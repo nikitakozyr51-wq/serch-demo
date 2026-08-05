@@ -1,0 +1,399 @@
+---
+// Шрифт подключён через @font-face в global.css файлами из public/fonts.
+// Импорт пакета убран: он выдавал адрес с кириллицей в пути и не загружался.
+import '@/styles/global.css'
+import { isActiveRoute, siteRoutes } from '@/lib/site-routes'
+
+interface Props {
+  canonicalUrl?: string
+  /**
+   * Описание для выдачи. Необязательно: у страниц, закрытых от индексации,
+   * его нет по спецификации `СИСТЕМА · Индексация и метаданные` — «title и
+   * description не нужны: страница не должна находиться поиском вообще».
+   */
+  description?: string
+  /**
+   * Содержимое `<meta name="robots">`. Пусто у открытых страниц (значение по
+   * умолчанию у поисковиков и есть `index, follow`), `noindex, nofollow` — у
+   * страниц, на которых виден чей-то номер. Правило одно на весь продукт и
+   * записано в DESIGN.md: это не про трафик, а про 152-ФЗ.
+   */
+  robots?: string
+  title: string
+}
+
+const { canonicalUrl, description, robots, title } = Astro.props
+
+/**
+ * Какая оболочка у документа на телефоне.
+ *
+ * У сайта их две, и это решение файла, а не вёрстки. `home` — мобильная
+ * главная (`EDoek`): полоса 56 с призывом и меню, жёлоб 20, подвал внизу.
+ * `page` — все остальные мобильные кадры сайта: полоса 56 с маркой и подписью
+ * раздела, жёлоб 16, подвала нет.
+ *
+ * Атрибут стоит на `body`, потому что оболочка — свойство документа, а не
+ * компонента: жёлоб нужен секциям, шапке и подвалу одновременно, и решать его
+ * в трёх местах значит однажды решить по-разному.
+ */
+const shell = isActiveRoute(Astro.url.pathname, siteRoutes.home) ? 'home' : 'page'
+---
+
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#f7faf8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>{title}</title>
+    {robots && <meta name="robots" content={robots} />}
+    {description && <meta name="description" content={description} />}
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body data-shell={shell}>
+    {/* Пропуск к содержанию виден только в фокусе, поэтому кольцо у него —
+        единственное состояние, которое человек вообще увидит. `ctl-dark`: на
+        тёмной заливке графитовое кольцо сливается с самой ссылкой, и между
+        ними обязан стоять зазор 2 px цветом `bg`.
+
+        Заливка графитовая, а не акцентная. `bg-primary` в этом проекте —
+        это `accent-deep`, а красный в продукте значит ровно одно: «сейчас
+        списываются деньги». Пропуск к содержанию не списывает ничего,
+        и красный на нём обесценивает единственный сигнал о трате. */}
+    <a
+      class="ctl ctl-dark sr-only z-50 rounded-md bg-fg px-4 py-2 text-surface focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+      href="#main-content"
+    >
+      Перейти к содержанию
+    </a>
+    <slot />
+
+    <script>
+      /**
+       * Движение сайта: reveal при скролле и счётчики.
+       *
+       * Токены и обоснование — `design-research/v2/MOTION-SPEC.md`, правила
+       * перечислены там же. Библиотек на движение у сайта нет и не должно быть:
+       * всё, что здесь нужно, — это CSS-переход и `IntersectionObserver`.
+       *
+       * Разметка объявляет НАМЕРЕНИЕ, а не состояние:
+       *   `data-rev-group`  — контейнер, чьи отрисованные прямые дети выходят
+       *                       по очереди; шаг задаёт `data-rev-step` (80 по
+       *                       умолчанию, 120 у высказываний и карточек);
+       *   `data-rev-solo`   — одиночный блок, выходит сам по себе;
+       *   `data-count-to`   — счётчик: цель, а также `data-count-from`,
+       *                       `data-count-dur`, `data-count-pow`.
+       * Само `data-rev` вешает этот скрипт. При отключённом JS в разметке нет
+       * ни одного скрытого узла, и страница читается целиком.
+       */
+
+      /** Шаг стаггера по умолчанию. */
+      const STAGGER_DEFAULT = 80
+      /** Потолок задержки: дальше блок «доезжает» после того, как прочитан. */
+      const STAGGER_CAP = 560
+      /**
+       * Один «удар» движением на экран: если в кадре и блок, и счётчик, счётчик
+       * идёт вторым — через `--rev-d + 160 ms` после появления своего блока.
+       */
+      const COUNT_LEAD = 160
+      /**
+       * Страховка снятия состояния: в фоновой вкладке переход не начинается и
+       * `transitionend` не приходит, а состояние обязано сняться (см. ниже).
+       * 900 > 780 ms самого перехода.
+       */
+      const SETTLE_FALLBACK = 900
+
+      /**
+       * Порог 0.01 и `-4%` вместо 0.12 и `-8%`: со старыми значениями блок
+       * должен был войти в кадр на 12 % и ещё на 8 % вглубь, движение начиналось,
+       * когда блок уже хорошо виден, и читалось как «появился под носом».
+       */
+      const OBSERVER_OPTIONS: IntersectionObserverInit = {
+        rootMargin: '0px 0px -4% 0px',
+        threshold: 0.01,
+      }
+
+      interface RevealItem {
+        el: HTMLElement
+        delay: number
+      }
+
+      interface Counter {
+        el: HTMLElement
+        from: number
+        to: number
+        duration: number
+        /** Показатель затухания `1-(1-t)^power`. */
+        power: number
+        /** Блок, с появлением которого счётчик стартует; `null` — свой триггер. */
+        host: HTMLElement | null
+        started: boolean
+        /** Финал уже в DOM: цикл обязан остановиться. */
+        settled: boolean
+      }
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const supportsObserver = 'IntersectionObserver' in window
+
+      /**
+       * Стаггер нумерует ОТРИСОВАННЫЕ элементы, а не всё из `querySelectorAll`:
+       * скрытый на телефоне узел иначе съедает такт, и соседи получают чужую
+       * задержку.
+       */
+      const isRendered = (el: Element) => el.getClientRects().length > 0
+
+      const numberFrom = (raw: string | undefined, fallback: number) => {
+        if (raw === undefined) return fallback
+        const parsed = Number(raw)
+        return Number.isFinite(parsed) ? parsed : fallback
+      }
+
+      // ── 1. Что проявляется и с какой задержкой ─────────────────────────────
+      const candidates: RevealItem[] = []
+
+      for (const group of document.querySelectorAll<HTMLElement>('[data-rev-group]')) {
+        if (!isRendered(group)) continue
+
+        const step = numberFrom(group.dataset.revStep, STAGGER_DEFAULT)
+
+        /* Горизонтальная рельса раскрывается разом целиком: карточки за краем
+           скролл-контейнера по X никогда не пересекают вьюпорт, и по одной они
+           не проявились бы вовсе. */
+        if (group.scrollWidth - group.clientWidth > 1) {
+          candidates.push({ delay: 0, el: group })
+          continue
+        }
+
+        const children = Array.from(group.children).filter(
+          (child): child is HTMLElement => child instanceof HTMLElement && isRendered(child),
+        )
+        children.forEach((child, index) => {
+          candidates.push({ delay: Math.min(index * step, STAGGER_CAP), el: child })
+        })
+      }
+
+      for (const solo of document.querySelectorAll<HTMLElement>('[data-rev-solo]')) {
+        if (isRendered(solo)) candidates.push({ delay: 0, el: solo })
+      }
+
+      /* Вложенный reveal внутри reveal ждал бы собственного пересечения уже
+         внутри уезжающего родителя: снаружи это читается как «половина блока
+         не появилась». Внешний узел выигрывает. */
+      const items = candidates.filter(
+        (item) => !candidates.some((other) => other.el !== item.el && other.el.contains(item.el)),
+      )
+
+      // ── 2. Счётчики ────────────────────────────────────────────────────────
+      const counters: Counter[] = []
+
+      for (const el of document.querySelectorAll<HTMLElement>('[data-count-to]')) {
+        const to = Number(el.dataset.countTo)
+        if (!Number.isFinite(to)) continue
+
+        counters.push({
+          duration: numberFrom(el.dataset.countDur, 1600),
+          el,
+          from: numberFrom(el.dataset.countFrom, 0),
+          host: items.find((item) => item.el.contains(el))?.el ?? null,
+          power: numberFrom(el.dataset.countPow, 4),
+          settled: false,
+          started: false,
+          to,
+        })
+      }
+
+      /** Минус типографский (U+2212): дефис в числе читается как перенос. */
+      const format = (value: number) => {
+        const rounded = Math.round(value)
+        return rounded < 0 ? `−${Math.abs(rounded)}` : String(rounded)
+      }
+
+      const finish = (counter: Counter) => {
+        counter.started = true
+        counter.settled = true
+        counter.el.textContent = format(counter.to)
+      }
+
+      const run = (counter: Counter) => {
+        if (counter.started) return
+        counter.started = true
+
+        const start = performance.now()
+        const tick = (now: number) => {
+          if (counter.settled) return
+          const t = Math.min(1, (now - start) / counter.duration)
+          const eased = 1 - Math.pow(1 - t, counter.power)
+          counter.el.textContent = format(counter.from + (counter.to - counter.from) * eased)
+          if (t < 1) {
+            requestAnimationFrame(tick)
+            return
+          }
+          counter.settled = true
+        }
+        requestAnimationFrame(tick)
+      }
+
+      const startCounters = (host: HTMLElement, delay: number) => {
+        for (const counter of counters) {
+          if (counter.host !== host || counter.started) continue
+          window.setTimeout(() => run(counter), delay + COUNT_LEAD)
+        }
+      }
+
+      /* Стартовое значение пишется в DOM при инициализации. Иначе до попадания
+         в кадр виден финал, а потом сброс и пересчёт — то есть число сначала
+         врёт, потом дёргается. */
+      if (reduceMotion || !supportsObserver) {
+        for (const counter of counters) finish(counter)
+      } else {
+        for (const counter of counters) counter.el.textContent = format(counter.from)
+      }
+
+      /* При печати `IntersectionObserver` не срабатывает: `data-rev` гасит
+         `@media print`, а счётчик остался бы в PDF на стартовом нуле. */
+      window.addEventListener('beforeprint', () => {
+        for (const counter of counters) finish(counter)
+
+        /* Отложенные картинки в PDF не попадают: `loading="lazy"` не отменяется
+           ни `@media print`, ни самим `beforeprint`. Замер показал, что
+           у непрокрученной страницы в PDF не хватает четырёх фотографий,
+           и вес падает на треть. Снятие атрибута заставляет браузер начать
+           загрузку немедленно; на уже загруженные это не влияет. */
+        for (const image of document.querySelectorAll('img[loading="lazy"]')) {
+          image.removeAttribute('loading')
+        }
+      })
+
+      // ── 3. Наблюдение ──────────────────────────────────────────────────────
+      if (!reduceMotion && supportsObserver) {
+        for (const item of items) {
+          item.el.setAttribute('data-rev', '')
+          if (item.delay > 0) item.el.style.setProperty('--rev-d', `${item.delay}ms`)
+        }
+
+        /**
+         * Снятие состояния после перехода. `[data-rev].in` имеет специфичность
+         * (0,2,0) и, оставшись висеть, навсегда перебивает hover-правила (0,1,0);
+         * заодно уходит `will-change`, то есть композиторский слой.
+         */
+        const settle = (el: HTMLElement) => {
+          el.removeAttribute('data-rev')
+          el.classList.remove('in')
+          el.style.removeProperty('--rev-d')
+        }
+
+        const revealObserver = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue
+
+            const el = entry.target as HTMLElement
+            // Срабатывание один раз: прокрутка вверх-вниз ничего не переигрывает.
+            revealObserver.unobserve(el)
+            el.classList.add('in')
+
+            const delay = Number.parseFloat(el.style.getPropertyValue('--rev-d')) || 0
+            const fallback = window.setTimeout(() => settle(el), delay + SETTLE_FALLBACK)
+            const onTransitionEnd = (event: TransitionEvent) => {
+              // Только собственный переход и только по `opacity`: `transform`
+              // приходит вторым событием и снял бы состояние дважды.
+              if (event.target !== el || event.propertyName !== 'opacity') return
+              window.clearTimeout(fallback)
+              el.removeEventListener('transitionend', onTransitionEnd)
+              settle(el)
+            }
+            el.addEventListener('transitionend', onTransitionEnd)
+
+            startCounters(el, delay)
+          }
+        }, OBSERVER_OPTIONS)
+
+        for (const item of items) revealObserver.observe(item.el)
+
+        /* Счётчик вне проявляющегося блока ведёт себя сам. Тем, у кого блок
+           есть, собственный наблюдатель не ставится намеренно: он выиграл бы
+           гонку у reveal-колбэка и съел бы задержку в 160 ms, ради которой
+           счётчик и идёт вторым. */
+        const orphans = counters.filter((counter) => counter.host === null)
+        if (orphans.length > 0) {
+          const countObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue
+              countObserver.unobserve(entry.target)
+              const counter = counters.find((item) => item.el === entry.target)
+              if (counter) run(counter)
+            }
+          }, OBSERVER_OPTIONS)
+
+          for (const counter of orphans) countObserver.observe(counter.el)
+        }
+      }
+    </script>
+
+    <script>
+      /**
+       * Отклик контрола на НАЖАТИЕ, а не на отпускание.
+       *
+       * Жалоба владельца звучит как «кнопки не реагируют, ничего не
+       * нажимается», и причина у неё техническая: мышью `:active` приходит уже
+       * на `pointerdown`, а на тач-экране браузер ставит его с задержкой в
+       * несколько сотен миллисекунд — и не ставит вовсе, если палец сдвинулся
+       * и жест оказался прокруткой. Человек нажимает, ничего не происходит,
+       * он нажимает ещё раз.
+       *
+       * Поэтому состояние дублируется атрибутом `data-pressed`, а стили под
+       * него уже написаны в `global.css` рядом с `:active` — одной парой на
+       * каждую ступень заливки.
+       *
+       * Скрипт — улучшение, а не условие: без него `:active` продолжает
+       * работать мышью и клавишей, просто на телефоне отклик снова становится
+       * ленивым. Ни один контрол без JS не ломается.
+       */
+      let pressed: HTMLElement | null = null
+
+      const release = () => {
+        if (!pressed) return
+        pressed.removeAttribute('data-pressed')
+        pressed = null
+      }
+
+      document.addEventListener(
+        'pointerdown',
+        (event) => {
+          release()
+
+          const target =
+            event.target instanceof Element ? event.target.closest<HTMLElement>('.ctl') : null
+          // Выключенный контрол не отвечает: у него одно состояние, и оно
+          // говорит «сюда нельзя».
+          if (!target || target.matches(':disabled, [aria-disabled="true"]')) return
+
+          pressed = target
+          target.setAttribute('data-pressed', '')
+        },
+        { passive: true },
+      )
+
+      /* Прокрутка снимает нажатие — так же, как это делает система: палец,
+         который поехал по странице, кнопку не нажимает. `capture: true` ловит
+         и прокрутку внутренних лент (районы на телефоне), которая до `window`
+         не всплывает. */
+      document.addEventListener('scroll', release, { capture: true, passive: true })
+
+      for (const type of ['pointerup', 'pointercancel', 'dragstart', 'contextmenu']) {
+        window.addEventListener(type, release, { capture: true, passive: true })
+      }
+
+      /* Уход со вкладки в момент нажатия оставил бы подсветку висеть до
+         возвращения. */
+      window.addEventListener('blur', release)
+    </script>
+  </body>
+</html>

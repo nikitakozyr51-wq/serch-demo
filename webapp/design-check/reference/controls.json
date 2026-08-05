@@ -1,0 +1,42 @@
+{
+  "_": "Эталон доски «СИСТЕМА · Состояния контролов» (nXleb) из Pencil-файла serch. Снят через execute с resolveVariables, поэтому цвета настоящие, а не имена переменных. Обновлять командой из webapp/design-check/README.md.",
+  "_snapshot": "2026-08-03",
+  "primary-48|rest": { "height": 48, "fill": "#1e1e1e", "radius": 999, "padding": [0, 28], "text": { "color": "#ffffff", "size": 16, "weight": "600", "ls": -0.24, "lh": 24 } },
+  "primary-48|hover": { "height": 48, "fill": "#333029", "radius": 999, "padding": [0, 28], "text": { "color": "#ffffff", "size": 16, "weight": "600", "ls": -0.24, "lh": 24 } },
+  "primary-48|focus": { "height": 48, "fill": "#1e1e1e", "radius": 999, "padding": [0, 28], "ring": { "gap": "#f9f9f9", "color": "#1e1e1e", "width": 2 }, "text": { "color": "#ffffff", "size": 16, "weight": "600", "ls": -0.24, "lh": 24 } },
+  "primary-48|press": { "height": 48, "fill": "#0d0d0c", "radius": 999, "padding": [0, 28], "text": { "color": "#ffffff", "size": 16, "weight": "600", "ls": -0.24, "lh": 24 } },
+  "primary-48|disabled": { "height": 48, "fill": "#f2f1ee", "radius": 999, "padding": [0, 28], "text": { "color": "#6f6b64", "size": 16, "weight": "600", "ls": -0.24, "lh": 24 } },
+
+  "secondary-32|rest": { "height": 32, "fill": "#f2f1ee", "stroke": "#8a867f", "strokeWidth": 1, "radius": 8, "padding": [0, 16], "text": { "color": "#57544f", "size": 14, "weight": "600", "ls": -0.14, "lh": 20 } },
+  "secondary-32|hover": { "height": 32, "fill": "#e9e7e3", "stroke": "#8a867f", "strokeWidth": 1, "radius": 8, "padding": [0, 16], "text": { "color": "#1e1e1e", "size": 14, "weight": "600", "ls": -0.14, "lh": 20 } },
+  "secondary-32|focus": { "height": 32, "fill": "#f2f1ee", "ring": { "color": "#1e1e1e", "width": 2 }, "radius": 8, "padding": [0, 16], "text": { "color": "#57544f", "size": 14, "weight": "600", "ls": -0.14, "lh": 20 } },
+  "secondary-32|press": { "height": 32, "fill": "#dedbd6", "stroke": "#8a867f", "strokeWidth": 1, "radius": 8, "padding": [0, 16], "text": { "color": "#1e1e1e", "size": 14, "weight": "600", "ls": -0.14, "lh": 20 } },
+  "secondary-32|disabled": { "height": 32, "fill": "#ffffff", "stroke": "#8a867f", "strokeWidth": 1, "radius": 8, "padding": [0, 16], "text": { "color": "#6f6b64", "size": 14, "weight": "600", "ls": -0.14, "lh": 20 } },
+
+  "input-40|rest": { "height": 40, "fill": "#ffffff", "stroke": "#8a867f", "strokeWidth": 1, "radius": 10, "padding": [0, 12], "text": { "color": "#1e1e1e", "size": 14, "weight": "500", "ls": -0.14, "lh": 20 } },
+  "input-40|hover": { "height": 40, "fill": "#ffffff", "stroke": "#57544f", "strokeWidth": 1, "radius": 10, "padding": [0, 12], "text": { "color": "#1e1e1e", "size": 14, "weight": "500", "ls": -0.14, "lh": 20 } },
+  "input-40|focus": { "height": 40, "fill": "#ffffff", "ring": { "color": "#1e1e1e", "width": 2 }, "radius": 10, "padding": [0, 12], "text": { "color": "#1e1e1e", "size": 14, "weight": "500", "ls": -0.14, "lh": 20 } },
+  "input-40|press": { "height": 40, "fill": "#ffffff", "stroke": "#1e1e1e", "strokeWidth": 1, "radius": 10, "padding": [0, 12], "text": { "color": "#1e1e1e", "size": 14, "weight": "500", "ls": -0.14, "lh": 20 } },
+  "input-40|disabled": { "height": 40, "fill": "#f2f1ee", "stroke": "#ddd9d3", "strokeWidth": 1, "radius": 10, "padding": [0, 12], "text": { "color": "#6f6b64", "size": 14, "weight": "500", "ls": -0.14, "lh": 20 } },
+
+  "chip-28|rest": { "height": 28, "fill": "#ffffff", "stroke": "#8a867f", "strokeWidth": 1, "radius": 999, "padding": [0, 12], "text": { "color": "#1e1e1e", "size": 13, "weight": "500", "ls": -0.13, "lh": 20 } },
+  "chip-28|hover": { "height": 28, "fill": "#f2f1ee", "stroke": "#8a867f", "strokeWidth": 1, "radius": 999, "padding": [0, 12], "text": { "color": "#1e1e1e", "size": 13, "weight": "500", "ls": -0.13, "lh": 20 } },
+  "chip-28|focus": { "height": 28, "fill": "#ffffff", "ring": { "color": "#1e1e1e", "width": 2 }, "radius": 999, "padding": [0, 12], "text": { "color": "#1e1e1e", "size": 13, "weight": "500", "ls": -0.13, "lh": 20 } },
+  "chip-28|press": { "height": 28, "fill": "#1e1e1e", "stroke": "#1e1e1e", "strokeWidth": 1, "radius": 999, "padding": [0, 12], "text": { "color": "#ffffff", "size": 13, "weight": "500", "ls": -0.13, "lh": 20 } },
+  "chip-28|disabled": { "height": 28, "fill": "#ffffff", "stroke": "#ddd9d3", "strokeWidth": 1, "radius": 999, "padding": [0, 12], "text": { "color": "#6f6b64", "size": 13, "weight": "500", "ls": -0.13, "lh": 20 } },
+
+  "photo-small|rest": { "fill": "#f2f1ee", "stroke": "#ddd9d3", "strokeWidth": 1, "radius": 6 },
+  "photo-medium|rest": { "fill": "#f2f1ee", "stroke": "#ddd9d3", "strokeWidth": 1, "radius": 8 },
+  "photo-large|rest": { "fill": "#f2f1ee", "stroke": "#ddd9d3", "strokeWidth": 1, "radius": 16, "padding": [32, 32] },
+
+  "listing-row|rest": { "height": 88, "fill": "#ffffff", "padding": [0, 16] },
+  "listing-row|selected": { "height": 88, "fill": "#ffffff", "stroke": "#1e1e1e", "strokeWidth": 1, "padding": [0, 16] },
+  "listing-row|taken": { "height": 88, "fill": "#ffffff", "padding": [0, 16] },
+  "listing-row|blocked": { "height": 88, "fill": "#f2f1ee", "padding": [0, 16] },
+
+  "checkbox-24|rest": { "height": 24, "width": 24, "fill": "#ffffff", "stroke": "#8a867f", "strokeWidth": 1, "radius": 6 },
+  "checkbox-24|hover": { "height": 24, "width": 24, "fill": "#ffffff", "stroke": "#1e1e1e", "strokeWidth": 1, "radius": 6 },
+  "checkbox-24|focus": { "height": 24, "width": 24, "fill": "#ffffff", "ring": { "color": "#1e1e1e", "width": 2 }, "radius": 6 },
+  "checkbox-24|press": { "height": 24, "width": 24, "fill": "#1e1e1e", "stroke": "#1e1e1e", "strokeWidth": 1, "radius": 6 },
+  "checkbox-24|disabled": { "height": 24, "width": 24, "fill": "#f2f1ee", "stroke": "#ddd9d3", "strokeWidth": 1, "radius": 6 }
+}

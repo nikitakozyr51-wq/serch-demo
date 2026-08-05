@@ -1,0 +1,66 @@
+---
+/**
+ * САЙТ · Контакты — кадр `FIZOs`, 1440×1755.
+ *
+ * Та же форма, что «О компании»: шапка → первый экран → юридический контур из
+ * трёх строк → подвал. Телефона на странице нет намеренно, так в файле и так
+ * написано в самом тексте.
+ *
+ * Две первых строки контура озаглавлены почтовыми адресами. В Pencil это
+ * простой текст, здесь — ссылки `mailto:`. Оформление не меняется ни на
+ * пиксель, но адрес, по которому нельзя написать нажатием, на странице
+ * «Контакты» был бы дефектом, а не точностью перевода.
+ */
+import LegalRow from '@/components/landing/LegalRow.astro'
+import LegalSection from '@/components/landing/LegalSection.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import SiteHeader from '@/components/landing/SiteHeader.astro'
+import SitePageHero from '@/components/landing/SitePageHero.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+
+const title = 'Контакты — Сёрчь'
+const description =
+  'Три адреса под три разных вопроса: продукт, персональные данные и юридический адрес. Отвечаем за один рабочий день.'
+
+const publicWebsiteUrl = import.meta.env.PUBLIC_WEBSITE_URL
+const canonicalUrl = publicWebsiteUrl
+  ? new URL(Astro.url.pathname, publicWebsiteUrl).toString()
+  : undefined
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} title={title}>
+  {/* Подпись мобильной полосы 56 — замер кадра `XlMmA`. */}
+  <SiteHeader caption="контакты" />
+
+  <main id="main-content">
+    <SitePageHero
+      titleLines={[{ text: 'Как с нами' }, { text: 'связаться' }]}
+      subtitle="Пишите почтой: телефон поддержки мы не держим намеренно, чтобы каждое обращение оставалось письменным и его можно было проверить."
+      trust="Отвечаем в рабочие дни с 10:00 до 19:00 по московскому времени."
+      bottom={64}
+    />
+
+    <LegalSection
+      title="Куда писать"
+      lead="Три адреса под три разных вопроса. Письмо не на тот адрес мы всё равно перешлём, но ответ придёт позже."
+    >
+      <LegalRow
+        title="hello@serch.ru"
+        titleHref="mailto:hello@serch.ru"
+        text="Всё про продукт: подключение агентства, счета и акты, вопросы по выдаче и раскрытиям. Отвечаем за один рабочий день."
+      />
+      <LegalRow
+        title="dpo@serch.ru"
+        titleHref="mailto:dpo@serch.ru"
+        text="Персональные данные: запрос об источнике номера, требование удалить данные, снятие отказа. Отвечаем за один рабочий день, как требует 152-ФЗ."
+      />
+      <LegalRow
+        title="Юридический адрес"
+        text="191186, Санкт-Петербург, Невский проспект, 20. Курьерскую корреспонденцию принимаем по будням."
+        last
+      />
+    </LegalSection>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

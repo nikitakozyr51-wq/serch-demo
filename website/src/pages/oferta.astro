@@ -1,0 +1,72 @@
+---
+/**
+ * САЙТ · Оферта — кадр `OzhLX`, 1440×1677.
+ *
+ * Третья страница того же семейства: шапка → первый экран → разделы → подвал.
+ *
+ * Строка доверия здесь не про Роскомнадзор, а про реквизиты продавца
+ * (замер `i7Dzs`), и это по делу: оферта — договор, а у договора должна быть
+ * видна сторона. Те же реквизиты стоят в нижней строке подвала, и это не
+ * дублирование ради объёма: подвал говорит, кто владеет сайтом, первый экран
+ * оферты — кто заключает договор.
+ *
+ * Раскрыты разделы про предмет и про деньги — те два, ради которых оферту
+ * открывают. У трёх остальных текста ответа в файле нет.
+ */
+import SiteFaq from '@/components/landing/SiteFaq.astro'
+import type { FaqItem } from '@/components/landing/SiteFaq.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import SiteHeader from '@/components/landing/SiteHeader.astro'
+import SitePageHero from '@/components/landing/SitePageHero.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+
+const title = 'Публичная оферта Сёрчь'
+const description =
+  'Редакция от 12 июня 2026 года. Предмет договора, стоимость, возвраты, ответственность сторон.'
+
+const publicWebsiteUrl = import.meta.env.PUBLIC_WEBSITE_URL
+const canonicalUrl = publicWebsiteUrl
+  ? new URL(Astro.url.pathname, publicWebsiteUrl).toString()
+  : undefined
+
+const sections: FaqItem[] = [
+  {
+    question: '1. Предмет договора и что именно вы покупаете',
+    open: true,
+    answer:
+      'Сервис предоставляет доступ к поиску по объявлениям и по запросу пользователя раскрывает контакт размещателя. Сервис не является участником сделки с недвижимостью, не оказывает риелторских услуг и не гарантирует результат переговоров с собственником.',
+  },
+  {
+    question: '2. Стоимость, порядок оплаты и возврат',
+    open: true,
+    answer:
+      'Доступ агентства 3 000 ₽ в месяц, раскрытие одного контакта 199 ₽. Возврат за раскрытие производится по заявке пользователя: по объективной причине сразу, по субъективной в течение часа с лимитом двенадцать возвратов за тридцать дней.',
+  },
+  { question: '3. Обязанности пользователя при обзвоне' },
+  { question: '4. Ответственность сторон и ограничения' },
+  { question: '5. Срок действия, изменение условий, расторжение' },
+]
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} title={title}>
+  {/* Подпись мобильной полосы 56 — замер кадра `j1bD09`. */}
+  <SiteHeader caption="оферта" />
+
+  <main id="main-content">
+    <SitePageHero
+      titleLines={[{ text: 'Публичная' }, { text: 'оферта' }]}
+      subtitle="Редакция от 12 июня 2026 года. Договор считается заключённым с момента создания агентства в сервисе."
+      trust="ООО «Сёрчь» · ИНН 7813592047 · 191186, Санкт-Петербург, Невский проспект, 20"
+      bottom={64}
+    />
+
+    <SiteFaq
+      title="Разделы оферты"
+      lead="Полный текст доступен для скачивания в PDF. Ниже разделы, которые чаще всего читают."
+      items={sections}
+      dense
+    />
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

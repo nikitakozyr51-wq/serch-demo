@@ -1,0 +1,464 @@
+import { useNavigate } from "@tanstack/react-router"
+import type { ReactNode } from "react"
+
+import { Button } from "@/components/controls/Button"
+import { Typography } from "@/components/typography"
+import { signIn } from "@/features/auth"
+import { MobileAuthLogo } from "@/features/cabinet"
+import { cn } from "@/lib/utils"
+
+/**
+ * Оставшиеся экраны входа на телефоне.
+ *
+ * Снято с `F0mnv`, `PaDiZ`, `cboBK`, `gNVkZ`, `T2qr0A`. Каркас у всех пяти
+ * один: кадр 390 × 844, логотип 56, тело с полями [32, 16] и зазором 32,
+ * распорка вниз и правовая строка у нижнего края.
+ *
+ * **Каждый из пяти — тупик по своей причине, и ни один не бросает человека.**
+ * Код не пришёл — есть «отправить ещё раз». Письмо не пришло — сказано, куда
+ * смотреть. Приглашение не ваше — есть «отклонить». Доступ закрыт — есть кому
+ * написать. Мёртвых концов нет: у любого состояния есть следующее действие.
+ *
+ * **На телефоне правая панель десктопа исчезла целиком.** На 1440 рядом
+ * с формой стоит тёплая колонка 520: шаги, цены, состав, строка про защиту
+ * базы. На 390 её некуда поставить, и в файле её нет — вместо неё остались
+ * заголовок, форма, одно действие и правовая строка. Это не «сжатый десктоп»,
+ * а другой экран: человек на телефоне уже принял решение войти, ему не
+ * продают, ему дают войти.
+ *
+ * **Экранов входа пять, а нижней навигации нет ни на одном.** Входить ещё
+ * некуда: вкладки появятся после того, как человек окажется в кабинете.
+ */
+
+/** Правовая строка, общая для четырёх экранов из пяти. */
+const LEGAL =
+  "Оператор персональных данных. Стоп-лист исполняется у всех сотрудников сразу."
+
+/**
+ * Каркас экрана входа на телефоне: логотип 56, тело с полями [32, 16]
+ * и зазором 32.
+ *
+ * Общий `MobileAuthScreen` сюда не подошёл: у него тело набрано полями 16
+ * и зазором 20, а в этих пяти кадрах — 32 и 32. Подогнать кадр под чужую
+ * раскладку значило бы выдумать дизайн, только тихо.
+ *
+ * Тело прокручивается: на «Приглашении сотрудника» три поля, кнопка
+ * и правовая строка не встают в 788 px между логотипом и низом экрана —
+ * при мелком шрифте системы они переполняют кадр примерно на полсотни
+ * пикселей. Распорка при этом схлопывается первой, и правовая строка
+ * уезжает вниз, а не режется.
+ */
+function MobileAuthFrame({ children }: { children: ReactNode }) {
+  return (
+    // Кадр телефона на десктопном экране: 390 × 844 по центру, чтобы стенд
+    // можно было смотреть в обычном браузере рядом с макетом.
+    <div className="flex min-h-svh w-full items-start justify-center bg-line-1 p-10">
+      <div
+        data-slot="mobile-auth-screen"
+        className="flex h-[844px] w-[390px] flex-col overflow-hidden bg-bg outline-solid outline-1 -outline-offset-1 outline-line-2"
+      >
+        <MobileAuthLogo />
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-8 overflow-y-auto px-4 py-8">
+          <>{children}</>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Заголовок 28/600 и объяснение 14/500 под ним, зазор 24. */
+function MobileAuthTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="flex w-full shrink-0 flex-col gap-6">
+      <Typography variant="cardPrice" tone="default" as="h1">
+        {title}
+      </Typography>
+      <Typography variant="uiText" tone="secondary">
+        {subtitle}
+      </Typography>
+    </div>
+  )
+}
+
+/**
+ * Поле формы входа на телефоне: метка капслоком, поле 48 с радиусом 12
+ * и подсказка 12/500 под ним.
+ *
+ * Это не `TextField` кабинета: тот собран на ступени 40 с радиусом 10
+ * и полями 12. На телефоне поле выросло до 48 — по пальцу, а не по мышке, —
+ * и вместе с высотой поменялись радиус и внутренние поля. Другая геометрия
+ * значит другой контрол, и подменять его ближайшим существующим нельзя.
+ *
+ * **Ошибка не добавляет рамку, а заменяет её**, и толщина растёт с 1 до 2.
+ * Обводка рисуется внутрь, поэтому поле не подпрыгивает на два пикселя
+ * в тот момент, когда человек читает, что не так.
+ */
+function MobileAuthField({
+  label,
+  value,
+  hint,
+  error,
+}: {
+  label: string
+  value: string
+  hint?: string
+  error?: string
+}) {
+  const message = error ?? hint
+
+  return (
+    <div
+      data-slot="mobile-auth-field"
+      data-invalid={error ? true : undefined}
+      className="flex w-full flex-col gap-2"
+    >
+      <Typography variant="columnHeader" tone="dense">
+        {label}
+      </Typography>
+      <div
+        className={cn(
+          "flex h-ctl-lg w-full items-center rounded-xl bg-surface px-4 outline-solid",
+          error
+            ? "outline-2 -outline-offset-2 outline-err-text"
+            : "outline-1 -outline-offset-1 outline-border-control",
+        )}
+      >
+        {/*
+          Значение и приглашение набраны одинаково — графитом, не приглушённым.
+          Так в файле: «Введите четыре цифры» стоит тем же цветом, что
+          «Королёв Дмитрий». Разницу между «пусто» и «введено» здесь несёт
+          только текст, и это расхождение с полем кабинета названо в отчёте.
+        */}
+        <Typography variant="controlLabelLg" tone="default">
+          {value}
+        </Typography>
+      </div>
+      {message === undefined ? null : (
+        <Typography variant="metaText" tone={error ? "destructive" : "dense"}>
+          {message}
+        </Typography>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Пара «вопрос — действие» под кнопкой.
+ *
+ * Обычно идёт строкой, на «Проверьте почту» — столбиком по центру: там вопрос
+ * длиннее («Письмо не пришло за пять минут?»), и в строку с ответом он
+ * на 390 не встаёт. Так в файле.
+ */
+function MobileAuthAside({
+  question,
+  action,
+  stacked = false,
+}: {
+  question: string
+  action: string
+  stacked?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "flex w-full shrink-0 items-center",
+        stacked ? "flex-col gap-0.5" : "gap-1.5",
+      )}
+    >
+      <Typography variant="denseText" tone="secondary">
+        {question}
+      </Typography>
+      {/* Второе действие пары: «Отправить ещё раз», «Отклонить»,
+          «Проверьте папку Спам». Экранов у них в файле нет, поэтому действие
+          называется и ничего не рисует — выдуманная плашка была бы хуже. */}
+      <button
+        type="button"
+        data-action={action}
+        className="cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      >
+        <Typography variant="numericDense" tone="default">
+          {action}
+        </Typography>
+      </button>
+    </div>
+  )
+}
+
+/** Правовая строка у нижнего края, отжатая распоркой. */
+function MobileAuthLegal({ text }: { text: string }) {
+  return (
+    <>
+      <div className="flex-1" />
+      <Typography variant="metaText" tone="dense">
+        {text}
+      </Typography>
+    </>
+  )
+}
+
+/**
+ * МОБАЙЛ · Код подтверждения (`F0mnv`).
+ *
+ * **Поле обычное, а не четыре ячейки под цифры.** Так в файле, и на телефоне
+ * это важнее, чем на десктопе: код чаще всего вставляют из буфера, а ячейки
+ * вставку ломают — четыре цифры попадают в первую клетку.
+ *
+ * Подзаголовок сразу называет два срока: десять минут жизни кода и шестьдесят
+ * секунд до повторной отправки. Оба — ответ на вопрос «сколько мне ждать»,
+ * заданный до того, как человек начнёт жать «отправить ещё раз».
+ */
+export function MobileConfirmCodePage() {
+  const navigate = useNavigate()
+
+  /** Код принят — человек внутри. Сам код не проверяется: сервера за ним нет. */
+  const confirm = () => {
+    signIn()
+    void navigate({ to: "/m/today" })
+  }
+
+  return (
+    <MobileAuthFrame>
+      <MobileAuthTitle
+        title="Введите код из письма"
+        subtitle="Отправили четыре цифры на i.smirnova@nevsky.ru. Код живёт десять минут, повторная отправка через шестьдесят секунд."
+      />
+
+      <div className="flex w-full shrink-0 flex-col gap-4">
+        <MobileAuthField
+          label="КОД ИЗ ПИСЬМА"
+          value="Введите четыре цифры"
+          hint="вход с нового устройства подтверждается кодом"
+        />
+      </div>
+
+      <Button variant="primary" size="lg" block onClick={confirm}>
+        Подтвердить вход
+      </Button>
+
+      <MobileAuthAside question="Письмо не пришло?" action="Отправить ещё раз" />
+
+      <MobileAuthLegal text={LEGAL} />
+    </MobileAuthFrame>
+  )
+}
+
+/**
+ * МОБАЙЛ · Код подтверждения, ошибка (`PaDiZ`).
+ *
+ * **Введённый код остаётся в поле.** Экран не стирает «4 8 1 6» — человек
+ * видит, что именно он ввёл, и правит одну цифру вместо того, чтобы набирать
+ * заново, ещё раз рискуя попыткой.
+ *
+ * Текст ошибки отвечает на три вопроса разом: что случилось («неверный код»),
+ * сколько осталось («четыре попытки») и что будет потом («вход закроется
+ * на пятнадцать минут»). Последнее сказано до блокировки, а не после неё:
+ * упереться в закрытый вход внезапно страшнее, чем знать про предел заранее.
+ */
+export function MobileConfirmCodeErrorPage() {
+  const navigate = useNavigate()
+
+  const confirm = () => {
+    signIn()
+    void navigate({ to: "/m/today" })
+  }
+
+  return (
+    <MobileAuthFrame>
+      <MobileAuthTitle
+        title="Введите код из письма"
+        subtitle="Отправили четыре цифры на i.smirnova@nevsky.ru. Код живёт десять минут, повторная отправка через шестьдесят секунд."
+      />
+
+      <div className="flex w-full shrink-0 flex-col gap-4">
+        <MobileAuthField
+          label="КОД ИЗ ПИСЬМА"
+          value="4 8 1 6"
+          error="Неверный код. Осталось четыре попытки, потом вход закроется на пятнадцать минут."
+        />
+      </div>
+
+      <Button variant="primary" size="lg" block onClick={confirm}>
+        Подтвердить вход
+      </Button>
+
+      <MobileAuthAside question="Письмо не пришло?" action="Отправить ещё раз" />
+
+      <MobileAuthLegal text={LEGAL} />
+    </MobileAuthFrame>
+  )
+}
+
+/**
+ * МОБАЙЛ · Проверьте почту (`cboBK`).
+ *
+ * Полей нет вовсе: человеку нечего вводить, он ждёт письма. Единственное
+ * действие — отправить письмо ещё раз, и подсказка под ним говорит, куда
+ * смотреть раньше, чем жать: «Проверьте папку «Спам»». Порядок здесь важнее
+ * вежливости — повторное письмо попадёт в тот же спам, что и первое.
+ *
+ * Срок жизни ссылки назван (двадцать четыре часа), чтобы человек, вернувшийся
+ * к письму завтра вечером, понимал, почему ссылка не сработала.
+ */
+export function MobileCheckMailPage() {
+  const navigate = useNavigate()
+
+  /**
+   * «Отправить письмо ещё раз» возвращает на восстановление пароля.
+   *
+   * Второго письма без сервера не будет, а отдельного экрана «письмо ушло
+   * повторно» в файле нет. Возврат на форму честнее: человек видит, какой
+   * адрес указан, и может его поправить — это и есть частая причина,
+   * по которой письмо не пришло.
+   */
+  const again = () => void navigate({ to: "/m/forgot" })
+
+  return (
+    <MobileAuthFrame>
+      <MobileAuthTitle
+        title="Проверьте почту"
+        subtitle="Мы отправили письмо на i.smirnova@nevsky.ru. Перейдите по ссылке из письма, чтобы подтвердить адрес и открыть кабинет. Ссылка живёт двадцать четыре часа."
+      />
+
+      <Button variant="primary" size="lg" block onClick={again}>
+        Отправить письмо ещё раз
+      </Button>
+
+      <MobileAuthAside
+        stacked
+        question="Письмо не пришло за пять минут?"
+        action="Проверьте папку «Спам»"
+      />
+
+      <MobileAuthLegal text={LEGAL} />
+    </MobileAuthFrame>
+  )
+}
+
+/**
+ * МОБАЙЛ · Приглашение сотрудника (`gNVkZ`).
+ *
+ * **Роль объяснена до принятия, а не после.** «Вы видите выдачу, свои подборки
+ * и свои раскрытия; баланс агентства, отчёты и журнал доступа видит только
+ * руководитель» — человек соглашается, понимая границы, и не удивляется потом,
+ * что чего-то не видит.
+ *
+ * Почта из приглашения не меняется, и об этом сказано подсказкой под полем:
+ * приглашение выписано на конкретный адрес, и подмена означала бы, что
+ * в агентство войдёт не тот, кого звали.
+ *
+ * Согласия с офертой на телефоне нет — на десктопе под формой стоит галка
+ * «Принимаю оферту и правила работы с контактами», в этом кадре её нет.
+ * Расхождение названо в отчёте; выдумывать её здесь нельзя.
+ */
+export function MobileInvitePage() {
+  const navigate = useNavigate()
+
+  /**
+   * Приглашение принято — сотрудник попадает на свой первый вход,
+   * а не в общий кабинет: у него другой лимит и другие права.
+   */
+  const accept = () => {
+    signIn()
+    void navigate({ to: "/m/first-run/employee" })
+  }
+
+  return (
+    <MobileAuthFrame>
+      <MobileAuthTitle
+        title="Ирина приглашает вас в «Невский проспект»"
+        subtitle="Роль «агент»: вы видите выдачу, свои подборки и свои раскрытия. Баланс агентства, отчёты и журнал доступа видит только руководитель."
+      />
+
+      <div className="flex w-full shrink-0 flex-col gap-4">
+        <MobileAuthField label="ФАМИЛИЯ И ИМЯ" value="Королёв Дмитрий" />
+        <MobileAuthField
+          label="РАБОЧИЙ E-MAIL"
+          value="d.korolev@nevsky.ru"
+          hint="адрес из приглашения, изменить нельзя"
+        />
+        <MobileAuthField
+          label="ПАРОЛЬ"
+          value="Придумайте пароль"
+          hint="не короче десяти знаков"
+        />
+      </div>
+
+      <Button variant="primary" size="lg" block onClick={accept}>
+        Принять приглашение
+      </Button>
+
+      <MobileAuthAside question="Это приглашение не для вас?" action="Отклонить" />
+
+      <MobileAuthLegal text={LEGAL} />
+    </MobileAuthFrame>
+  )
+}
+
+/**
+ * МОБАЙЛ · Доступ закрыт (`T2qr0A`).
+ *
+ * **Экран отвечает на три вопроса сразу, и это редкий случай, когда так надо.**
+ * Первый снят подзаголовком: дело не в пароле, «почта и пароль верные».
+ * Дальше тремя блоками по 16/600 с пояснением 13/500 — что с раскрытыми
+ * контактами, что с личными данными, что с журналом доступа.
+ *
+ * Про 199 ₽ сказано прямо: за контакты платило агентство, а не человек.
+ * Это снимает главную обиду отключённого агента — ощущение, что у него
+ * забрали купленное.
+ *
+ * Про журнал сказано, что он остаётся, и сразу почему: «требование закона,
+ * а не решение руководителя». Иначе строчка читалась бы как слежка.
+ *
+ * Правовая строка здесь не общая: вместо оператора персональных данных
+ * в ней имя и почта руководителя и адрес формы удаления данных — всё,
+ * что человеку сейчас нужно, чтобы что-то сделать дальше.
+ */
+export function MobileAccessClosedPage() {
+  const facts = [
+    {
+      title: "Контакты остались у агентства",
+      note: "199 ₽ за них платило агентство, а не вы. История звонков и заметки тоже принадлежат агентству.",
+    },
+    {
+      title: "Личные данные — по заявлению",
+      note: "имя, почта и телефон удаляются за тридцать дней, форма на serch.ru/data",
+    },
+    {
+      title: "Журнал доступа сохраняется",
+      note: "кто и когда открывал контакты. Это требование закона, а не решение руководителя.",
+    },
+  ]
+
+  return (
+    <MobileAuthFrame>
+      <MobileAuthTitle
+        title="Доступ закрыт"
+        subtitle="Руководитель агентства «Невский проспект» закрыл ваш доступ 2 августа. Почта и пароль верные — дело не в них."
+      />
+
+      <div className="flex w-full shrink-0 flex-col gap-3">
+        {facts.map((fact) => (
+          <div key={fact.title} className="flex w-full flex-col gap-0.5">
+            <Typography variant="rowPrice" tone="default">
+              {fact.title}
+            </Typography>
+            <Typography variant="denseText" tone="dense">
+              {fact.note}
+            </Typography>
+          </div>
+        ))}
+      </div>
+
+      <Button
+        variant="primary"
+        size="lg"
+        block
+        data-action="написать руководителю агентства"
+      >
+        Написать руководителю
+      </Button>
+
+      <MobileAuthLegal text="Ирина Смирнова · i.smirnova@nevsky.ru · удалить данные: serch.ru/data" />
+    </MobileAuthFrame>
+  )
+}

@@ -1,0 +1,265 @@
+---
+/**
+ * Макет выдачи на первом экране — узел Pencil `ALz6d`, 486×496.
+ *
+ * Это снимок кабинета, а не отдельный интерфейс сайта: строка поиска, шапка
+ * счёта, три строки выдачи и раскрытый объект внизу. Поэтому карточка
+ * приподнята тенью — единственной на всём сайте — и лежит на белом, а не на
+ * фоне страницы: продукт должен читаться как окно, а не как ещё один блок.
+ *
+ * Разметка нарочно неинтерактивная: это картинка состояния. Кнопки «Найти» и
+ * «Позвонить» нарисованы как есть, но кликать в них нечего, поэтому они
+ * собраны как `div`, а не как контролы — фальшивых кнопок в табуляции быть
+ * не должно.
+ *
+ * Две вещи в этом узле спорят с правилами лендинга, и оба значения — из файла:
+ * кнопка «Найти» залита `accent-deep`, хотя денег не списывает, и её поле по
+ * горизонтали 20, а не 28, как у ступени 48 в лестнице сайта.
+ *
+ * Строки выдачи: первые две — прозрачные с волосной линией снизу; третья, та
+ * самая, что раскрыта ниже, залита `warm` и скруглена на 10. Список идёт без
+ * зазора между строками: линия и есть зазор.
+ *
+ * Телефон — узел `c94VEp` внутри «МОБАЙЛ · Главная» (`EDoek`), и он собран
+ * иначе, а не сжат. Карточки нет вовсе: ни заливки, ни обводки, ни поля, ни
+ * тени — четыре части лежат прямо в колонке через 12. Строка поиска выше:
+ * 72 против 48, радиус 16 против 12, белая заливка вместо фона страницы,
+ * поле слева 16, значок 18 против 16, а кнопка «Найти» залита `fg`, а не
+ * `accent-deep`. Это снимает спор десктопа с правилом «красный значит
+ * списание»: на телефоне красного в макете нет.
+ *
+ * Строки выдачи и раскрытый объект совпадают на обеих ширинах во всём, кроме
+ * одного: рамки у миниатюры 40×40 на телефоне нет. В десктопных строках
+ * (`TnQcc`, `GxeMW`, `hcDtm`) стоит волосная линия 1 px, в мобильных
+ * (`J2daxs`, `lue37`, `delAl`) обводки нет вовсе. Рамка на телефоне была
+ * дорисована, а не снята замером, — теперь она живёт от lg.
+ *
+ * Шапка счёта тоже собрана по-разному: на десктопе это одна строка 15/600
+ * «247 объектов от собственников», на телефоне — число 15/600 и слово 13/500,
+ * выровненные по нижнему краю (`cE6UZ`, `ai=end`), а не по центру.
+ */
+import { Search } from 'lucide-react'
+
+import { listingThumbs } from '@/lib/site-photos'
+
+interface Row {
+  photo: string
+  address: string
+  meta: string
+  price: string
+  /** Отклонение от медианы: глиф, текст и цвет — три разных состояния. */
+  deviation: {
+    glyph?: string
+    label: string
+    tone: 'flat' | 'above' | 'below'
+    /**
+     * Счётчик MOTION-SPEC «−12 %»: 0 → −12 за 1600 ms. Он есть ровно у этой
+     * строки — той, что раскрыта ниже. У «+9 %» счётчика в спеке нет, и
+     * заводить его «для симметрии» значило бы добавить движение, которого
+     * никто не заказывал. Знак и число считает скрипт, единица остаётся
+     * в разметке: она не меняется, и незачем гонять её через `textContent`.
+     */
+    countTo?: number
+  }
+  /** Строка, которую агент выбрал: залита `warm`, без нижней линии. */
+  active?: boolean
+}
+
+const rows: Row[] = [
+  {
+    photo: listingThumbs.nauki,
+    address: 'Науки пр., 17',
+    meta: '1-комн · 39 м² · 14 минут назад',
+    price: '8,1 млн ₽',
+    deviation: { label: '≈ рынок', tone: 'flat' },
+  },
+  {
+    photo: listingThumbs.svetlanovskiy,
+    address: 'Светлановский пр., 62',
+    meta: '2-комн · 63 м² · 38 минут назад',
+    price: '14,1 млн ₽',
+    deviation: { glyph: '▲', label: '+9 %', tone: 'above' },
+  },
+  {
+    photo: listingThumbs.grazhdanskiy,
+    address: 'Гражданский пр., 114',
+    meta: '3-комн · 71 м² · 1 час назад',
+    price: '12,8 млн ₽',
+    deviation: { countTo: -12, glyph: '▼', label: '−12', tone: 'below' },
+    active: true,
+  },
+]
+
+const deviationTone = {
+  flat: 'text-text-dense',
+  above: 'text-err-text',
+  below: 'text-ok-text',
+} as const
+---
+
+{/* `hv-object` — подъём −2 px под курсором. Карточка неинтерактивна и не
+    должна обещать нажатие; ход здесь работает иначе: это единственный на
+    странице снимок продукта, и он отвечает на курсор как предмет, а не как
+    кнопка. Ниже lg карточки нет вовсе, а наведения нет на телефоне, поэтому
+    правило и живёт под `@media (hover: hover)`. */}
+{/* `aria-hidden` снят: внутри теперь живая кнопка, а спрятанное от читалки
+    нажатие — это ловушка для того, кто ходит клавиатурой. */}
+<div
+  data-demo-mock
+  class="hv-object flex flex-col gap-3 lg:rounded-3xl lg:border lg:border-hairline lg:bg-surface lg:p-4 lg:shadow-[0_16px_40px_-12px_#1E1E1E1F]"
+>
+  <div
+    class="flex h-18 items-center gap-3 rounded-2xl border border-hairline bg-surface py-3 pr-3 pl-4 lg:h-12 lg:gap-2.5 lg:rounded-xl lg:bg-bg lg:py-0 lg:pr-1.5 lg:pl-3.5"
+  >
+    <Search className="size-[18px] shrink-0 text-text-3 lg:size-4" />
+    <span class="text-15 min-w-0 flex-1 font-medium text-fg lg:text-15-dense">
+      Калининский<span class="hidden lg:inline"> район</span>, до 15 млн
+    </span>
+    {/*
+      Кнопка настоящая, а не нарисованная. Промпт движения требует от витрины
+      состояний `idle → pending → success` со скелетоном при поиске: человек
+      обязан увидеть, что продукт делает, а не поверить картинке. Владелец
+      об это и споткнулся — «Поиск в герое не нажимается».
+
+      Скелетон держится 900 мс: это не имитация задержки ради красоты,
+      а нижняя граница из DESIGN.md — показанный скелет живёт минимум 400 мс,
+      иначе он мигает, а четыре площадки быстрее секунды не отвечают.
+    */}
+    <button
+      type="button"
+      data-demo-search
+      class="ctl ctl-solid text-15 flex h-12 shrink-0 cursor-pointer items-center rounded-full bg-fg px-4 font-semibold text-surface lg:text-17 lg:px-5"
+    >
+      Найти
+    </button>
+  </div>
+
+  <div class="flex items-center justify-between gap-2 px-1 lg:px-0">
+    <span class="flex items-end gap-1 lg:items-baseline">
+      {/* Счётчик «247 объектов»: 0 → 247 за 1600 ms. Класс `c-n` резервирует
+          три разряда, иначе растущее число двигает слово «объектов» вправо. */}
+      <span class="c-n text-15 font-semibold text-fg" data-count-dur="1600" data-count-to="247">247</span>
+      <span class="text-13 font-medium text-text-2 lg:text-15-dense lg:font-semibold lg:text-fg">
+        объектов<span class="hidden lg:inline"> от собственников</span>
+      </span>
+    </span>
+    <span class="text-12 font-medium text-text-dense lg:text-13 lg:text-text-2">
+      112 дублей склеено
+    </span>
+  </div>
+
+  {/* Список объектов. В состоянии `pending` поверх него ложится скелетон —
+      разметка при этом не меняется, поэтому страница не прыгает. */}
+  <div class="demo-rows flex flex-col" data-demo-rows>
+    {
+      rows.map((row) => (
+        <div
+          class:list={[
+            // `min-h`, а не `h`: 64 — замер строки с однострочным адресом.
+            // На 320 адрес переносится, и жёсткая высота положила бы вторую
+            // строку поверх соседней строки выдачи.
+            'flex min-h-16 items-center gap-3 px-2',
+            row.active ? 'rounded-lg bg-warm' : 'border-b border-hairline',
+          ]}
+        >
+          <img
+            class="size-10 shrink-0 rounded-lg object-cover lg:border lg:border-hairline"
+            src={row.photo}
+            alt=""
+            width="40"
+            height="40"
+            loading="lazy"
+            decoding="async"
+          />
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="text-15 font-semibold text-fg">{row.address}</span>
+            <span class="text-13 font-medium text-text-2">{row.meta}</span>
+          </div>
+          <div class="flex shrink-0 flex-col items-end gap-0.5">
+            <span class="text-15 font-semibold text-fg">{row.price}</span>
+            <span class:list={['flex items-center gap-1', deviationTone[row.deviation.tone]]}>
+              {row.deviation.glyph && <span class="text-12 font-semibold">{row.deviation.glyph}</span>}
+              {row.deviation.countTo === undefined ? (
+                <span class="text-13 font-semibold">{row.deviation.label}</span>
+              ) : (
+                /* Считается только знак с числом, «%» стоит рядом. Три
+                   зарезервированных разряда покрывают «−12» целиком, поэтому
+                   единица не ездит по строке, пока счётчик набирает значение. */
+                <span class="text-13 font-semibold">
+                  <span
+                    class="c-n"
+                    data-count-dur="1600"
+                    data-count-to={row.deviation.countTo}
+                  >{row.deviation.label}</span> %
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+      ))
+    }
+  </div>
+
+  <div class="flex flex-col gap-2 rounded-2xl bg-warm p-3.5">
+    {/* Номер не переносится: телефон, разорванный по строкам, перестаёт быть
+        номером. На 320 адрес и номер встают друг под друга, а не ломаются. */}
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <span class="text-15 font-semibold text-fg">Гражданский пр., 114</span>
+      <span class="text-20 font-semibold whitespace-nowrap text-fg">+7 900 000-93-96</span>
+    </div>
+    <span class="text-13 font-medium text-text-2">
+      2 публикации · 1 номер · проверено сегодня в 14:02
+    </span>
+    <span class="text-17 flex h-12 items-center justify-center rounded-full bg-fg font-semibold text-surface">
+      Позвонить
+    </span>
+    <span class="text-13 font-medium text-text-2">
+      Списано 199 ₽. Запись в журнале доступа. Вернём, если это посредник.
+    </span>
+  </div>
+</div>
+
+<script>
+  /*
+    Витрина: `idle → pending → success`.
+
+    Нажатие на «Найти» показывает скелетон на 900 мс и возвращает список.
+    Это не украшение: витрина обещает продукт, а обещание, которое не отвечает
+    на нажатие, читается как неработающий сайт — на это и пожаловался владелец.
+
+    Скелетон рисуется поверх готового списка непрозрачной заливкой, а не
+    подменяет разметку: подмена сдвинула бы страницу, а движение раскладки
+    в этом проекте запрещено.
+
+    Прогрессивное улучшение: без JS кнопка остаётся кнопкой и ничего не ломает,
+    список виден целиком. При `prefers-reduced-motion` скелетона нет вовсе —
+    список моргает состоянием, но не мерцает.
+  */
+  const mock = document.querySelector<HTMLElement>('[data-demo-mock]')
+  const button = mock?.querySelector<HTMLButtonElement>('[data-demo-search]')
+  const rows = mock?.querySelector<HTMLElement>('[data-demo-rows]')
+
+  if (mock && button && rows) {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    let busy = false
+
+    button.addEventListener('click', () => {
+      if (busy) return
+      busy = true
+
+      mock.dataset.demoState = 'pending'
+      button.setAttribute('aria-busy', 'true')
+      rows.setAttribute('aria-busy', 'true')
+
+      window.setTimeout(
+        () => {
+          mock.dataset.demoState = 'success'
+          button.removeAttribute('aria-busy')
+          rows.removeAttribute('aria-busy')
+          busy = false
+        },
+        reduce ? 0 : 900,
+      )
+    })
+  }
+</script>

@@ -1,0 +1,146 @@
+---
+/**
+ * Подвал сайта — компонент Pencil `ffD1a`, 1440×397.
+ *
+ * ГЛАВНОЕ. Ниже lg подвала на сайте нет. Это проверено обходом всех 86 кадров
+ * шириной 390: строка «© 2026 Сёрчь» встречается ровно на одном — на «МОБАЙЛ ·
+ * Главная» (`W8o1CK`). Ни на «Тарифах», ни на «Как это устроено», ни на
+ * «Законе и данных», ни на «О компании», «Контактах», «Оферте», «Политике»,
+ * «Согласии», в блоге и на служебных страницах подвала не нарисовано вовсе:
+ * страница кончается своим последним блоком, а на «Тарифах» и «Законе» —
+ * сноской 12/500 в теле. Мобильные кадры — не адаптив десктопных, и подвал
+ * здесь не «переехал вниз», его нет.
+ *
+ * Поэтому ниже lg подвал показан только на главной. Правило выведено из
+ * адреса, а не из свойства: свойство у шапки и свойство у подвала разъехались
+ * бы на первой же новой странице.
+ *
+ * Сверху волосная линия 1 px, поля 64 сверху и 48 снизу, внутри колонка 1200
+ * с зазором 48: верх подвала, линия-разделитель, нижняя строка.
+ *
+ * Точка вордмарка здесь 9×9, а не 8×8, как в шапке. Это расхождение самого
+ * файла, а не опечатка перевода: обе меры сняты замером.
+ *
+ * Телефон — кадр `W8o1CK` внутри «МОБАЙЛ · Главная» (`EDoek`): поля 40 сверху,
+ * 32 снизу, 20 по бокам, и один зазор 28 на всё — между маркой, каждой
+ * колонкой, линией, строкой оператора и копирайтом. Колонки не переносятся по
+ * строке, а встают друг под друга; внутри колонки зазор 12, а не 14. Слоган
+ * на телефоне набран 13/500, а не 15/500: это второй замер, а не уменьшенный
+ * первый. Точка вордмарка здесь 8×8 против 9×9 на десктопе.
+ */
+import BrandMark from './BrandMark.astro'
+import { isActiveRoute, signupHref, siteRoutes } from '@/lib/site-routes'
+
+const columns = [
+  {
+    label: 'ПРОДУКТ',
+    name: 'Продукт',
+    links: [
+      { href: siteRoutes.howItWorks, label: 'Как это устроено' },
+      { href: siteRoutes.blog, label: 'Блог' },
+      { href: siteRoutes.pricing, label: 'Тарифы' },
+      { href: signupHref, label: 'Получить доступ' },
+    ],
+  },
+  {
+    label: 'КОМПАНИЯ',
+    name: 'Компания',
+    links: [
+      { href: siteRoutes.about, label: 'О компании' },
+      { href: siteRoutes.contacts, label: 'Контакты' },
+      { href: siteRoutes.legal, label: 'Закон и данные' },
+      { href: siteRoutes.status, label: 'Статус сервиса' },
+    ],
+  },
+  {
+    label: 'ПРАВОВОЕ',
+    name: 'Правовое',
+    links: [
+      { href: siteRoutes.offer, label: 'Оферта' },
+      { href: siteRoutes.privacy, label: 'Политика 152-ФЗ' },
+      { href: siteRoutes.consent, label: 'Согласие на обработку ПД' },
+    ],
+  },
+]
+
+// В файле стоит «© 2026 Сёрчь». Год берём с часов, чтобы подвал не устарел
+// сам по себе: сегодня это ровно то же значение, что в замере.
+const year = new Date().getFullYear()
+
+// Тот же активный пункт, что и в шапке, и по той же причине: подвал — второе,
+// а на телефоне единственное полное меню сайта, и человек должен видеть в нём
+// своё место. Отличие одно на оба меню — `fg` и начертание 600. Ссылка
+// «Получить доступ» ведёт в кабинет, то есть на внешний адрес, и активной не
+// бывает никогда: это отсекает `isActiveRoute`.
+const isActive = (href: string) => isActiveRoute(Astro.url.pathname, href)
+
+// Та же развилка, что в шапке, и по тому же источнику: главная — единственный
+// мобильный кадр сайта с подвалом.
+const isHome = isActiveRoute(Astro.url.pathname, siteRoutes.home)
+---
+
+<footer
+  class:list={[
+    'border-t border-hairline bg-bg pt-10 pb-8 lg:pt-16 lg:pb-12',
+    isHome ? '' : 'hidden lg:block',
+  ]}
+>
+  {/* Три части подвала выходят с шагом 80: меню, разделитель, реквизиты. */}
+  <div class="site-container flex flex-col gap-7 lg:gap-12" data-rev-group>
+    <div class="flex flex-col justify-between gap-7 lg:flex-row lg:gap-16">
+      <div class="flex flex-col gap-3 lg:w-[380px] lg:gap-4">
+        <a class="ctl self-start rounded-sm" href={siteRoutes.home} aria-label="Сёрчь, на главную">
+          <BrandMark dot={8} dotLg={9} />
+        </a>
+        <p class="text-13 font-medium text-text-2 lg:text-15">
+          Поисковик прямых собственников недвижимости для риелторов. Санкт-Петербург.
+        </p>
+        {/* Почта — не пункт меню, поэтому сдвига +2 px у неё нет: он размечает
+            колонки ссылок. `self-start` тоже не косметика: без него ссылка
+            растягивается на всю колонку 380, и кольцо фокуса обводит пустоту
+            справа от адреса вместо самого адреса. */}
+        <a
+          class="ctl ctl-ink text-15 self-start font-semibold text-fg transition-colors duration-150"
+          href="mailto:hello@serch.ru">hello@serch.ru</a
+        >
+      </div>
+
+      <div class="flex flex-col gap-7 lg:flex-row lg:flex-wrap lg:gap-x-16 lg:gap-y-10">
+        {
+          columns.map((column) => (
+            <nav class="flex flex-col gap-3 lg:gap-3.5" aria-label={column.name}>
+              <span class="text-label font-semibold text-text-dense">{column.label}</span>
+              {/* `hv-foot` — сдвиг +2 px по X при наведении. Ссылок в подвале
+                  одиннадцать, подчёркивание на каждой превратило бы колонку в
+                  рябь, а сдвиг читается только под курсором. Класс несёт и
+                  сам сдвиг, и переход цвета: `transform` и `color` обязаны
+                  идти с одним временем, иначе ссылка «доезжает» после того,
+                  как уже покрасилась. */}
+              {column.links.map((link) => (
+                <a
+                  class:list={[
+                    'ctl ctl-text hv-foot text-15 self-start',
+                    isActive(link.href) ? 'font-semibold text-fg' : 'font-medium text-text-2',
+                  ]}
+                  aria-current={isActive(link.href) ? 'page' : undefined}
+                  href={link.href}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          ))
+        }
+      </div>
+    </div>
+
+    <div class="h-px w-full bg-hairline" aria-hidden="true"></div>
+
+    <div class="flex flex-col justify-between gap-7 sm:flex-row sm:items-center sm:gap-5">
+      <p class="text-13 font-medium text-text-2">
+        ООО «Сёрчь» · ИНН 7813592047 · оператор персональных данных в реестре Роскомнадзора
+      </p>
+      <p class="text-13 font-medium text-text-dense">© {year} Сёрчь</p>
+    </div>
+  </div>
+</footer>

@@ -1,0 +1,202 @@
+---
+/**
+ * САЙТ · Блог, список — кадр `E34UR`, 1440×2528.
+ *
+ * Шапка → первый экран → раздел «Последние разборы» → подвал. Ни призыва, ни
+ * вопросов на странице нет: список разборов ничего не продаёт.
+ *
+ * Раздел собран той же формой, что «Как это устроено» на одноимённой странице
+ * (`StepsSection`): слева колонка 282 с заголовком и оглавлением, справа 894 с
+ * карточками. Это не совпадение — в Pencil кадр раздела так и называется «Как
+ * это устроено» и сделан копией. Поэтому здесь взята готовая форма, а не
+ * заведён второй язык для того же самого.
+ *
+ * Три отличия от шагов, и все три сняты замером, а не выбраны:
+ * поле карточки 28 против 24, зазор текста и фото 32 против 24, высота 296
+ * против 288; метка карточки набрана 12/+1.6, а не 11/+0.66; приглушённый
+ * пункт оглавления взят `text-dense`, а не `text-2`.
+ */
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import SiteHeader from '@/components/landing/SiteHeader.astro'
+import SitePageHero from '@/components/landing/SitePageHero.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import { blogPhotos } from '@/lib/site-photos'
+import { blogPostRoutes } from '@/lib/site-routes'
+
+const title = 'Блог — Сёрчь'
+const description =
+  'Разборы по данным нашей выдачи: сколько объявлений размещают посредники, как ведут себя цены и что происходит с законом о звонках.'
+
+const publicWebsiteUrl = import.meta.env.PUBLIC_WEBSITE_URL
+const canonicalUrl = publicWebsiteUrl
+  ? new URL(Astro.url.pathname, publicWebsiteUrl).toString()
+  : undefined
+
+interface BlogPost {
+  /** Якорь карточки: по нему в неё ведёт пункт оглавления. */
+  id: string
+  /** Название рубрики в оглавлении. */
+  section: string
+  /** Метка карточки: дата и рубрика капслоком. */
+  label: string
+  title: string
+  lead: string
+  photo: string
+  /**
+   * Адрес разбора. Есть только у первого: в Pencil собран ровно один кадр
+   * статьи. Заводить адреса остальным трём значит поставить на страницу три
+   * ссылки в 404 — заголовок без ссылки честнее сломанной ссылки.
+   */
+  href?: string
+}
+
+const posts: BlogPost[] = [
+  {
+    id: 'razbor-01',
+    section: 'Данные рынка',
+    label: '22 ИЮЛЯ · ДАННЫЕ РЫНКА',
+    title: 'Восемь объявлений из десяти в Петербурге размещает не собственник',
+    lead: 'Разобрали 1 240 объявлений за сутки по всем восемнадцати районам: сколько из них дубли, сколько агентские и сколько остаётся, если убрать и то и другое.',
+    photo: blogPhotos[0],
+    href: blogPostRoutes.ownersShare,
+  },
+  {
+    id: 'razbor-02',
+    section: 'Закон и звонки',
+    label: '8 ИЮЛЯ · ЗАКОН И ЗВОНКИ',
+    title: 'Штраф за один холодный звонок: как читать 41-ФЗ агентству недвижимости',
+    lead: 'С 1 сентября 2025 года массовый обзвон без согласия абонента наказывается штрафом юрлицу от 300 тысяч рублей. Разбираем, что считается массовым и что делать агентству.',
+    photo: blogPhotos[1],
+  },
+  {
+    id: 'razbor-03',
+    section: 'Работа агентства',
+    label: '24 ИЮНЯ · РАБОТА АГЕНТСТВА',
+    title: 'Сколько стоит встреча: считаем юнит-экономику контактов',
+    lead: 'Подписка не показывает цену одного контакта. Показываем, как посчитать рубли за встречу и за договор, если платите за факт.',
+    photo: blogPhotos[2],
+  },
+  {
+    id: 'razbor-04',
+    section: 'Продукт',
+    label: '10 ИЮНЯ · ПРОДУКТ',
+    title: 'Почему мы не отдаём номера пачкой и не собираемся',
+    lead: 'Выгрузка списка это то, что превращает сервис в слив персональных данных. Объясняем, чем это грозит агентству и почему запрет защищает вас.',
+    photo: blogPhotos[3],
+  },
+]
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} title={title}>
+  {/* Подпись мобильной полосы 56 — замер кадра `wyxba`. */}
+  <SiteHeader caption="блог" />
+
+  <main id="main-content">
+    <SitePageHero
+      titleLines={[{ text: 'Что мы знаем' }, { text: 'о рынке' }, { text: 'Петербурга', muted: true }]}
+      subtitle="Разборы по данным нашей выдачи: сколько объявлений размещают посредники, как ведут себя цены и что происходит с законом о звонках."
+      trust="Пишем раз в две недели. Только то, что можем подтвердить своими цифрами."
+      trustFootnote
+      prices={[
+        { sum: '199 ₽', note: 'за раскрытый контакт' },
+        { sum: '3 000 ₽', note: 'в месяц за агентство' },
+      ]}
+      bottom={64}
+    />
+
+    <section class="site-container py-20 lg:py-40">
+      <div class="flex flex-col gap-12 lg:flex-row lg:gap-6">
+        {/* Та же пара групп, что у «Как это устроено»: колонка с оглавлением
+            выходит с шагом 80, карточки разборов — с 120. */}
+        <div class="lg:w-[282px] lg:shrink-0" data-rev-group>
+          <h2 class="text-26 font-semibold text-fg lg:text-40">Последние разборы</h2>
+
+          {/* В Pencil оглавление нарисовано с выделенной первой рубрикой: это
+              состояние прокрутки, а не украшение. Пункты ведут к карточкам
+              якорями — список рубрик, который никуда не ведёт, был бы просто
+              покрашенным текстом.
+
+              Наведение красит обе части строки, а не саму ссылку: у номера и у
+              рубрики свои цвета классами, и они перебивают наследование —
+              `hover:text-fg` на ссылке не давал вообще ничего. */}
+          <nav class="mt-9 flex flex-col" aria-label="Рубрики">
+            {
+              posts.map((post, index) => (
+                <a
+                  class="ctl group flex h-11 items-center gap-3.5 border-t border-hairline"
+                  href={`#${post.id}`}
+                  aria-current={index === 0 ? 'true' : undefined}
+                >
+                  <span
+                    class:list={[
+                      'text-13 font-semibold transition-colors duration-150 group-hover:text-fg',
+                      index === 0 ? 'text-fg' : 'text-text-dense',
+                    ]}
+                  >
+                    {index + 1}
+                  </span>
+                  <span
+                    class:list={[
+                      'text-17 transition-colors duration-150 group-hover:text-fg',
+                      index === 0 ? 'font-semibold text-fg' : 'font-medium text-text-dense',
+                    ]}
+                  >
+                    {post.section}
+                  </span>
+                </a>
+              ))
+            }
+          </nav>
+        </div>
+
+        <div
+          class="flex flex-col gap-6 lg:w-[894px] lg:shrink-0"
+          data-rev-group
+          data-rev-step="120"
+        >
+          {
+            posts.map((post) => (
+              <article
+                class="hv-card flex flex-col gap-8 rounded-3xl bg-warm p-7 lg:h-74 lg:flex-row lg:items-center"
+                id={post.id}
+              >
+                <div class="flex flex-col lg:flex-1">
+                  <span class="text-label font-semibold text-text-dense">{post.label}</span>
+                  <h3 class="mt-3.5 text-26 font-semibold text-fg">
+                    {post.href ? (
+                      <a class="ctl ctl-ink transition-colors duration-150" href={post.href}>
+                        {post.title}
+                      </a>
+                    ) : (
+                      post.title
+                    )}
+                  </h3>
+                  <p class="mt-3 text-16 font-medium text-text-2">{post.lead}</p>
+                </div>
+                <img
+                  class="aspect-[380/240] w-full rounded-2xl object-cover lg:h-60 lg:w-[380px] lg:shrink-0"
+                  src={post.photo}
+                  alt=""
+                  width="380"
+                  height="240"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    {/* Ниже lg строка доверия уходит из первого экрана в конец страницы —
+        так на кадре `wyxba`, как и на «Тарифах» с «Законом». */}
+    <div class="site-container pt-3 pb-8 lg:hidden">
+      <p class="text-12 font-medium text-text-dense">
+        Пишем раз в две недели. Только то, что можем подтвердить своими цифрами.
+      </p>
+    </div>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

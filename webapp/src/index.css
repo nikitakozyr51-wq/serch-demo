@@ -1,0 +1,496 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Inter Tight подключён файлами из `public/fonts`, а не пакетом.
+   Причина: путь до репозитория содержит кириллицу, и Vite в режиме разработки
+   выдаёт адрес вида `/@fs/D:/ÑÐµÑÑ/node_modules/...` — имя папки уходит
+   в искажённой кодировке, файл не находится, и весь текст молча рисуется
+   запасным системным шрифтом. Файлы из `public` отдаются по адресу без пути
+   репозитория, поэтому от имени папки не зависят.
+
+   Наборов два: латиница для цифр и служебных строк, кириллица для всего
+   остального. Греческий и вьетнамский продукту не нужны — не возим. */
+@font-face {
+  font-family: 'Inter Tight Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-tight-cyrillic-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'Inter Tight Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-tight-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Тёмной темы в продукте нет — решение, см. DESIGN.md «Тёмной темы нет, и это решение».
+   Вариант остаётся объявленным, потому что на `dark:` завязаны 73 места в регенерируемых
+   примитивах shadcn. Класса `.dark` в продукте не существует, поэтому вариант никогда
+   не активируется. Снос `dark:` из вендорных файлов дал бы тот же результат ценой правки
+   23 файлов, которые перезатрёт следующая генерация shadcn. */
+@custom-variant dark (&:is(.dark *));
+
+/* Плотный режим. Высоты и поле ячейки переключаются переменными сами.
+   Вариант нужен там, где переменной не обойтись: кегль подписи падает с 14
+   на 13 на ступенях 32 и 40, радиус кнопки вида — с 8 на 6, а зазоры между
+   блоками идут не по одной шкале с высотами. */
+@custom-variant compact (:root[data-density="compact"] &);
+
+@theme inline {
+    /* ── Шрифт ─────────────────────────────────────────────────────────────
+       Inter Tight, начертания 600 и 500. Третьего нет: иерархия делается
+       кеглем и цветом, не толщиной. */
+    --font-sans: 'Inter Tight Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: var(--font-sans);
+
+    /* ── Типографика кабинета — закрытая лестница, 8 ступеней ──────────────
+       11 · 12 · 13 · 14 · 16 · 20 · 28 · 40. Промежуточных нет, полупиксельных нет.
+       Интерлиньяж объявлен в пикселях и в диапазоне 12–20 кратен четырём.
+       Именованные ступени Tailwind посажены на лестницу, поэтому даже случайный
+       `text-3xl` в примитиве shadcn попадает в 28, а не в чужие 30. */
+    --text-11: 11px;
+    --text-11--line-height: 16px;
+    --text-11--letter-spacing: 0.06em;
+
+    --text-xs: 12px;
+    --text-xs--line-height: 16px;
+    --text-xs--letter-spacing: -0.005em;
+
+    --text-13: 13px;
+    --text-13--line-height: 20px;
+    --text-13--letter-spacing: -0.01em;
+
+    --text-sm: 14px;
+    --text-sm--line-height: 20px;
+    --text-sm--letter-spacing: -0.01em;
+
+    --text-base: 16px;
+    --text-base--line-height: 24px;
+    --text-base--letter-spacing: -0.015em;
+
+    --text-lg: 20px;
+    --text-lg--line-height: 28px;
+    --text-lg--letter-spacing: -0.02em;
+
+    --text-xl: 20px;
+    --text-xl--line-height: 28px;
+    --text-xl--letter-spacing: -0.02em;
+
+    --text-2xl: 28px;
+    --text-2xl--line-height: 32px;
+    --text-2xl--letter-spacing: -0.025em;
+
+    --text-3xl: 28px;
+    --text-3xl--line-height: 32px;
+    --text-3xl--letter-spacing: -0.025em;
+
+    --text-4xl: 40px;
+    --text-4xl--line-height: 42px;
+    --text-4xl--letter-spacing: -0.03em;
+
+    /* Второй законный вариант ступени 20: отношение 1.2, только заголовок
+       в тесной панели. Вне этой роли брать нельзя. */
+    --text-20-tight: 20px;
+    --text-20-tight--line-height: 24px;
+    --text-20-tight--letter-spacing: -0.02em;
+
+    /* Девятой ступени в кабинете нет. Убрано, чтобы её нельзя было применить молча. */
+    --text-5xl: initial;
+    --text-6xl: initial;
+    --text-7xl: initial;
+    --text-8xl: initial;
+    --text-9xl: initial;
+
+    /* ── Движение ──────────────────────────────────────────────────────────
+       У кабинета физика не та, что у лендинга: переходы 120–200 мс, никаких
+       reveal-каскадов на списках, движение передаёт состояние, а не украшает.
+       150 мс — середина окна и значение по умолчанию у Tailwind.
+
+       Кривая: единственная, которая в проекте выбрана и обоснована —
+       `cubic-bezier(.22,.61,.24,1)` из MOTION-SPEC. Она заменила чистый
+       экспоненциальный `.16,1,.3,1` после того, как владелец назвал его
+       «очень резким»: тот проходит 80 % пути за первую треть времени и
+       читается рывком. Отдельного числа для кабинета в документах нет,
+       поэтому берётся эта, а не выдумывается третья.
+
+       Анимировать разрешено цвет, `opacity` и `transform`. Свойства раскладки
+       (`width`, `height`, `top`, `left`) — никогда. */
+    --default-transition-timing-function: cubic-bezier(0.22, 0.61, 0.24, 1);
+    --default-transition-duration: 150ms;
+
+    /* ── Отступы ───────────────────────────────────────────────────────────
+       База 4 px. Шкала на самом деле двойная:
+       микро (внутри контрола и строки) 2 · 4 · 6 · 8 · 10 · 12 · 14 — это `*-0.5`…`*-3.5`;
+       макро (между блоками) 16 · 20 · 24 · 28 · 32 · 40 · 48 · 56 · 64 · 80 · 88 · 96 · 120 · 140
+       — это целые кратные. Обе выражаются без произвольных значений. */
+    --spacing: 4px;
+
+    /* ── Радиусы ───────────────────────────────────────────────────────────
+       Привязаны к высоте, отношение радиуса к высоте 0.22–0.27.
+       Именованные ступени shadcn посажены на лестницу, иначе `calc(--radius * 1.4)`
+       из шаблона выдаёт 14 · 18 · 22 · 26 — значения, которых в проекте нет. */
+    --radius: 10px;
+    --radius-none: 0px;
+    --radius-bar: 2px;          /* только полоски высотой до 8 px: шкала отклонения, антидубль */
+    --radius-bar-lg: 4px;       /* только заливки индикаторов */
+    --radius-sm: 6px;           /* r-6  — высота 24 */
+    --radius-md: 8px;           /* r-8  — высота 28 и 32 */
+    --radius-lg: 10px;          /* r-10 — высота 36 и 40 */
+    --radius-xl: 12px;          /* r-control — высота 44 и 48, строка-карточка 64/88 */
+    --radius-2xl: 16px;         /* r-media — панели и модалки */
+    --radius-3xl: 24px;         /* r-card */
+    --radius-4xl: 24px;         /* потолок: крупнее r-card в кабинете ничего нет */
+    /* r-pill живёт в `rounded-full`. Только primary-кнопка, чип фильтра и круглые фигуры. */
+
+    /* ── Цвет: семантический слой shadcn посажен на токены проекта ──────────
+       Это делает 70 вендорных примитивов фирменными без правки их файлов. */
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    /* ── Цвет: токены проекта под своими именами ───────────────────────────
+       Яркого `accent #fa3433` здесь нет намеренно: он только на сайте.
+       В кабинете красный существует ровно один — `accent-deep`, и только там,
+       где списываются деньги. */
+    --color-bg: var(--bg);
+    --color-surface: var(--surface);
+    --color-warm: var(--warm);
+    --color-warm-hover: var(--warm-hover);
+    --color-warm-press: var(--warm-press);
+    --color-fg: var(--fg);
+    --color-fg-hover: var(--fg-hover);
+    --color-fg-press: var(--fg-press);
+    --color-text-2: var(--text-2);
+    --color-text-3: var(--text-3);
+    --color-text-dense: var(--text-dense);
+    --color-line-1: var(--line-1);
+    --color-line-2: var(--line-2);
+    --color-line-3: var(--line-3);
+    --color-border-control: var(--border-control);
+    --color-accent-bright: var(--accent-bright);
+    --color-accent-deep: var(--accent-deep);
+    --color-accent-hover: var(--accent-hover);
+    --color-ok-text: var(--ok-text);
+    --color-ok-glyph: var(--ok-glyph);
+    --color-ok-tint: var(--ok-tint);
+    --color-warn-text: var(--warn-text);
+    --color-warn-glyph: var(--warn-glyph);
+    --color-warn-tint: var(--warn-tint);
+    --color-err-text: var(--err-text);
+    --color-err-glyph: var(--err-glyph);
+    --color-err-tint: var(--err-tint);
+
+    /* Завесы. Под текстом на фото — 65 %, текст на ней чистый белый, не 85 и не 65:
+       иерархию на фото даёт кегль, а не прозрачность. Под мобильным листом — 35 %. */
+    --color-scrim-photo: var(--scrim-photo);
+    --color-scrim-sheet: var(--scrim-sheet);
+    --color-on-photo: var(--on-photo);
+
+    /* ── Лестница контролов ────────────────────────────────────────────────
+       Высота, радиус и кегль подписи связаны жёстко. Пара «высота с чужим
+       радиусом» — дефект, а не вариант. Значения переключаются плотностью. */
+    /* Неймспейс именно `--height-*`: утилита `h-*` читает только его и `--spacing`.
+       Через `--size-*` эти же значения породили бы `size-*` (ширина И высота
+       разом) и не дали бы `h-*` вовсе — так уже было, и все контролы
+       схлопнулись по высоте до строки текста. */
+    --height-ctl-xs: var(--h-xs);      /* 28 → 24 · r-6  · 12 — чип состояния */
+    --height-ctl-sm: var(--h-sm);      /* 32 → 28 · r-8  · 14 — кнопка в строке, вторичная */
+    --height-ctl-md: var(--h-md);      /* 40 → 36 · r-10 · 14 — инпут, кнопка формы, селект */
+    --height-ctl-lg: var(--h-lg);      /* 48 → 44 · r-12 · 16 — поисковая строка, primary */
+    --height-ctl-chip: var(--h-chip);  /* 28 → 24 · r-8/pill · 13 — чип фильтра и чип выбора */
+
+    /* Поле ячейки и строки: 16 → 12. Отдельная ступень в шкале отступов,
+       потому что это единственный отступ, который переключается плотностью:
+       `px-cell` меняется сам, а `px-4` остался бы просторным навсегда. */
+    --spacing-cell: var(--pad-cell);
+
+    /* Ряды */
+    --height-row-obj: var(--row-obj);    /* 88 → 64 — строка выдачи */
+    --height-row-tbl: var(--row-tbl);    /* 48 → 40 — строка таблицы */
+    --height-row-head: var(--row-head);  /* 36 → 32 — шапка таблицы */
+
+    /* ── Закрытая шкала ширин колонок ──────────────────────────────────────
+       Все кратны гаттеру 24. Одна и та же по смыслу колонка имеет одну ширину
+       во всех восьми таблицах: сумма всегда 96, дата со временем всегда 144. */
+    /* Неймспейс `--width-*`: утилита `w-*` читает его, `--spacing` и `--container`. */
+    --width-col-96: 96px;    /* деньги, счётчик, короткая дата без времени */
+    --width-col-120: 120px;  /* одно слово, чип статуса, канал, тип */
+    --width-col-144: 144px;  /* дата со временем 24.07, 15:40 */
+    --width-col-168: 168px;  /* человек, телефон, способ оплаты */
+    --width-col-216: 216px;  /* фраза: причина, документ, действие, срок, исход */
+
+    /* ── Сетка кабинета ────────────────────────────────────────────────────
+       Экран 1440 · сайдбар 240 · тело 1200 · поле 24 · контент 1152.
+       Столбец фильтров 260, выдача 908. Фильтры никогда не перекрывают выдачу. */
+    --width-sidebar: 240px;
+    --height-header: 56px;
+    --width-content: 1152px;
+    --width-filters: 260px;
+    --width-results: 908px;
+}
+
+:root {
+    /* ── Ядро палитры ──────────────────────────────────────────────────────
+       Ни синего, ни оранжевого. Ни чистого #000, ни чистого #fff как приёма. */
+    --bg: #f9f9f9;
+    --surface: #ffffff;
+    --warm: #f2f1ee;
+    --fg: #1e1e1e;
+    --text-2: #57544f;   /* вторичный текст от 14 px */
+    --text-3: #8f8b84;   /* только от 18.66 px и только как декоративная подпись */
+    --text-dense: #6f6b64; /* любой текст мельче 18.66 px, на любом из трёх фонов */
+
+    --fg-hover: #333029;
+    --fg-press: #0d0d0c;
+    --warm-hover: #e9e7e3;
+    --warm-press: #dedbd6;
+
+    /* Линии: три уровня плюс граница контрола.
+       hairline #e7e5e0 даёт 1.2:1 и структурой таблицы быть не может. */
+    --line-1: #ebe9e5;         /* декоративный делитель внутри карточки */
+    --line-2: #ddd9d3;         /* разделитель строк списка, внутренняя граница ячейки */
+    --line-3: #c6c4c0;         /* внешняя рамка таблицы, закреплённая шапка */
+    --border-control: #8a867f; /* граница инпута, невыбранного чипа, выключенной кнопки */
+
+    /* Единственный красный кабинета. Только там, где списываются деньги.
+       Кнопка «Позвонить» им не красится: нажатие стоит 0 ₽.
+       Кнопка «Раскрыть · 199 ₽» в строке похожих — тоже нет: красный закреплён
+       за единственным главным списанием на карточке объекта. */
+    /* Яркий акцент в кабинете разрешён ровно в одном месте — точка вордмарка.
+       Правило «красный только там, где списываются деньги» имеет единственное
+       исключение, и оно записано в DESIGN.md: точка не нажимается, значит
+       ничего не обещает. Проверка на будущее: выписать все узлы с accent
+       и по каждому ответить, сколько денег списывает нажатие. Ноль — цвет неверен.
+
+       DESIGN.md называет его `accent`, но это имя в shadcn занято подложкой
+       наведения: назвать его так значило бы покрасить в красный каждое
+       `hover:bg-accent` в вендорных примитивах. Поэтому здесь `accent-bright`. */
+    --accent-bright: #fa3433;
+
+    --accent-deep: #d92d2c;
+    /* Ступень наведения для кнопки списания. Взята из переменных файла Pencil.
+       Отдельного шага нажатия для красного в системе не объявлено, поэтому
+       нажатие использует ту же ступень — выдумывать восьмой красный не стал. */
+    --accent-hover: #d21f1e;
+
+    --scrim-photo: #1e1e1ea6;  /* завеса под текстом на фото, fg при 65 % */
+    --scrim-sheet: #1e1e1e59;  /* затемнение под мобильным листом, fg при 35 % */
+    --on-photo: #ffffff;
+
+    /* Семантика: один цвет, повёрнутый по hue, при постоянных светлоте и насыщенности.
+       «Внимание» — тёмная охра-олива на hue 105, не оранжевый.
+       Декоративно не применяется: шкала «признаки собственника» нейтральная. */
+    --ok-text: #1d7d3e;
+    --ok-glyph: #25984d;
+    --ok-tint: #e6f5e8;
+    --warn-text: #756c00;
+    --warn-glyph: #8f8300;
+    --warn-tint: #eeedd6;
+    --err-text: #a7463e;
+    --err-glyph: #ca564d;
+    --err-tint: #fdeceb;
+
+    /* ── Плотность: один токен, шаг −4 px, пол 24 px (WCAG 2.5.8, не эстетика) ──
+       Просторный режим по умолчанию. Переключатель живёт в меню «Вид» экрана выдачи. */
+    --h-xs: 28px;
+    --h-sm: 32px;
+    --h-md: 40px;
+    --h-lg: 48px;
+    --h-chip: 28px;
+    --row-obj: 88px;
+    --row-tbl: 48px;
+    --row-head: 36px;
+    --pad-cell: 16px;
+
+    /* ── Семантический слой shadcn ─────────────────────────────────────────
+       primary графитовый, а не красный: primary-кнопка не списывает деньги.
+       ring графитовый: акцент в кольце фокуса запрещён, красный значит «списание».
+       muted-foreground взят как text-dense, потому что вторичный текст в кабинете
+       почти всегда мельче 18.66 px, а text-3 там не проходит по контрасту. */
+    --background: var(--bg);
+    --foreground: var(--fg);
+    --card: var(--surface);
+    --card-foreground: var(--fg);
+    --popover: var(--surface);
+    --popover-foreground: var(--fg);
+    --primary: var(--fg);
+    --primary-foreground: var(--bg);
+    --secondary: var(--warm);
+    --secondary-foreground: var(--fg);
+    --muted: var(--warm);
+    --muted-foreground: var(--text-dense);
+    --accent: var(--warm);
+    --accent-foreground: var(--fg);
+    --destructive: var(--err-text);
+    --border: var(--line-2);
+    --input: var(--border-control);
+    --ring: var(--fg);
+
+    --sidebar: var(--warm);
+    --sidebar-foreground: var(--fg);
+    --sidebar-primary: var(--fg);
+    --sidebar-primary-foreground: var(--bg);
+    --sidebar-accent: var(--warm-hover);
+    --sidebar-accent-foreground: var(--fg);
+    --sidebar-border: var(--line-1);
+    --sidebar-ring: var(--fg);
+
+    /* Сегменты диаграмм. Текстовая палитра из трёх ступеней для диаграммы мала:
+       соседние сегменты обязаны различаться. Значения закреплены за диаграммами
+       и к тексту не применяются. Набор предварительный: экран «Эффективность»
+       в первую версию не входит, при его сборке ряд проверяется на реальных данных. */
+    --chart-1: var(--fg);
+    --chart-2: #75716a;
+    --chart-3: #a8a49d;
+    --chart-4: var(--line-3);
+    --chart-5: var(--line-2);
+}
+
+/* Плотный режим. Шаг −4 px с полом 24. Строка выдачи 88 → 64 — не шаг лестницы,
+   а собственное правило: двухстрочная карточка сжимается в одну строку. */
+:root[data-density="compact"] {
+    --h-xs: 24px;
+    --h-sm: 28px;
+    --h-md: 36px;
+    --h-lg: 44px;
+    --h-chip: 24px;
+    --row-obj: 64px;
+    --row-tbl: 40px;
+    --row-head: 32px;
+    --pad-cell: 12px;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    }
+  /* Кольцо фокуса: графит, 2 px, снаружи контрола — поэтому не съедает высоту
+     и не ломает лестницу. Акцент в кольце запрещён. На тёмных контролах кольцо
+     двойное, это задаёт сам контрол: сначала 2 px bg как зазор, затем 2 px fg. */
+  *:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    }
+  body {
+    @apply bg-background text-foreground;
+    font-weight: 500;
+    }
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    }
+  /* Кабинет требует минимум 1280. Планшета нет — решение, см. DESIGN.md. */
+  }
+
+/**
+ * Плашка скелетона.
+ *
+ * Цвет плашки снят с макета — `line-1`, ровно как на экранах загрузки.
+ * Мерцание в макете взяться не может: файл статичен и движения не хранит,
+ * поэтому амплитуда и длительность взяты из DESIGN.md: переход к `line-2`
+ * и 1,3 секунды линейно. Без второй ступени мерцание при контрасте 1,2:1
+ * попросту не видно.
+ *
+ * Отключённое движение гасит мерцание насухо, а не замедляет его: общий
+ * ковёр ниже оставил бы градиент застывшим на случайном кадре, то есть
+ * плашку в полоску. Здесь остаётся ровная заливка.
+ */
+.skeleton-plate {
+  background-color: var(--line-1);
+  background-image: linear-gradient(
+    90deg,
+    var(--line-1) 25%,
+    var(--line-2) 37%,
+    var(--line-1) 63%
+  );
+  background-size: 200% 100%;
+  animation: serch-shimmer 1.3s linear infinite;
+}
+
+@keyframes serch-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/*
+  Появление окна кабинета: 120 мс, прозрачность и сдвиг на 8 px вверх.
+
+  Нижняя граница диапазона кабинета (120–200 мс) выбрана не случайно: палитру
+  открывают десятки раз за день, и она обязана казаться мгновенной. Reveal
+  лендинга на 780 мс здесь запрещён спекой прямо: 30–50 звонков в день
+  умножают каждую лишнюю десятую.
+
+  Двигаются только `opacity` и `transform` — ни `width`, ни `top`. Кривая
+  ease-out без отскока: окно, которое перелетает и возвращается, читается
+  как неисправное.
+*/
+@keyframes serch-motion-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.motion-in {
+  animation: serch-motion-in 120ms cubic-bezier(0.22, 0.61, 0.24, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .skeleton-plate {
+    background-image: none;
+    animation: none !important;
+  }
+}

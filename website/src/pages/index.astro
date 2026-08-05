@@ -1,0 +1,57 @@
+---
+/**
+ * САЙТ · Главная — кадр Pencil `o5tT7a`, 1440×8055.
+ *
+ * Порядок секций взят из файла и не переставлен: обещание → врез → как это
+ * устроено → склейка → районы → доказательства → тарифы → вопросы → призыв.
+ * Врез стоит вторым намеренно: сначала показываем продукт, потом бьём цифрой,
+ * почему без него больно.
+ *
+ * Ритм между секциями один на всю страницу — 140 сверху и снизу (на телефоне
+ * 80), кроме финального призыва: у него 200 (на телефоне 96). Третьего
+ * значения нет.
+ *
+ * Телефон — кадр `EDoek`, 390×7815, и состав у него другой: полоса 56 вместо
+ * шапки, а секции «Как это устроено» нет вовсе. Порядок мобильной главной —
+ * первый экран → врез → возможности → районы → доказательства → тарифы →
+ * вопросы → призыв → подвал. Подвал на телефоне есть только здесь: это
+ * единственный из 86 мобильных кадров файла, где он нарисован. Само скрытие
+ * живёт в `StepsSection.astro` — рядом с тем, что скрывается.
+ */
+import DistrictsSection from '@/components/landing/DistrictsSection.astro'
+import EvidenceSection from '@/components/landing/EvidenceSection.astro'
+import FaqSection from '@/components/landing/FaqSection.astro'
+import FinalCtaSection from '@/components/landing/FinalCtaSection.astro'
+import HeroSection from '@/components/landing/HeroSection.astro'
+import MergeSection from '@/components/landing/MergeSection.astro'
+import PricingSection from '@/components/landing/PricingSection.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import SiteHeader from '@/components/landing/SiteHeader.astro'
+import StatementSection from '@/components/landing/StatementSection.astro'
+import StepsSection from '@/components/landing/StepsSection.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+
+const title = 'Сёрчь — прямые контакты собственников недвижимости в Петербурге'
+const description =
+  'Прямые контакты собственников с четырёх площадок: дубли склеены, посредники отсеяны, видно, кто из ваших уже звонил. 3 000 ₽ в месяц за агентство и 199 ₽ за раскрытый контакт.'
+const publicWebsiteUrl = import.meta.env.PUBLIC_WEBSITE_URL
+const canonicalUrl = publicWebsiteUrl
+  ? new URL(Astro.url.pathname, publicWebsiteUrl).toString()
+  : undefined
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} title={title}>
+  <SiteHeader />
+  <main id="main-content">
+    <HeroSection />
+    <StatementSection />
+    <StepsSection />
+    <MergeSection />
+    <DistrictsSection />
+    <EvidenceSection />
+    <PricingSection />
+    <FaqSection />
+    <FinalCtaSection />
+  </main>
+  <SiteFooter />
+</BaseLayout>

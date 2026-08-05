@@ -1,0 +1,169 @@
+---
+/**
+ * Служебная публичная страница — один каркас на четыре пары кадров:
+ * `mEcGL`/`gKAga` (404), `C8nzz`/`E7swy` (технические работы),
+ * `M8UCn`/`olXfz` (статус сервиса), `H83QZ`/`V9ILWs` (serch.ru/stop).
+ *
+ * Все четыре пары совпадают до пикселя: та же публичная шапка, то же тело с
+ * полем 48 и зазором 48, та же колонка слева и та же тёплая панель 400
+ * справа. Различаются только слова и наличие формы. Поэтому это компонент, а
+ * не четыре копии: любая правка каркаса иначе разъехалась бы на четвёртой
+ * странице, а заметили бы её на восьмой.
+ *
+ * РАСКЛАДКА (замеры сняты с обеих ширин, 1440 и 390).
+ *
+ * Широкий экран: тело 1440 с полем 48 по кругу и зазором 48 между колонками.
+ * Слева колонка 896 с зазором 20 — заголовок 28/600, лид 14/500 шириной 640,
+ * кнопка 48 и правовая строка 12/500. Справа панель 400 на `warm` с радиусом
+ * 16 из пары «панели → r-media», поле 28, зазор 14. Панель тянется во всю
+ * высоту тела, поэтому сноска в ней прижата к низу распоркой.
+ *
+ * Телефон: одна колонка, жёлоб 16, поля 24 сверху и 32 снизу, зазор 24.
+ * Заголовок 26/600, лид 15/500, кнопка во всю ширину с меткой 16/600,
+ * панель с полем 16. Обратный привычному порядок кеглей — лид и метка кнопки
+ * на телефоне КРУПНЕЕ, чем на 1440, — не описка: на телефоне эта страница
+ * занимает весь экран и работает заголовком, на 1440 она стоит в колонке
+ * рядом с панелью и обязана быть тише её.
+ *
+ * Сноска панели на широком экране живёт ВНУТРИ панели, а на телефоне — под
+ * ней, отдельной строкой на фоне страницы. Это два разных узла файла, а не
+ * один переехавший, поэтому здесь два элемента, и на каждой ширине виден
+ * ровно один: у второго `display: none`, и экранный диктор читает его не
+ * дважды, а один раз.
+ *
+ * Подвала у этих страниц нет ни на одном кадре — и это осмысленно. На 404 и
+ * на технических работах человек уже не туда попал, ему нужен выход, а не
+ * карта сайта; на `serch.ru/stop` он собственник, а не клиент, и продавать
+ * ему агентство в такой момент — грубость.
+ */
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import PublicHeader from './PublicHeader.astro'
+
+export interface ServiceRow {
+  /** Левая, тёмная часть строки: срок, источник или состояние. */
+  term: string
+  text: string
+}
+
+interface Props {
+  /** Подпись рядом с маркой в шапке: широкий экран и телефон. */
+  caption: string
+  captionSm: string
+  heading: string
+  lead: string
+  /** Строка 12/500 под кнопкой — правовое или уточняющее пояснение. */
+  legal: string
+  /**
+   * Короткая редакция правовой строки для 390.
+   *
+   * На кадре `V9ILWs` она обрывается на «жалобе в Роскомнадзор», без ссылки
+   * на статью. Ссылка на норму нужна юристу за столом, а собственнику
+   * с телефона — причина, по которой у него ничего не спрашивают.
+   */
+  legalSm?: string
+  /**
+   * Единственное действие страницы. С `href` это ссылка; без него — кнопка
+   * отправки формы, и тогда форма обязана быть заполнена через слот `fields`.
+   */
+  action: { href?: string; label: string }
+  panel: { label: string; rows: ServiceRow[]; note: string }
+  title: string
+  description?: string
+  robots?: string
+  canonicalUrl?: string
+}
+
+const { action, canonicalUrl, caption, captionSm, description, heading, lead, legal, legalSm, panel, robots, title } =
+  Astro.props
+
+// Поля есть только у `serch.ru/stop`. Форма заводится ровно тогда, когда есть
+// что отправлять: пустой `<form>` вокруг ссылки сломал бы Enter и автозаполнение.
+const hasForm = Astro.slots.has('fields')
+
+// Кнопка 48: на телефоне во всю ширину с меткой 16/600, на 1440 — по ширине
+// метки с полем 28 и меткой 14/600. Радиус-пилюля здесь по правилу, а не по
+// высоте: пилюлю получает только главное действие, и оно на странице одно.
+// Пять состояний — общий набор `.ctl-*` из `global.css`, тот же, что у кнопок
+// лендинга: у служебной страницы своя ступень геометрии, но не своя физика.
+const actionClasses = [
+  'ctl ctl-solid ctl-dark',
+  'inline-flex h-ctl-lg w-full items-center justify-center rounded-full px-7',
+  'text-16 font-semibold',
+  'transition-colors duration-150',
+  'lg:w-auto lg:self-start lg:text-14',
+]
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} robots={robots} title={title}>
+  <PublicHeader caption={caption} captionSm={captionSm} />
+
+  {/* Высота тела на 1440 — весь экран без шапки (72), поэтому панель справа
+      дотягивается до низа, как в файле. На телефоне высота по содержимому. */}
+  <main
+    class="flex flex-col gap-6 px-4 pt-6 pb-8 lg:min-h-[calc(100vh-72px)] lg:flex-row lg:gap-12 lg:p-12"
+    id="main-content"
+  >
+    <div class="flex flex-col gap-6 lg:max-w-[896px] lg:flex-1 lg:gap-5">
+      {/* На широком экране зазор внутри пары «заголовок — лид» равен зазору
+          колонки (20), то есть колонка читается как плоская. На телефоне он
+          вдвое меньше зазора колонки: 10 против 24. */}
+      <div class="flex flex-col gap-2.5 lg:gap-5">
+        <h1 class="text-26 font-semibold text-fg lg:text-28">{heading}</h1>
+        <p class="text-15 font-medium text-text-2 lg:max-w-[640px] lg:text-14">{lead}</p>
+      </div>
+
+      {
+        hasForm ? (
+          <form class="flex flex-col gap-6 lg:gap-5" method="post">
+            {/* Поля стоят теснее друг к другу, чем к кнопке: 20 на телефоне
+                против 24 и 16 на широком экране против 20. Обе меры сняты. */}
+            <div class="flex flex-col gap-5 lg:gap-4">
+              <slot name="fields" />
+            </div>
+
+            <button class:list={actionClasses} type="submit">
+              {action.label}
+            </button>
+          </form>
+        ) : (
+          <a class:list={actionClasses} href={action.href}>
+            {action.label}
+          </a>
+        )
+      }
+
+      {
+        legalSm ? (
+          <>
+            <p class="text-12 font-medium text-text-dense lg:hidden">{legalSm}</p>
+            <p class="hidden text-12 font-medium text-text-dense lg:block lg:max-w-[640px]">
+              {legal}
+            </p>
+          </>
+        ) : (
+          <p class="text-12 font-medium text-text-dense lg:max-w-[640px]">{legal}</p>
+        )
+      }
+    </div>
+
+    <aside class="flex flex-col gap-3.5 rounded-2xl bg-warm p-4 lg:w-100 lg:shrink-0 lg:p-7">
+      <p class="text-label-sm font-semibold text-text-dense">{panel.label}</p>
+
+      {
+        panel.rows.map((row) => (
+          <div class="flex flex-col gap-1">
+            <p class="text-13 font-semibold text-fg">{row.term}</p>
+            <p class="text-13 font-medium text-text-2">{row.text}</p>
+          </div>
+        ))
+      }
+
+      {/* Распорка прижимает сноску к низу панели — так она стоит в файле.
+          На телефоне панель по содержимому, распорки там нет. */}
+      <div class="hidden lg:block lg:flex-1"></div>
+      <p class="hidden text-12 font-medium text-text-dense lg:block">{panel.note}</p>
+    </aside>
+
+    <p class="text-12 font-medium text-text-dense lg:hidden">{panel.note}</p>
+  </main>
+</BaseLayout>

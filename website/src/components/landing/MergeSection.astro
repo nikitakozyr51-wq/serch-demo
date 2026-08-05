@@ -1,0 +1,70 @@
+---
+/**
+ * «Возможности» — кадр Pencil `AEbkf`, 1440×696. По сути это одна схема:
+ * четыре объявления сверху и один объект снизу, а между ними волосная линия
+ * и две прописные метки.
+ *
+ * Метка «ЧЕТЫРЕ ОБЪЯВЛЕНИЯ…» приглушена, метка «ОДИН ОБЪЕКТ, ОДИН НОМЕР» —
+ * графитовая. Это и есть весь довод: до склейки шумно, после склейки тихо.
+ *
+ * Зазор между четырьмя плашками 4, а не 24: они читаются как один разорванный
+ * ряд, а не как четыре карточки. Плотных значений на лендинге нет нигде,
+ * кроме этого места, и здесь плотность — приём.
+ *
+ * Телефон — кадр `ephKI` внутри «МОБАЙЛ · Главная» (`EDoek`). Схема та же,
+ * ритм другой, и все три меры сняты замером: шапка блока через 12, а не 16;
+ * между шапкой, схемой и итогом ровно 24 без волосной линии, а не 48 + линия +
+ * 48; внутри итоговой плашки адрес и номер разведены на 8, а не на 16. Линии
+ * и широкого шага на телефоне нет вовсе: секция и так стоит одна на экране,
+ * и делить её ещё раз нечем.
+ */
+const sources = [
+  { name: 'Авито', detail: '9,4 млн ₽ · +7 900 000-23-72' },
+  { name: 'Циан', detail: '9,6 млн ₽ · +7 900 000-40-04' },
+  { name: 'Домклик', detail: '9,4 млн ₽ · +7 900 000-23-72' },
+  { name: 'Яндекс', detail: '9,9 млн ₽ · +7 900 000-03-09' },
+]
+---
+
+<section class="site-container py-20 lg:py-35">
+  <div class="flex max-w-[690px] flex-col gap-3 lg:gap-4" data-rev-group>
+    <h2 class="text-26 font-semibold text-fg lg:text-40">Один объект вместо четырёх объявлений</h2>
+    <p class="text-17 max-w-[640px] font-medium text-text-2">
+      Одна квартира висит на четырёх площадках под разными телефонами и с разной ценой. Агент
+      обзванивает её четыре раза и четыре раза попадает на посредника.
+    </p>
+  </div>
+
+  {/* Схема выходит по порядку довода: метка, четыре объявления, метка, итог.
+      Ряд плашек проявляется целиком, а не по плашке: зазор между ними 4, они
+      читаются как один разорванный ряд, и разбирать его по частям значило бы
+      разобрать сам довод. */}
+  <div class="mt-6 lg:mt-12 lg:border-t lg:border-hairline lg:pt-12" data-rev-group>
+    <p class="text-label font-semibold text-text-dense">ЧЕТЫРЕ ОБЪЯВЛЕНИЯ, ТРИ НОМЕРА, ТРИ ЦЕНЫ</p>
+
+    <div class="mt-3.5 grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
+      {
+        sources.map((source) => (
+          <div class="flex flex-col gap-1 rounded-lg bg-warm px-4 py-3">
+            <span class="text-15 font-semibold text-fg">{source.name}</span>
+            <span class="text-13 font-medium text-text-dense">{source.detail}</span>
+          </div>
+        ))
+      }
+    </div>
+
+    <p class="text-label mt-6 font-semibold text-fg">ОДИН ОБЪЕКТ, ОДИН НОМЕР</p>
+
+    <div
+      class="mt-3.5 flex flex-col gap-2 rounded-xl bg-fg px-4 py-4 lg:h-16 lg:flex-row lg:items-center lg:gap-4 lg:py-0"
+    >
+      <div class="flex flex-1 flex-col gap-1">
+        <span class="text-15 font-semibold text-on-dark">Тихорецкий пр., 5</span>
+        <span class="text-13 font-medium text-on-dark-meta">
+          1-комн · 42 м² · 9,4 млн ₽ · собственник
+        </span>
+      </div>
+      <span class="text-15 font-semibold text-on-dark">+7 900 000-23-72</span>
+    </div>
+  </div>
+</section>

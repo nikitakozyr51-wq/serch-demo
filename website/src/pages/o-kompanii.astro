@@ -1,0 +1,64 @@
+---
+/**
+ * САЙТ · О компании — кадр `KUKbD`, 1440×1823.
+ *
+ * Самая короткая страница сайта: шапка → первый экран → юридический контур из
+ * трёх строк → подвал. Ни призыва, ни вопросов, ни фотографии в файле нет, и
+ * это осмысленно — страницу открывают, чтобы проверить контрагента перед
+ * оплатой, а не чтобы им проникнуться.
+ *
+ * Обе части уже собраны: первый экран — `SitePageHero` (нижнее поле 64),
+ * контур — `LegalSection` со строками `LegalRow`. Артефакта справа у строк
+ * здесь нет: в файле у этих строк только заголовок 282 и текст 486.
+ */
+import LegalRow from '@/components/landing/LegalRow.astro'
+import LegalSection from '@/components/landing/LegalSection.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import SiteHeader from '@/components/landing/SiteHeader.astro'
+import SitePageHero from '@/components/landing/SitePageHero.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+
+const title = 'О компании — Сёрчь'
+const description =
+  'Юридическое лицо, реестровая запись и границы ответственности. Страница для тех, кто проверяет контрагента перед оплатой.'
+
+const publicWebsiteUrl = import.meta.env.PUBLIC_WEBSITE_URL
+const canonicalUrl = publicWebsiteUrl
+  ? new URL(Astro.url.pathname, publicWebsiteUrl).toString()
+  : undefined
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} title={title}>
+  {/* Подпись мобильной полосы 56 — замер кадра `wQ2c2`. */}
+  <SiteHeader caption="о компании" />
+
+  <main id="main-content">
+    <SitePageHero
+      titleLines={[{ text: 'Кто делает' }, { text: '«Сёрчь»' }]}
+      subtitle="Небольшая команда в Петербурге. Мы не агентство и не берём комиссию со сделок: наш заработок это доступ и раскрытые контакты."
+      trust="ООО «Сёрчь» · ИНН 7813592047 · оператор персональных данных, уведомление в Роскомнадзор № 78-19-004182"
+      bottom={64}
+    />
+
+    <LegalSection
+      title="Кому вы платите"
+      lead="Юридическое лицо, реестровая запись и границы ответственности. Страница для тех, кто проверяет контрагента перед оплатой."
+    >
+      <LegalRow
+        title="Юридическое лицо"
+        text="ООО «Сёрчь», Санкт-Петербург. ИНН 7813592047, ОГРН 1197847043318. Работаем с юридическими лицами по договору, счёт и акт приходят первого числа."
+      />
+      <LegalRow
+        title="Кто отвечает за данные"
+        text="Оператор персональных данных, уведомление в Роскомнадзор № 78-19-004182. Серверы в Российской Федерации. Запросы собственников принимает dpo@serch.ru и рассматривает за один рабочий день."
+      />
+      <LegalRow
+        title="Что мы себе запретили"
+        text="Выгрузку номеров пачкой, продажу списков третьим лицам и снятие отказа собственника. Последнее не может сделать даже поддержка."
+        last
+      />
+    </LegalSection>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

@@ -1,0 +1,244 @@
+---
+/**
+ * САЙТ · Блог, статья — кадр `shmRc`, 1440×3430.
+ *
+ * Шапка → первый экран → витрина с таблицей районов → три вывода → методика →
+ * подвал. Призыва к действию на статье нет: разбор доказывает, а не продаёт.
+ *
+ * Три из пяти блоков собраны уже существующими частями сайта — первый экран,
+ * юридический контур и блок вопросов. Свой на странице только один блок,
+ * витрина с таблицей: такой таблицы на сайте больше нигде нет.
+ *
+ * Про таблицу. Дорожка рядом с числом объектов — не украшение, а то же число
+ * в другой форме, поэтому она скрыта от чтения с экрана и её длина считается
+ * от максимума по колонке (334, Приморский), а не задана вручную. Замер
+ * подтверждает: 148 из 334 дают 111 px при дорожке 250 — ровно то значение,
+ * что стоит в файле.
+ *
+ * Пять колонок в 1200 не сжимаются ни во что осмысленное, поэтому ниже
+ * контейнера таблица уезжает вбок внутри своей обёртки. Обрезки нет: доступны
+ * все колонки, страница вбок не едет.
+ */
+import LegalRow from '@/components/landing/LegalRow.astro'
+import LegalSection from '@/components/landing/LegalSection.astro'
+import SiteFaq from '@/components/landing/SiteFaq.astro'
+import type { FaqItem } from '@/components/landing/SiteFaq.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import SiteHeader from '@/components/landing/SiteHeader.astro'
+import SitePageHero from '@/components/landing/SitePageHero.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+
+const title = 'Восемь объявлений из десяти размещает не собственник — Сёрчь'
+const description =
+  'Разбор 1 240 объявлений по восемнадцати районам Петербурга за сутки: сколько из них дубли, сколько агентские и сколько остаётся собственников.'
+
+const publicWebsiteUrl = import.meta.env.PUBLIC_WEBSITE_URL
+const canonicalUrl = publicWebsiteUrl
+  ? new URL(Astro.url.pathname, publicWebsiteUrl).toString()
+  : undefined
+
+interface DistrictRow {
+  district: string
+  /** Объектов от собственников. Это же число задаёт длину дорожки. */
+  objects: number
+  perMeter: string
+  median: string
+  fresh: string
+}
+
+const districts: DistrictRow[] = [
+  {
+    district: 'Петроградский',
+    objects: 148,
+    perMeter: '412 тыс ₽',
+    median: '14,8 млн ₽',
+    fresh: '+11',
+  },
+  { district: 'Центральный', objects: 203, perMeter: '389 тыс ₽', median: '21,6 млн ₽', fresh: '+17' },
+  {
+    district: 'Василеостровский',
+    objects: 176,
+    perMeter: '271 тыс ₽',
+    median: '9,4 млн ₽',
+    fresh: '+14',
+  },
+  { district: 'Московский', objects: 286, perMeter: '246 тыс ₽', median: '11,9 млн ₽', fresh: '+22' },
+  { district: 'Приморский', objects: 334, perMeter: '218 тыс ₽', median: '8,7 млн ₽', fresh: '+26' },
+  { district: 'Калининский', objects: 291, perMeter: '205 тыс ₽', median: '7,9 млн ₽', fresh: '+19' },
+]
+
+// Максимум по колонке задаёт полную дорожку. Считается, а не вписывается:
+// иначе добавление района молча сломало бы пропорции всех остальных.
+const objectsMax = Math.max(...districts.map((row) => row.objects))
+
+const faqItems: FaqItem[] = [
+  {
+    question: 'Откуда взяты 1 240 объявлений',
+    open: true,
+    answer:
+      'Все объявления о продаже квартир по Петербургу, появившиеся на четырёх площадках за сутки 21 июля 2026 года. Повторные публикации одного объявления на одной площадке не считались.',
+  },
+  {
+    question: 'Как определялся дубль и как посредник',
+    open: true,
+    answer:
+      'Дубль: совпадение адреса, площади, этажа и не менее двух фотографий. Посредник: номер встречается более чем в трёх объявлениях по разным адресам либо помечен площадкой как агентский.',
+  },
+  // Три последних вопроса в Pencil свёрнуты, текста ответа у них нет.
+  { question: 'Почему считали только продажу квартир?' },
+  { question: 'Что делали с объявлениями без телефона?' },
+  { question: 'Можно ли повторить расчёт на своей выборке?' },
+]
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} title={title}>
+  {/* Подпись мобильной полосы 56 — замер кадра `eZAoT`. */}
+  <SiteHeader caption="блог · разбор" />
+
+  <main id="main-content">
+    <SitePageHero
+      kickerSm="22 ИЮЛЯ · ДАННЫЕ РЫНКА"
+      titleLines={[
+        { text: 'Восемь объявлений' },
+        { text: 'из десяти размещает' },
+        { text: 'не собственник', muted: true },
+      ]}
+      subtitle="22 июля 2026 · разбор по данным нашей выдачи за сутки · читать шесть минут"
+      trust="Данные: 1 240 объявлений по восемнадцати районам Петербурга за 21 июля 2026 года."
+      bottom={64}
+    />
+
+    <section class="py-20 lg:py-35">
+      {/* Шаг 80 по трём частям блока: заголовок, таблица, сноска. Строки
+          таблицы по очереди не выходят — таблицу читают целиком, и уезжающая
+          шапка со столбцами это не движение, а помеха чтению. */}
+      <div class="site-container flex flex-col gap-14" data-rev-group>
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-end">
+          <h2 class="text-26 font-semibold text-fg lg:w-[690px] lg:shrink-0 lg:text-40">
+            Что показывают цифры
+          </h2>
+          <p class="text-17-prose font-medium text-text-2 lg:w-[486px] lg:shrink-0">
+            Медиана по районам и число объектов, оставшихся после склейки дублей и отсева
+            посредников.
+          </p>
+        </div>
+
+        {/* `min-w-0` обязателен: у элемента гибкой раскладки минимальная ширина
+            по умолчанию равна ширине содержимого, поэтому без него таблица не
+            сжимается, а растягивает колонку — и вбок едет вся страница, а не
+            таблица внутри своей обёртки. */}
+        <div class="hidden lg:block min-w-0 overflow-x-auto">
+          <table class="w-full min-w-[1000px] table-fixed">
+            <colgroup>
+              <col />
+              <col class="w-[340px]" />
+              <col class="w-[170px]" />
+              <col class="w-[170px]" />
+              <col class="w-[160px]" />
+            </colgroup>
+            <thead>
+              <tr class="h-10 border-b border-line-3">
+                <th class="text-label text-left font-semibold text-text-dense" scope="col">РАЙОН</th>
+                <th class="text-label text-right font-semibold text-text-dense" scope="col">
+                  ОБЪЕКТОВ ОТ СОБСТВЕННИКОВ
+                </th>
+                <th class="text-label text-right font-semibold text-text-dense" scope="col">
+                  МЕДИАНА ₽/М²
+                </th>
+                <th class="text-label text-right font-semibold text-text-dense" scope="col">
+                  МЕДИАНА ЦЕНЫ
+                </th>
+                <th class="text-label text-right font-semibold text-text-dense" scope="col">
+                  НОВЫХ ЗА СУТКИ
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                districts.map((row) => (
+                  <tr class="h-15 border-b border-line-2">
+                    <th class="text-17 text-left font-semibold text-fg" scope="row">
+                      {row.district}
+                    </th>
+                    <td>
+                      <div class="flex items-center justify-end gap-4">
+                        <span
+                          class="h-1.5 w-[250px] overflow-hidden rounded-full bg-warm"
+                          aria-hidden="true"
+                        >
+                          <span
+                            class="block h-full rounded-full bg-text-2"
+                            style={`width: ${((row.objects / objectsMax) * 100).toFixed(2)}%`}
+                          />
+                        </span>
+                        <span class="text-16 font-semibold text-fg">{row.objects}</span>
+                      </div>
+                    </td>
+                    <td class="text-16 text-right font-medium text-text-2">{row.perMeter}</td>
+                    <td class="text-16 text-right font-medium text-text-2">{row.median}</td>
+                    <td class="text-16 text-right font-medium text-fg">{row.fresh}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        {/* Ниже lg таблица не сжимается, а пересобирается в строки «ключ —
+            значение»: на кадре `eZAoT` у района одна строка 15/600 и под ней
+            все три числа одной подписью 12/500. Пять колонок в 390 не встают
+            ни при какой ужимке, а полоса объёма 250 px там просто не помещается.
+
+            Числа при этом те же самые — меняется только форма подачи. */}
+        <div class="flex flex-col lg:hidden">
+          {
+            districts.map((row) => (
+              <div class="flex items-center gap-3 border-b border-line-2 py-3">
+                <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span class="text-15 font-semibold text-fg">{row.district}</span>
+                  <span class="text-12 font-medium text-text-dense">
+                    {row.perMeter}/м² · медиана {row.median} · {row.fresh} за сутки
+                  </span>
+                </div>
+                <span class="text-16 font-semibold text-fg">{row.objects}</span>
+              </div>
+            ))
+          }
+        </div>
+
+
+        <p class="max-w-[760px] text-13 font-medium text-text-2">
+          Шесть районов из восемнадцати. Полная таблица по всем районам обновляется каждые сутки.
+        </p>
+      </div>
+    </section>
+
+    <LegalSection
+      title="Три вывода"
+      lead="Коротко о том, что из этих чисел следует для агентства."
+    >
+      <LegalRow
+        title="Дубли важнее посредников"
+        text="630 объявлений из 1 240 это один и тот же объект под разными номерами. Агент, который обзванивает список подряд, половину времени звонит по кругу."
+      />
+      <LegalRow
+        title="Свежесть решает"
+        text="Объявление собственника живёт в среднем один-два часа до того, как его найдут агентства. Дальше по номеру звонят все подряд, и собственник перестаёт брать трубку."
+      />
+      <LegalRow
+        title="Цена не главный фильтр"
+        text="Отклонение от медианы района полезно, но само по себе не отделяет собственника от посредника: агентские объявления встречаются и ниже рынка."
+        last
+      />
+    </LegalSection>
+
+    <SiteFaq
+      title="Как мы считали"
+      lead="Методика открыта, любой может проверить её на своей выборке."
+      items={faqItems}
+      dense
+    />
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

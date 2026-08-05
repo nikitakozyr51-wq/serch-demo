@@ -1,0 +1,210 @@
+---
+/**
+ * САЙТ · Закон и данные — кадр `ViV45`, 1440×3582.
+ *
+ * Шапка → первый экран → юридический контур с тремя артефактами → вопросы →
+ * итоговое действие на фотографии → подвал.
+ *
+ * Артефакты справа в контуре — не иллюстрации, а куски настоящего кабинета:
+ * стоппер, паспорт данных и журнал доступа. Они и есть доказательство того,
+ * что написано слева, поэтому набраны интерфейсными ступенями, а не текстовыми.
+ */
+import { Lock } from 'lucide-react'
+
+import LegalRow from '@/components/landing/LegalRow.astro'
+import LegalSection from '@/components/landing/LegalSection.astro'
+import SiteCta from '@/components/landing/SiteCta.astro'
+import SiteFaq from '@/components/landing/SiteFaq.astro'
+import type { FaqItem } from '@/components/landing/SiteFaq.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import SiteHeader from '@/components/landing/SiteHeader.astro'
+import SitePageHero from '@/components/landing/SitePageHero.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import { signupHref } from '@/lib/site-routes'
+
+const title = 'Закон и данные — Сёрчь'
+const description =
+  'Что делаем мы, чтобы продажа контактов оставалась законной, и что при этом обязаны делать вы как звонящая сторона.'
+
+const publicWebsiteUrl = import.meta.env.PUBLIC_WEBSITE_URL
+const canonicalUrl = publicWebsiteUrl
+  ? new URL(Astro.url.pathname, publicWebsiteUrl).toString()
+  : undefined
+
+// Паспорт данных объекта: ключ слева, значение справа, четыре строки по 36.
+const passport = [
+  { key: 'Площадка', value: 'Авито' },
+  { key: 'Объявление', value: '№ 4172' },
+  { key: 'Опубликовано', value: '14 июля' },
+  { key: 'Проверено', value: 'сегодня в 14:02' },
+]
+
+// Журнал доступа: две записи по 52. Имя в журнале не сокращается никогда —
+// журнал существует ровно затем, чтобы ответить на вопрос «кто именно».
+const accessLog = [
+  { initials: 'ИС', name: 'Ирина С.', object: 'Гражданский пр., 114', when: 'сегодня 14:02' },
+  { initials: 'ПГ', name: 'Пётр Г.', object: 'Науки пр., 17', when: 'вчера 18:40' },
+]
+
+const faqItems: FaqItem[] = [
+  {
+    question: 'Это законно? Вы же показываете чужие телефоны.',
+    open: true,
+    answer:
+      'Мы оператор персональных данных с уведомлением в Роскомнадзор. По каждому номеру показываем происхождение: площадку, номер объявления, дату публикации и дату проверки. Собственник исключает свой номер на serch.ru/stop за минуту, после этого номер скрыт у всех пользователей сервиса.',
+  },
+  {
+    question: 'А если под видом собственника окажется агент?',
+    open: true,
+    answer:
+      'Возврат делается кнопкой в панели фиксации звонка, а не письмом в поддержку. Объективные причины закрываются сразу, субъективные в течение часа, с лимитом двенадцать возвратов за тридцать дней.',
+  },
+  // Три последних вопроса в Pencil свёрнуты, текста ответа у них нет.
+  { question: 'Что будет, если собственник пожалуется в Роскомнадзор?' },
+  { question: 'Кому вы передаёте данные собственников?' },
+  { question: 'Сколько вы храните данные и что удаляете совсем?' },
+]
+
+// Фотография финального призыва — прямая ссылка из файла: собственных снимков
+// у сайта нет ни одного.
+// Один текст в двух местах и ни в одном — на обеих ширинах сразу: от lg это
+// правовая строка призыва на фотографии, ниже lg — сноска в конце страницы.
+const ctaLegal = 'Не собственник, не платите · обработка по 152-ФЗ'
+
+const ctaPhoto =
+  'https://images.unsplash.com/photo-1781661005867-a5b8ec7d4d31?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3ODUxMjE3NDd8&ixlib=rb-4.1.0&q=80&w=1080'
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} title={title}>
+  {/* Подпись мобильной полосы 56 — замер кадра `RbWlq`. */}
+  <SiteHeader caption="закон и данные" />
+
+  <main id="main-content">
+    <SitePageHero
+      titleLines={[
+        { text: 'Закон, данные' },
+        { text: 'и ваша' },
+        { text: 'ответственность', muted: true },
+      ]}
+      subtitle="Что делаем мы, чтобы продажа контактов оставалась законной, и что при этом обязаны делать вы как звонящая сторона."
+      trust="Оператор персональных данных, уведомление в Роскомнадзор № 78-19-004182. Серверы в Российской Федерации."
+      trustFootnote
+      prices={[
+        { sum: '199 ₽', note: 'за раскрытый контакт' },
+        { sum: '3 000 ₽', note: 'в месяц за агентство' },
+      ]}
+      action={{ href: signupHref, label: 'Создать агентство' }}
+      bottom={72}
+    />
+
+    <LegalSection
+      title="Так это работает по закону"
+      lead="С 1 сентября 2025 года массовый звонок без согласия абонента стоит юрлицу от 300 тысяч до миллиона рублей. Под ударом не только мы как продавец контактов, но и вы как звонящий."
+    >
+      <LegalRow
+        title="Стоп-лист собственников"
+        text="Агент отмечает «просил не звонить» в панели фиксации звонка. Номер закрывается для всего агентства сразу."
+      >
+        <div class="flex flex-col gap-2.5">
+          <div class="flex items-center gap-2.5 rounded-lg bg-warm px-4 py-3.5">
+            <Lock className="size-4 shrink-0 text-text-2" aria-hidden="true" />
+            <div class="flex flex-1 flex-col gap-0.5">
+              <span class="text-15 font-semibold text-fg">Кузнецовская ул., 44</span>
+              <span class="text-13 font-medium text-text-2">
+                Собственник просил не звонить · 12 сентября
+              </span>
+            </div>
+          </div>
+          <p class="text-13 font-medium text-text-dense">
+            Кнопка раскрытия неактивна, 199 ₽ не списываются.
+          </p>
+        </div>
+      </LegalRow>
+
+      <LegalRow
+        title="Паспорт данных объекта"
+        text="Видно, с какой площадки взят номер, из какого объявления и когда проверен. Готовый ответ на вопрос «откуда у вас мой телефон»."
+      >
+        <dl class="flex flex-col">
+          {
+            passport.map((row, index) => (
+              <div
+                class:list={[
+                  'flex h-9 items-center justify-between',
+                  index > 0 ? 'border-t border-hairline' : '',
+                ]}
+              >
+                <dt class="text-13 font-medium text-text-2">{row.key}</dt>
+                <dd class="text-13 font-semibold text-fg">{row.value}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </LegalRow>
+
+      <LegalRow
+        title="Журнал доступа"
+        text="Кто, когда и по какому объекту. Выгрузка номеров пачкой недоступна никому, включая руководителя."
+        last
+      >
+        <ul class="flex flex-col">
+          {
+            accessLog.map((entry, index) => (
+              <li
+                class:list={[
+                  'flex h-13 items-center gap-2.5',
+                  index > 0 ? 'border-t border-hairline' : '',
+                ]}
+              >
+                {/* Аватар коллеги `dFVKR`: инициалы 11/600 без трекинга —
+                    единственный капслок на сайте, набранный нормальным. */}
+                <span
+                  class="flex size-6 shrink-0 items-center justify-center rounded-full bg-warm text-label-sm font-semibold tracking-normal text-text-dense"
+                  aria-hidden="true"
+                >
+                  {entry.initials}
+                </span>
+                <span class="flex flex-1 flex-col gap-0.5">
+                  <span class="text-13 font-semibold text-fg">{entry.name}</span>
+                  <span class="text-13 font-medium text-text-2">{entry.object}</span>
+                </span>
+                <span class="text-13 font-medium text-text-dense">{entry.when}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </LegalRow>
+    </LegalSection>
+
+    <SiteFaq
+      title="Вопросы про закон"
+      lead="То, о чём руководители агентств спрашивают чаще всего."
+      items={faqItems}
+      dense
+    />
+
+    {/* Призыв на фотографии — блок десктопной страницы (`Q9O7S`). На кадре
+        `RbWlq` его нет вовсе: мобильный «Закон» кончается одной строкой 12/500,
+        а кнопка «Создать агентство» стоит наверху, сразу под ценой. Это общее
+        правило всех мобильных страниц сайта — обход десяти кадров 390 показал
+        сноску в конце и ни одного призыва на фотографии. */}
+    <div class="hidden lg:block">
+      <SiteCta
+        title="Перестаньте платить за чужие номера"
+        subtitle="Задайте район и цену, получите прямой номер собственника. Первые пять раскрытий бесплатно."
+        action={{ href: signupHref, label: 'Создать агентство' }}
+        legal={ctaLegal}
+        photo={ctaPhoto}
+      />
+    </div>
+
+    {/* Сноска ниже lg: тот же текст, что в правовой строке призыва. Поля 12
+        сверху складываются с полем блока вопросов, снизу 32 — нижнее поле тела
+        мобильного кадра. */}
+    <div class="site-container pt-3 pb-8 lg:hidden">
+      <p class="text-12 font-medium text-text-dense">{ctaLegal}</p>
+    </div>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

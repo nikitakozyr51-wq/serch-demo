@@ -1,0 +1,76 @@
+---
+/**
+ * САЙТ · Согласие на обработку данных — кадр `uolBJ`, 1440×1696.
+ *
+ * Тот же скелет, что у «Политики»: шапка → первый экран → разделы → подвал.
+ *
+ * Заголовок здесь в три строки, и третья набрана `text-2`, а не `fg`
+ * (замер `BYrI4`, #57544f). Приём тот же, что на «Законе и данных»: приглушена
+ * та часть, которая уточняет, а не называет. «Согласие на обработку» —
+ * название документа, «персональных данных» — уточнение.
+ *
+ * Документ короткий, и это сказано вслух в лиде слева. Раскрыты первые два
+ * раздела — те, что отвечают на вопрос сотрудника «что я подписываю»;
+ * у трёх остальных текста ответа в файле нет.
+ */
+import SiteFaq from '@/components/landing/SiteFaq.astro'
+import type { FaqItem } from '@/components/landing/SiteFaq.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import SiteHeader from '@/components/landing/SiteHeader.astro'
+import SitePageHero from '@/components/landing/SitePageHero.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+
+const title = 'Согласие на обработку персональных данных сотрудника'
+const description =
+  'Отдельный документ по статье 10.1 закона 152-ФЗ. Подписывается при создании агентства и при принятии приглашения.'
+
+const publicWebsiteUrl = import.meta.env.PUBLIC_WEBSITE_URL
+const canonicalUrl = publicWebsiteUrl
+  ? new URL(Astro.url.pathname, publicWebsiteUrl).toString()
+  : undefined
+
+const sections: FaqItem[] = [
+  {
+    question: 'Чьи данные и какие',
+    open: true,
+    answer:
+      'Фамилия, имя, рабочая почта, рабочий телефон и роль сотрудника агентства. Телефон виден коллегам в журнале и клиентам в подборке, поэтому личный номер указывать не нужно.',
+  },
+  {
+    question: 'Зачем и на какой срок',
+    open: true,
+    answer:
+      'Для доступа в кабинет, ведения журнала доступа и выставления документов агентству. Срок: пока действует договор с агентством и год после его окончания, как требует закон для журналов доступа.',
+  },
+  { question: 'Как отозвать согласие' },
+  { question: 'Что происходит после отзыва' },
+  { question: 'Кому мы передаём эти данные' },
+]
+---
+
+<BaseLayout canonicalUrl={canonicalUrl} description={description} title={title}>
+  {/* Подпись мобильной полосы 56 — замер кадра `BA3aO`. */}
+  <SiteHeader caption="согласие на обработку ПД" />
+
+  <main id="main-content">
+    <SitePageHero
+      titleLines={[
+        { text: 'Согласие' },
+        { text: 'на обработку' },
+        { text: 'персональных данных', muted: true },
+      ]}
+      subtitle="Отдельный документ по статье 10.1 закона 152-ФЗ. Подписывается при создании агентства и при принятии приглашения сотрудником."
+      trust="Копию подписанного согласия можно скачать в профиле в любой момент."
+      bottom={64}
+    />
+
+    <SiteFaq
+      title="Что именно вы подписываете"
+      lead="Документ короткий: это согласие на обработку данных сотрудника агентства, а не согласие собственника объекта."
+      items={sections}
+      dense
+    />
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

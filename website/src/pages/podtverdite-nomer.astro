@@ -1,0 +1,80 @@
+---
+/**
+ * САЙТ · Подтвердите, что номер ваш — кадр `LMsWf`, 1440×1063.
+ *
+ * Промежуточный шаг отказа от звонков: собственник ввёл номер на
+ * `serch.ru/stop`, получил код по SMS и подтверждает, что номер его.
+ *
+ * Второй абзац объясняет, зачем вообще этот шаг, и объяснение стоит в лиде,
+ * а не мелким шрифтом внизу: без него подтверждение читается как лишнее
+ * препятствие между человеком и его правом. С ним — как защита: иначе скрыть
+ * чужое объявление смог бы любой.
+ *
+ * Поле кода получает цифровую клавиатуру, а не буквенную: на телефоне это
+ * разница между двумя касаниями и десятью.
+ *
+ * Метод POST — по той же причине, что и на «Удалить мои данные»: код из SMS
+ * не должен попадать в адресную строку и в историю браузера. Адрес обработчика
+ * ещё не задан, бэкенд формы не подключён.
+ *
+ * Страница закрыта от индексации: в тексте видна маска чужого номера.
+ */
+import PublicAction from '@/components/landing/PublicAction.astro'
+import PublicField from '@/components/landing/PublicField.astro'
+import PublicHeader from '@/components/landing/PublicHeader.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+---
+
+<BaseLayout robots="noindex, nofollow" title="Подтвердите, что номер ваш — Сёрчь">
+  <PublicHeader caption="serch.ru/stop · подтверждение номера" captionSm="serch.ru/stop · код" />
+
+  {/* Жёлоб на телефоне 16, а не общесайтовые 20 — замер `CXe7Z`. */}
+  <main
+    class="site-container flex flex-col gap-6 px-4 pt-6 pb-8 lg:gap-8 lg:px-5 lg:pt-24 lg:pb-35"
+    id="main-content"
+  >
+    <div class="flex flex-col gap-2.5 lg:gap-8">
+      <h1 class="max-w-[760px] text-26 font-semibold text-fg lg:text-40">
+        Подтвердите, что номер ваш
+      </h1>
+      <p class="max-w-[700px] text-15 font-medium text-text-2 lg:text-17">
+        Мы отправили код на +7 900 ··· ·· 72. Без подтверждения исключить номер нельзя: иначе скрыть
+        чужое объявление смог бы любой.
+      </p>
+    </div>
+
+    <form class="flex flex-col gap-6 lg:gap-8" method="post">
+      <PublicField
+        id="code"
+        label="КОД ИЗ СМС"
+        name="code"
+        placeholder="4 8 1 6"
+        type="text"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+      />
+
+      {/* Обёртка нужна, чтобы кнопка держалась ширины своей метки: прямой
+          ребёнок колонки растянулся бы во всю ширину, а в файле кнопка 291. */}
+      <div>
+        <PublicAction label="Подтвердить и исключить номер" type="submit" />
+      </div>
+    </form>
+
+    <p class="max-w-[700px] text-12 font-medium text-text-dense lg:text-14">
+      Код живёт 10 минут. Отправить заново можно через 60 секунд.
+    </p>
+
+    {/* Строка есть только на телефоне (`WiXGt`), на десктопном `LMsWf` её нет.
+        И это правильно: код вводят с телефона, там же его и не получают,
+        и подсказка «проверьте, что номер указан верно» нужна ровно в тот
+        момент, когда человек смотрит на пустое поле и ждёт SMS. */}
+    <p class="max-w-[700px] text-12 font-medium text-text-dense lg:hidden">
+      Если код не пришёл, проверьте, что номер указан верно. Мы отправляем только на тот номер,
+      который стоит в объявлении.
+    </p>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

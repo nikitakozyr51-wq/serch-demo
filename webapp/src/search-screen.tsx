@@ -1,0 +1,448 @@
+import { useSearch } from "@tanstack/react-router"
+import { useEffect, useMemo, useState } from "react"
+
+import { Typography } from "@/components/typography"
+
+import { ALL_ROWS, DISTRICTS, MEASURED_ROWS, type SearchRow } from "@/data/search-rows"
+import { useOwnAgency, useSessionActions } from "@/features/auth"
+import { CabinetShell, useHotkeys } from "@/features/cabinet"
+import {
+  FilterPanel,
+  ListingRow,
+  ResultsHeader,
+  ResultTabs,
+} from "@/features/listings"
+
+/**
+ * КАБИНЕТ · Поиск → Выдача.
+ *
+ * Первый настоящий экран продукта, собранный из готовых частей:
+ * шапка `Vr9uG`, сайдбар `C6b6DX`, колонка фильтров `I55fb`, шапка выдачи,
+ * табы и строки `jsW77`.
+ *
+ * Сетка снята с `ghwPj`: экран 1440, шапка 56, сайдбар 240, столбец фильтров
+ * 260, остальное — выдача с полями 16 и зазором 12.
+ *
+ * **Все числа и адреса взяты из `DEMO-DATA.md`** и нигде не выдуманы:
+ * запрос «Красногвардейский, Невский, Калининский · 6–15 млн», девять строк,
+ * арифметика 892 − 431 − 214 = 247, баланс 8 610 ₽.
+ *
+ * Страница живёт только в режиме разработки: настоящий маршрут появится,
+ * когда за экраном будут данные, а не заглушки.
+ */
+
+/**
+ * Какие строки показывает каждый таб.
+ *
+ * **Фильтрация настоящая, а не нарисованная.** Табы и чипы районов реально
+ * сужают список, счётчик в шапке пересчитывается, и «Сбросить N» показывает,
+ * сколько условий сейчас работает. Данные пока демонстрационные, но поведение
+ * то самое: когда за экраном появится сеть, поменяется источник строк,
+ * а не логика.
+ */
+const TAB_FILTER: Record<string, (row: SearchRow) => boolean> = {
+  all: () => true,
+  new: (row) => row.freshnessMinutes <= 60 * 24,
+  "not-called": (row) => row.status !== "called" && row.status !== "disclosed",
+  taken: (row) => row.takenBy !== undefined,
+  mine: (row) => row.takenBy === "ИС",
+  cheaper: (row) => row.deviation < -5,
+}
+
+/**
+ * Как сортируется выдача.
+ *
+ * По свежести — по умолчанию: продукт обещает, что объявление собственника
+ * живёт час-два до того, как его найдут все, и порядок обязан это отражать.
+ * Остальные три — про деньги, и все три нужны разным людям: агент ищет,
+ * что дешевле рынка, руководитель смотрит на дорогое.
+ */
+const SORTS = {
+  fresh: { label: "по свежести", compare: (a: SearchRow, b: SearchRow) => a.freshnessMinutes - b.freshnessMinutes },
+  cheap: { label: "сначала дешёвые", compare: (a: SearchRow, b: SearchRow) => a.priceValue - b.priceValue },
+  expensive: { label: "сначала дорогие", compare: (a: SearchRow, b: SearchRow) => b.priceValue - a.priceValue },
+  deviation: { label: "ниже рынка", compare: (a: SearchRow, b: SearchRow) => a.deviation - b.deviation },
+} as const
+
+type SortId = keyof typeof SORTS
+
+/** Ступени потолка цены. Числа те же, что стоят в колонке фильтров файла. */
+const PRICE_CAPS = [8, 15, 25, 0] as const
+
+type Row = SearchRow
+
+/**
+ * Снять с объекта следы чужой работы.
+ *
+ * Остаются только факты о собственнике: он в стоп-листе, телефона нет, согласие
+ * отозвано. Всё остальное — «взят в работу», «прозвонен», «раскрыт», «отказ» —
+ * принадлежит агентству, которое это сделало, и новому агентству не переходит.
+ */
+const OWNER_FACTS = new Set(["stop-list", "no-phone", "revoked"])
+
+function withoutAgencyWork(row: SearchRow): SearchRow {
+  if (row.status !== undefined && OWNER_FACTS.has(row.status)) {
+    return { ...row, takenBy: undefined, selected: undefined }
+  }
+
+  return {
+    ...row,
+    takenBy: undefined,
+    selected: undefined,
+    status: "new",
+    action: { kind: "disclose", price: 199 },
+  }
+}
+
+/**
+ * КАБИНЕТ · Поиск → Выдача.
+ *
+ * `dataset="measured"` показывает девять замеренных строк — это стенд для
+ * сверки с макетом, и меняться он не должен. `dataset="all"` показывает всю
+ * базу: двести шестьдесят объектов, по которым фильтры действительно сужают,
+ * а счётчик в шапке действительно считает.
+ */
+export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measured" }) {
+  /**
+   * База — общая, работа по ней — своя.
+   *
+   * Объекты одни и те же у всех агентств: это рынок, а не имущество агентства.
+   * А вот «в работе у АТ», «раскрыт», «прозвонен» — это работа конкретного
+   * агентства, и в только что созданном её нет. Раньше новичок открывал выдачу
+   * и видел, что половина объектов уже разобрана его несуществующими
+   * коллегами.
+   *
+   * Три состояния при этом остаются: стоп-лист, отсутствие телефона и отзыв
+   * согласия — это факты о собственнике, а не о работе агентства, и они верны
+   * для всех одинаково.
+   */
+  const own = useOwnAgency()
+  const base = dataset === "measured" ? MEASURED_ROWS : ALL_ROWS
+  const rows = useMemo(() => (own ? base.map(withoutAgencyWork) : base), [own, base])
+  const [activeTab, setActiveTab] = useState("all")
+  const [dense, setDense] = useState(false)
+  const [sort, setSort] = useState<SortId>("fresh")
+  /** Потолок цены в миллионах. 0 — без потолка. */
+  const [priceCap, setPriceCap] = useState(15)
+  const [rooms, setRooms] = useState<number[]>([])
+  const [districts, setDistricts] = useState<string[]>([
+    "krasnogvardeisky",
+    "nevsky",
+    "kalininsky",
+  ])
+  /**
+   * Строка под курсором.
+   *
+   * Начальное значение берётся из данных, а не из нуля: в файле выбрана
+   * четвёртая строка — «Новочеркасский пр., 47», та, у которой действие
+   * «Раскрыть». Экран открывается с курсором на первом объекте, за который
+   * ещё не платили, и клавиша Enter сразу осмысленна.
+   */
+  /**
+   * Курсор держится за адрес, а не за номер строки.
+   *
+   * Номер строки врёт при первой же смене условий: сменил сортировку —
+   * и под курсором оказался другой объект, хотя человек ничего не выбирал.
+   * Адрес переживает и фильтр, и сортировку; если объект ушёл из выдачи,
+   * курсор честно пропадает, а не показывает на соседа.
+   */
+  /**
+   * Куда вернуться, если пришли из прозвона или из карточки.
+   *
+   * Адрес объекта приезжает параметром `at`. Без него курсор встаёт на строку,
+   * выбранную в макете. Стенд параметров не читает: у него свой адрес.
+   */
+  const { at } = useSearch({ from: '/search', shouldThrow: false }) ?? { at: undefined }
+
+  const [chosen, setChosen] = useState<string | null>(null)
+
+  /**
+   * Курсор: сначала выбранный человеком, потом пришедший адресом, потом
+   * строка из макета.
+   *
+   * Считается прямо в рендере, а не переносится в состояние эффектом.
+   * Эффект здесь означал бы лишний проход отрисовки и — что хуже — терял бы
+   * адрес, если человек вернулся из прозвона на уже открытую выдачу.
+   */
+  const cursorAddress =
+    chosen ?? at ?? rows.find((row) => row.selected)?.address ?? null
+
+  const setCursorAddress = setChosen
+  /**
+   * След последнего нажатия.
+   *
+   * **Он не рисуется на экране.** В файле для «B — в подборку» и «S — статус»
+   * нет ни плашки, ни тоста, а придумывать их я не имею права: клавиши
+   * обязаны открывать те же окна, что и мышь, и эти окна ещё не нарисованы.
+   * До тех пор след живёт атрибутом `data-last-action` — его видит проверка
+   * и увидит следующий разработчик, а человеку ничего лишнего не показано.
+   */
+  const [trace, setTrace] = useState<string | null>(null)
+
+  /**
+   * Плотность живёт на корне документа, а не в пропсах.
+   *
+   * Она переключает токены — высоты, поле ячейки, кегль подписи, — и потому
+   * обязана быть выше всех компонентов сразу. Иначе пришлось бы протаскивать
+   * признак через каждый узел, и первый же забытый остался бы просторным.
+   */
+  useEffect(() => {
+    const root = document.documentElement
+    if (dense) root.dataset.density = "compact"
+    else delete root.dataset.density
+    return () => {
+      delete root.dataset.density
+    }
+  }, [dense])
+
+  /**
+   * Что видно после всех условий.
+   *
+   * **Условия складываются, а не спорят.** Таб, район, потолок цены
+   * и комнатность сужают список каждый по-своему, и «Сбросить N» считает,
+   * сколько их сейчас работает. Это и есть ответ на вопрос «почему нашлось
+   * так мало» — без него человек решает, что сломался поиск.
+   */
+  const visible = rows
+    .filter((row) => (TAB_FILTER[activeTab] ?? TAB_FILTER.all!)(row))
+    .filter((row) => districts.length === 0 || districts.includes(row.district))
+    .filter((row) => priceCap === 0 || row.priceValue <= priceCap * 1_000_000)
+    .filter((row) => rooms.length === 0 || rooms.includes(row.rooms))
+    .sort(SORTS[sort].compare)
+
+  const cursor = cursorAddress === null ? -1 : visible.findIndex((row) => row.address === cursorAddress)
+
+  const toggleDistrict = (id: string) =>
+    setDistricts((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    )
+
+  /**
+   * Раскрытие контакта: 199 ₽ уходят со счёта агентства.
+   *
+   * **Списание видно в шапке, а не тостом.** Так записано в спеке движения:
+   * деньги оставляют постоянный след — в балансе, в таймлайне объекта
+   * и в журнале доступа, — а тост исчезает через четыре секунды и следом
+   * не является. Счётчик в шапке идёт 600 мс: это и есть подтверждение.
+   *
+   * Второй раз за тот же объект агентство не платит — правило продукта,
+   * а не защита от двойного нажатия.
+   */
+  const actions = useSessionActions()
+
+  const disclose = (row: Row) => {
+    if (row.action.kind !== "disclose") return
+
+    const result = actions.disclose(row.address)
+    if (result === "already") {
+      setTrace(`${row.address} · контакт уже раскрыт, второй раз не списываем`)
+    } else if (result === "trial") {
+      setTrace(`${row.address} · раскрыт, пробное раскрытие`)
+    } else if (result === "paid") {
+      setTrace(`${row.address} · раскрыт, списано 199 ₽`)
+    } else {
+      setTrace(`${row.address} · не хватает денег на счету`)
+    }
+  }
+
+  /**
+   * Клавиши строки выдачи: ↑ ↓ ходят, B в подборку, S статус, H напомнить,
+   * N заметка. Карта из спеки движения — она же нарисована в `L0qKK`.
+   *
+   * **Курсор один на мышь и клавиатуру.** Щелчок по строке переносит его
+   * туда же, куда его привели бы стрелки: две подсветки сразу — мышиная
+   * и клавиатурная — заставляют гадать, к чему относится следующее нажатие.
+   * Escape убирает курсор совсем.
+   */
+  const step = (delta: number) => {
+    if (visible.length === 0) return
+    const next =
+      cursor < 0
+        ? delta > 0
+          ? 0
+          : visible.length - 1
+        : (cursor + delta + visible.length) % visible.length
+    setCursorAddress(visible[next]?.address ?? null)
+  }
+
+  const act = (label: string) => {
+    const row = visible[cursor]
+    if (!row) {
+      setTrace("нужна строка")
+      return
+    }
+    setTrace(`${row.address} · ${label}`)
+  }
+
+  useHotkeys({
+    ArrowDown: () => step(1),
+    ArrowUp: () => step(-1),
+    j: () => step(1),
+    k: () => step(-1),
+    b: () => act("в подборку"),
+    s: () => act("сменить статус"),
+    h: () => act("напомнить"),
+    n: () => act("заметка"),
+    Enter: () => {
+      const row = visible[cursor]
+      if (row) disclose(row)
+    },
+    Escape: () => {
+      setCursorAddress(null)
+      setTrace(null)
+    },
+  })
+
+  return (
+    <CabinetShell activeId="search">
+        <FilterPanel
+          activeCount={
+            districts.length +
+            rooms.length +
+            (priceCap === 0 ? 0 : 1) +
+            (activeTab === "all" ? 0 : 1)
+          }
+          onToggle={(group, id) => {
+            if (group === "district") toggleDistrict(id)
+            if (group === "price") setPriceCap(Number.parseInt(id, 10))
+            if (group === "more") {
+              const room = Number.parseInt(id, 10)
+              if (Number.isFinite(room)) {
+                setRooms((current) =>
+                  current.includes(room)
+                    ? current.filter((item) => item !== room)
+                    : [...current, room],
+                )
+              }
+            }
+          }}
+          onReset={() => {
+            setDistricts([])
+            setRooms([])
+            setPriceCap(0)
+            setActiveTab("all")
+          }}
+          districts={[
+            DISTRICTS.slice(0, 1).map((item) => ({
+              id: item.id,
+              label: item.label,
+              selected: districts.includes(item.id),
+            })),
+            DISTRICTS.slice(1, 3).map((item) => ({
+              id: item.id,
+              label: item.label,
+              selected: districts.includes(item.id),
+            })),
+            DISTRICTS.slice(3).map((item) => ({
+              id: item.id,
+              label: item.label,
+              selected: districts.includes(item.id),
+            })),
+          ]}
+          price={["6 000 000", priceCap === 0 ? "без потолка" : `до ${priceCap} млн`]}
+          area={["от 40", "до 80"]}
+          floor={[
+            [
+              { id: "not-first", label: "не первый", selected: true },
+              { id: "not-last", label: "не последний" },
+            ],
+          ]}
+          metro={[
+            [{ id: "ligovsky", label: "Лиговский проспект", selected: true }],
+            [
+              { id: "obvodny", label: "Обводный канал", muted: true },
+              { id: "add-station", label: "+ станция", muted: true },
+            ],
+            [
+              { id: "walk-10", label: "до 10 мин", selected: true },
+              { id: "walk-20", label: "до 20 мин" },
+            ],
+          ]}
+          nearAddress="Лиговский пр., 44 · 1 км"
+          more={[
+            [1, 2, 3, 4].map((room) => ({
+              id: String(room),
+              label: `${room}-к`,
+              selected: rooms.includes(room),
+            })),
+            PRICE_CAPS.map((cap) => ({
+              id: String(cap),
+              label: cap === 0 ? "без потолка" : `до ${cap} млн`,
+              selected: priceCap === cap,
+            })),
+          ]}
+        />
+
+        <main
+          data-slot="results"
+          data-last-action={trace ?? undefined}
+          className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-cell compact:gap-2.5"
+        >
+          {/* Число в шапке считается от того, что реально видно. Раньше оно
+              было константой, и фильтр мог сузить список, не изменив цифру —
+              это ровно то место, где интерфейс начинает врать. */}
+          {/*
+            Числа считаются от найденного, а не стоят константой.
+
+            Доли взяты из `DEMO-DATA.md`: на 1 240 объявлений приходится
+            630 дублей и 419 посредников, то есть на каждый оставшийся объект
+            примерно 3,3 склеенных дубля и 2,2 отсеянных посредника. Иначе
+            шапка обещала бы 892 объявления там, где показано двенадцать строк,
+            и первый же внимательный человек поймал бы продукт на вранье.
+          */}
+          <ResultsHeader
+            listings={visible.length + Math.round(visible.length * 3.3) + Math.round(visible.length * 2.2)}
+            duplicates={Math.round(visible.length * 3.3)}
+            intermediaries={Math.round(visible.length * 2.2)}
+            dense={dense}
+          />
+
+          <ResultTabs
+            tabs={[
+              { id: "all", label: "Все" },
+              { id: "new", label: "Новые, 24 ч" },
+              { id: "not-called", label: "Не прозвонены" },
+              { id: "taken", label: "Взяли коллеги" },
+              { id: "mine", label: "Мои в работе" },
+              { id: "cheaper", label: "Снизили цену" },
+            ]}
+            activeId={activeTab}
+            onSelect={setActiveTab}
+            sortLabel={SORTS[sort].label}
+            onToggleSort={() => {
+              const ids = Object.keys(SORTS) as SortId[]
+              setSort(ids[(ids.indexOf(sort) + 1) % ids.length]!)
+            }}
+            dense={dense}
+            onToggleDensity={() => setDense((value) => !value)}
+          />
+
+          {/* Панель обрезает содержимое своим скруглением 16 и тянется на всю
+              высоту колонки: в макете под последней строкой остаётся белое поле,
+              а не серый фон страницы. */}
+          <div className="flex flex-1 flex-col overflow-hidden rounded-2xl bg-surface">
+            {visible.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 px-20">
+                <Typography variant="panelTitle" tone="default" align="center">
+                  Ничего не найдено
+                </Typography>
+                <Typography variant="uiText" tone="secondary" align="center">
+                  Условия сошлись в ноль. Снимите район или выберите другой таб.
+                </Typography>
+              </div>
+            ) : (
+              visible.map((row) => (
+                <ListingRow
+                  key={row.address}
+                  {...row}
+                  selected={row.address === cursorAddress}
+                  onOpen={() => setCursorAddress(row.address)}
+                  onAction={() => disclose(row)}
+                />
+              ))
+            )}
+          </div>
+        </main>
+    </CabinetShell>
+  )
+}

@@ -1,0 +1,64 @@
+---
+/**
+ * САЙТ · Данные удалены — кадр `z0bYqe`, 1440×1079.
+ *
+ * Экран-подтверждение, живущий один показ. Он не заканчивает разговор, а
+ * предупреждает: удаление данных не мешает нам собрать тот же номер заново,
+ * пока объявление висит на площадке. Поэтому под подтверждением стоит тёплая
+ * панель с честным «если» и действием, которое эту дыру закрывает.
+ *
+ * Панель — `warm` с радиусом 16 из карты «панели → r-media». Она не карточка
+ * и не врез: заливка здесь означает «прочитайте это, даже если остальное
+ * пролистали».
+ *
+ * Кегли внутри панели на телефоне КРУПНЕЕ, чем на широком экране: 17/600 и
+ * 13/500 против 16/600 и 14/500 (замеры `FXPMK` и `WhSUP`). Порядок обратный
+ * привычному, но обе меры сняты, и логика за ними есть: на телефоне панель
+ * занимает весь экран и работает заголовком, на 1440 она стоит в колонке 760
+ * рядом с сорок вторым заголовком страницы и обязана быть тише его.
+ *
+ * Страница закрыта от индексации: на ней видна маска чужого номера.
+ */
+import PublicAction from '@/components/landing/PublicAction.astro'
+import PublicHeader from '@/components/landing/PublicHeader.astro'
+import SiteFooter from '@/components/landing/SiteFooter.astro'
+import BaseLayout from '@/layouts/BaseLayout.astro'
+import { siteRoutes } from '@/lib/site-routes'
+---
+
+<BaseLayout robots="noindex, nofollow" title="Данные удалены — Сёрчь">
+  <PublicHeader caption="serch.ru/data · данные удалены" captionSm="serch.ru/data · удаление" />
+
+  {/* Жёлоб на телефоне 16, а не общесайтовые 20 — замер `k7NEli`. */}
+  <main
+    class="site-container flex flex-col gap-6 px-4 pt-6 pb-8 lg:gap-8 lg:px-5 lg:pt-24 lg:pb-35"
+    id="main-content"
+  >
+    <div class="flex flex-col gap-2.5 lg:gap-8">
+      <h1 class="max-w-[760px] text-26 font-semibold text-fg lg:text-40">Данные удалены</h1>
+      <p class="max-w-[760px] text-15 font-medium text-text-2 lg:text-17">
+        Номер +7 900 ··· ·· 72 и всё, что с ним связано, стёрто 28 июля. Копия подтверждения ушла на
+        вашу почту.
+      </p>
+    </div>
+
+    <div class="flex max-w-[760px] flex-col gap-3 rounded-2xl bg-warm p-4 lg:gap-2 lg:p-6">
+      <h2 class="max-w-[700px] text-17 font-semibold text-fg lg:text-16">
+        Если объявление осталось на площадке
+      </h2>
+      <p class="max-w-[700px] text-13 font-medium text-text-2 lg:text-14">
+        Мы собираем номера из открытых объявлений. Пока объявление висит на Авито или Циан, номер
+        может попасть к нам снова. Чтобы этого не случилось, снимите объявление или оставьте номер в
+        списке отказов: список переживает удаление данных и хранит только хеш номера.
+      </p>
+    </div>
+
+    {/* Обёртка нужна, чтобы кнопка держалась ширины своей метки: прямой
+        ребёнок колонки растянулся бы во всю ширину, а в файле кнопка 293. */}
+    <div>
+      <PublicAction href={siteRoutes.stop} label="Оставить номер в списке отказов" />
+    </div>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>

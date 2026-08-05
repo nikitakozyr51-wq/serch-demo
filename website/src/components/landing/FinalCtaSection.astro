@@ -1,0 +1,20 @@
+---
+/**
+ * «Итоговое действие» на главной — кадр Pencil `XhMfF`, 1440×674.
+ *
+ * Блок общий с «Законом и данными» (`Q9O7S`), различий два и оба из файла:
+ * здесь зазор колонки 24, а не 28, и своя фотография-подложка.
+ */
+import SiteCta from './SiteCta.astro'
+import { finalCtaPhoto } from '@/lib/site-photos'
+import { signupHref } from '@/lib/site-routes'
+---
+
+<SiteCta
+  action={{ href: signupHref, label: 'Создать агентство' }}
+  gap={24}
+  legal="Не собственник, не платите · обработка по 152-ФЗ"
+  photo={finalCtaPhoto}
+  subtitle="Задайте район и цену, получите прямой номер собственника. Первые пять раскрытий бесплатно."
+  title="Перестаньте платить за чужие номера"
+/>

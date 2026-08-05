@@ -1,0 +1,19 @@
+# The toolchain (bun tests, docker, prisma, expo) and several template tests
+# compare against LF-terminated strings. Keep the working tree LF on every OS,
+# including Windows checkouts with core.autocrlf=true.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp4 binary
+*.zip binary
