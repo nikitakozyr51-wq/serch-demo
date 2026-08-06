@@ -1,5 +1,5 @@
 import { Typography } from "@/components/typography"
-import { useSession } from "@/features/auth"
+import { useOwnAgency, useSession } from "@/features/auth"
 import { AgencyShell } from "@/features/agency"
 
 /**
@@ -49,7 +49,10 @@ const NUMBERS: PlanNumber[] = [
 
 export function AgencyPlanPage() {
   const session = useSession()
-  const own = session?.kind === "own"
+  // Через `useOwnAgency`, а не по полю сеанса: только эта функция знает про
+  // стенд сверки, который обязан показывать замеренные данные независимо от
+  // того, кто вошёл. Прямая проверка поля оставляла стенд пустым.
+  const own = useOwnAgency()
 
   // Своё агентство только что заведено: подписка ещё не оплачена, а мест
   // занято ровно одно — руководителем. Числа «6 из 20» и «следующее списание
@@ -83,7 +86,7 @@ export function AgencyPlanPage() {
       title="Тариф и подписка"
       note={
         own
-          ? `Агентство «${session.agency}». Подписку видит и меняет только руководитель.`
+          ? `Агентство «${session?.agency ?? ""}». Подписку видит и меняет только руководитель.`
           : "ООО «Невский проспект». Подписку видит и меняет только руководитель."
       }
     >

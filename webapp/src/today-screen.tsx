@@ -224,9 +224,18 @@ export function TodayScreenPage() {
         when: stopped ? "Звонок запрещён" : "Сегодня",
         whenNote: stopped ? "снять отметку нельзя" : "",
         blocked: stopped,
+        // Просрочен — время перезвона прошло. Подпись уходит в тон внимания:
+        // это не ошибка, но и не «всё по плану», и разница видна без чтения.
+        overdue: overdue.has(address) && !stopped,
         action: stopped ? "Стоп-лист" : "Позвонить",
       }
     })
+
+  const overdue = new Set(
+    callbacksDue(workspace, now)
+      .filter((item) => (item.remindAt ?? 0) < now)
+      .map((item) => item.address),
+  )
 
   const callbacks = rowsFor(
     callbacksDue(workspace, now).map((item) => item.address),

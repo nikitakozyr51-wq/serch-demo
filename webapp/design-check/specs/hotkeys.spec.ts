@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { ACCOUNT_EMAIL, seedAccountOnly, seedSession, seedWork } from '../lib/session'
+
 /**
  * Войти в кабинет.
  *
@@ -8,11 +10,52 @@ import { expect, test } from '@playwright/test'
  * а тот же путь, которым идёт человек.
  */
 async function enterCabinet(page: import('@playwright/test').Page) {
+  /**
+   * Дверь проверяется ОДИН раз — отдельной проверкой ниже, — а не в каждой
+   * из шести проверок клавиатуры.
+   *
+   * Раньше здесь заполнялась форма входа. Пока вход пускал любого, это было
+   * дёшево; теперь он ищет агентство по почте, и шесть проверок клавиатуры
+   * стали зависеть от внутренностей формы — от имени поля, от того, что
+   * кнопка не выключена, от текста ошибки. Любая правка формы роняла шесть
+   * проверок, не имеющих к ней отношения, и роняла по минуте каждую.
+   *
+   * Проверка одного правила в одном месте: вход — в «дверь пускает только
+   * заведённое агентство», клавиатура — в своих проверках.
+   */
+  await seedSession(page)
+  await page.goto('/today')
+  await page.waitForSelector('[data-slot="cabinet-sidebar"]')
+}
+
+/**
+ * ДВЕРЬ. Единственная проверка самого входа.
+ *
+ * Витрины, в которую пускали любого, в продукте больше нет: агентство заводит
+ * человек, и вход ищет его по почте среди заведённых. Проверка держит обе
+ * половины правила — незнакомую почту не пускает, знакомую пускает.
+ */
+test('вход: чужая почта не пускает, своя пускает', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1024 })
+  await seedAccountOnly(page)
   await page.goto('/login')
   await page.waitForSelector('[data-slot="auth-field"] input')
-  await page.getByRole('button', { name: 'Войти' }).click()
+
+  const email = page.locator('[data-slot="auth-field"] input[name="email"]')
+  const enter = page.getByRole('button', { name: 'Войти' })
+
+  await email.fill('нет-такого@example.com')
+  await enter.click()
+  await expect(
+    page.locator('[data-slot="auth-field"][data-invalid]'),
+    'вход пустил под почтой, под которой агентства не заводили',
+  ).toBeVisible()
+  expect(page.url(), 'вход увёл в кабинет вопреки отказу').toContain('/login')
+
+  await email.fill(ACCOUNT_EMAIL)
+  await enter.click()
   await page.waitForURL(/\/today/)
-}
+})
 
 /**
  * Клавиатура прозвона.
@@ -24,14 +67,19 @@ async function enterCabinet(page: import('@playwright/test').Page) {
  */
 test('прозвон: клавиши ставят результат и ведут к следующему объекту', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1024 })
+  // Очередь прозвона настоящая: раскрытые контакты, по которым ещё не
+  // звонили. Раньше здесь стояло вписанное «7 из 24», и проверка держала
+  // число, а не поведение.
+  await seedSession(page)
+  await seedWork(page, ['Ленская ул., 10', 'Гражданский пр., 114', 'Науки пр., 17'])
   await page.goto('/call')
   await page.waitForSelector('[data-slot="select-chip"]')
 
-  const position = () => page.locator('[data-slot="call-bar"] >> text=/\\d+ из 24/').innerText()
+  const position = () => page.locator('[data-slot="call-bar"] >> text=/\\d+ из \\d+/').innerText()
   const selected = () =>
     page.locator('[data-slot="select-chip"][data-selected]').first().innerText()
 
-  expect(await position()).toBe('7 из 24')
+  expect(await position()).toBe('1 из 3')
 
   /**
    * «3» — отказ, и после него сразу следующий объект.
@@ -46,19 +94,22 @@ test('прозвон: клавиши ставят результат и веду
     'data-last-result',
     'Отказ',
   )
-  expect(await position()).toBe('8 из 24')
+  // Объект, по которому записан исход, уходит из очереди: она и есть список
+  // того, что ещё не сделано. Осталось два, и позиция сдвинулась на второй —
+  // «3» переводит к следующему, а очередь под ним укоротилась.
+  expect(await position()).toBe('2 из 2')
   expect(await selected(), 'панель обязана обнулиться под новый объект').toContain('В работе')
 
   // «1» перехода не даёт: «в работе» значит, что с объектом продолжат сейчас.
   await page.keyboard.press('1')
   expect(await selected()).toContain('В работе')
-  expect(await position()).toBe('8 из 24')
+  expect(await position()).toBe('2 из 2')
 
   // J и K листают список без мыши.
-  await page.keyboard.press('j')
-  expect(await position()).toBe('9 из 24')
   await page.keyboard.press('k')
-  expect(await position()).toBe('8 из 24')
+  expect(await position()).toBe('1 из 2')
+  await page.keyboard.press('j')
+  expect(await position()).toBe('2 из 2')
 
   // Esc возвращает в выдачу **на ту же строку**: адрес объекта уезжает
   // параметром, иначе агент теряет место после каждого звонка.
@@ -68,6 +119,8 @@ test('прозвон: клавиши ставят результат и веду
 
 test('клавиша не срабатывает, пока человек печатает', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1024 })
+  await seedSession(page)
+  await seedWork(page, ['Ленская ул., 10', 'Гражданский пр., 114'])
   await page.goto('/call')
   await page.waitForSelector('[data-slot="select-chip"]')
 
@@ -83,9 +136,9 @@ test('клавиша не срабатывает, пока человек печ
     field.focus()
   })
 
-  const before = await page.locator('[data-slot="call-bar"] >> text=/\\d+ из 24/').innerText()
+  const before = await page.locator('[data-slot="call-bar"] >> text=/\\d+ из \\d+/').innerText()
   await page.keyboard.press('3')
-  const after = await page.locator('[data-slot="call-bar"] >> text=/\\d+ из 24/').innerText()
+  const after = await page.locator('[data-slot="call-bar"] >> text=/\\d+ из \\d+/').innerText()
 
   expect(after, 'позиция не должна меняться, пока фокус в поле ввода').toBe(before)
 })
@@ -106,9 +159,12 @@ test('выдача: стрелки водят курсор, буквы назы�
   const selectedAddress = () =>
     page.locator('[data-slot="listing-row"][data-selected]').first().innerText()
 
-  // Экран открывается с курсором на строке, за которую ещё не платили.
+  // Экран открывается с курсором на ПЕРВОЙ строке, за которую ещё не платили,
+  // — то есть на объекте, с которым можно начать работать прямо сейчас.
+  // Какой это адрес, зависит от сортировки по свежести, поэтому проверяется
+  // правило, а не адрес: под курсором стоит платное действие.
   const first = await selectedAddress()
-  expect(first).toContain('Новочеркасский пр., 47')
+  expect(first, 'курсор встал не на строку, с которой можно начать').toContain('199 ₽')
 
   // Стрелка уводит курсор на другую строку и возвращает обратно. Какая именно
   // строка соседняя, зависит от сортировки и фильтров, поэтому проверяется
@@ -120,13 +176,13 @@ test('выдача: стрелки водят курсор, буквы назы�
   await page.keyboard.press('ArrowUp')
   expect(await selectedAddress(), 'стрелка вверх не вернула курсор').toBe(first)
 
-  // Буквы пока не открывают окон — окна не нарисованы, — но действие названо
-  // и попадает в разметку. Это честнее выдуманной плашки.
+  // «B» открывает настоящее окно выбора подборки — с созданием первой.
+  // Раньше клавиша писала строчку в служебный атрибут, и обещание пустого
+  // экрана «объекты добавляются клавишей B» было ложным.
   await page.keyboard.press('b')
-  await expect(page.locator('[data-slot="results"]')).toHaveAttribute(
-    'data-last-action',
-    /в подборку/,
-  )
+  await expect(page.locator('[data-slot="collection-picker"]')).toBeVisible()
+  await page.keyboard.press('Escape')
+
   await page.keyboard.press('s')
   await expect(page.locator('[data-slot="results"]')).toHaveAttribute(
     'data-last-action',
@@ -146,9 +202,16 @@ test('счётчик баланса: раскрытие списывает 199 �
   const balance = async () => (await box.innerText()).replace(/\s/g, ' ')
   expect(await balance()).toBe('8 610 ₽')
 
-  // Enter раскрывает контакт под курсором. Списание видно в шапке, а не тостом:
-  // деньги оставляют постоянный след, тост исчезает через четыре секунды.
-  await page.keyboard.press('Enter')
+  // Платит КНОПКА строки, а не `Enter`: клавиша теперь открывает карточку.
+  // Списание одним нажатием без экрана, где написана цена, — слишком
+  // дорогая ошибка, чтобы висеть на самой частой клавише. Списание видно
+  // счётчиком в шапке, а не тостом: деньги оставляют постоянный след.
+  await page
+    .locator('[data-slot="listing-row"][data-selected]')
+    .first()
+    .locator('[data-slot="button"]')
+    .first()
+    .click()
 
   // На середине счёта значение обязано отличаться и от старого, и от нового:
   // счётчик идёт, а не подменяется мгновенно.
@@ -161,10 +224,13 @@ test('счётчик баланса: раскрытие списывает 199 �
     .poll(balance, { timeout: 2000 })
     .toBe('8 411 ₽')
 
-  // Второй раз за тот же объект агентство не платит.
-  await page.keyboard.press('Enter')
-  await page.waitForTimeout(700)
-  expect(await balance()).toBe('8 411 ₽')
+  // Второй раз за тот же объект агентство не платит, и кнопка это говорит:
+  // «Раскрыть · 199 ₽» сменилась на «Открыть · 0 ₽».
+  const again = page.locator('[data-slot="listing-row"][data-selected]').first()
+  expect(
+    await again.locator('[data-slot="button"]').first().innerText(),
+    'строка не запомнила оплату',
+  ).toContain('0 ₽')
 })
 
 test('кабинет: ⌘K открывает палитру, «?» — карту клавиш', async ({ page }) => {

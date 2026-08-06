@@ -233,8 +233,6 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
    * Эффект здесь означал бы лишний проход отрисовки и — что хуже — терял бы
    * адрес, если человек вернулся из прозвона на уже открытую выдачу.
    */
-  const cursorAddress =
-    chosen ?? at ?? rows.find((row) => row.selected)?.address ?? null
 
   const setCursorAddress = setChosen
 
@@ -296,6 +294,25 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
     .filter((row) => rooms.length === 0 || rooms.includes(row.rooms))
     .sort(SORTS[sort].compare)
 
+  /**
+   * Курсор по умолчанию — первая видимая строка, за которую ещё не платили.
+   *
+   * Раньше он брался из данных: в замеренных строках одна помечена выбранной.
+   * После того как состояние строки стало собираться из работы агентства,
+   * помеченных строк не осталось вовсе, и выдача открывалась без курсора —
+   * клавиатура не работала до первого щелчка мышью.
+   *
+   * Считается ПОСЛЕ фильтров, а не до: курсор на строке, которую отфильтровали,
+   * — это курсор в никуда.
+   */
+  const cursorAddress =
+    chosen ??
+    at ??
+    rows.find((row) => row.selected)?.address ??
+    visible.find((row) => row.action.kind === "disclose")?.address ??
+    visible[0]?.address ??
+    null
+
   const cursor = cursorAddress === null ? -1 : visible.findIndex((row) => row.address === cursorAddress)
 
   const toggleDistrict = (id: string) =>
@@ -318,6 +335,14 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
 
   const disclose = (row: Row) => {
     if (row.action.kind !== "disclose") return
+
+    // Курсор прибивается к оплаченной строке.
+    //
+    // Без этого он уезжал: по умолчанию курсор стоит на первой строке, за
+    // которую ещё не платили, а оплаченная перестаёт быть такой — и подсветка
+    // сама собой перепрыгивала на соседний объект сразу после списания.
+    // Человек платил за один объект и оказывался с курсором на другом.
+    setCursorAddress(row.address)
 
     const result = actions.disclose(row.address)
     if (result === "already") {

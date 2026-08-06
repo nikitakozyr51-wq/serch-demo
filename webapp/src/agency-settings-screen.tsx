@@ -3,7 +3,7 @@ import { useState } from "react"
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
-import { useSession } from "@/features/auth"
+import { useOwnAgency, useSession } from "@/features/auth"
 import { AgencyShell, FormField, SettingRow } from "@/features/agency"
 
 /**
@@ -48,7 +48,10 @@ function RuleChips({ options, initial }: { options: string[]; initial: string })
 
 export function AgencySettingsPage() {
   const session = useSession()
-  const own = session?.kind === "own"
+  // Через `useOwnAgency`, а не по полю сеанса: только эта функция знает про
+  // стенд сверки, который обязан показывать замеренные данные независимо от
+  // того, кто вошёл. Прямая проверка поля оставляла стенд пустым.
+  const own = useOwnAgency()
 
   return (
     <AgencyShell
@@ -56,7 +59,7 @@ export function AgencySettingsPage() {
       title="Настройки агентства"
       note={
         own
-          ? `«${session.agency}» · доступ 3 000 ₽ в месяц · до двадцати сотрудников`
+          ? `«${session?.agency ?? ""}» · доступ 3 000 ₽ в месяц · до двадцати сотрудников`
           : "«Невский проспект» · доступ 3 000 ₽ в месяц · до двадцати сотрудников"
       }
       action={
@@ -76,7 +79,7 @@ export function AgencySettingsPage() {
               честнее чужого ИНН, подставленного за человека. */}
           <FormField
             label="НАЗВАНИЕ АГЕНТСТВА"
-            value={own ? session.agency : "Невский проспект"}
+            value={own ? session?.agency ?? "" : "Невский проспект"}
           />
           <FormField
             label="ИНН"
@@ -106,7 +109,7 @@ export function AgencySettingsPage() {
           </Typography>
           <div className="flex w-full flex-col gap-0.5">
             <Typography variant="numericDense" tone="default">
-              {own ? session.name : "Смирнова Ирина Владимировна"}
+              {own ? session?.name ?? "" : "Смирнова Ирина Владимировна"}
             </Typography>
             <Typography variant="metaText" tone="dense">
               руководитель · подписывает согласия и отвечает на запросы субъектов

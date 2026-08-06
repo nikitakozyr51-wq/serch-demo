@@ -5,7 +5,7 @@ import { useState } from "react"
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
-import { useSession } from "@/features/auth"
+import { useOwnAgency, useSession } from "@/features/auth"
 import { AgencyEmpty, AgencyShell, DataTable } from "@/features/agency"
 import { OwnerAvatar } from "@/features/listings"
 
@@ -111,7 +111,10 @@ function KeyNumber({
 export function AgencyEfficiencyPage() {
   const [period, setPeriod] = useState<string>("30 дней")
   const session = useSession()
-  const own = session?.kind === "own"
+  // Через `useOwnAgency`, а не по полю сеанса: только эта функция знает про
+  // стенд сверки, который обязан показывать замеренные данные независимо от
+  // того, кто вошёл. Прямая проверка поля оставляла стенд пустым.
+  const own = useOwnAgency()
 
   return (
     <AgencyShell
@@ -122,7 +125,7 @@ export function AgencyEfficiencyPage() {
       // вообще произносится.
       note={
         own
-          ? `агентство «${session.agency}» · 1 сотрудник`
+          ? `агентство «${session?.agency ?? ""}» · 1 сотрудник`
           : "агентство «Невский проспект» · 5 сотрудников"
       }
       action={

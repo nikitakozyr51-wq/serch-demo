@@ -2,7 +2,7 @@ import { mkdir, rm, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
-import { seedSession } from '../lib/session'
+import { seedSession, seedWork } from '../lib/session'
 
 /**
  * Снимки состояний выдачи.
@@ -256,6 +256,50 @@ test('карточка после раскрытия: номер, фиксаци
 
 test('Сегодня: три секции и порядок по срочности', async ({ page }) => {
   await seedSession(page)
+  /**
+   * «Сегодня» больше не константа: секции собираются из журналов. Значит и
+   * стенд наполняется журналом — иначе он показывает пустой экран и сверять
+   * нечего. Здесь ровно то, что нарисовано в макете: перезвон на сегодня,
+   * взятый в работу объект и сохранённый поиск.
+   */
+  const ADDRESSES = [
+    'Ленская ул., 10',
+    'Гражданский пр., 114',
+    'Науки пр., 17',
+    'Стахановцев ул., 14',
+    'Заневский пр., 32',
+    'Ленская ул., 6',
+  ]
+  // Время считается от текущего момента, а не прибито числом: «просрочен»
+  // и «на сегодня» — это отношение ко «сейчас», и с фиксированной датой
+  // проверка либо всегда врёт, либо перестаёт работать назавтра.
+  const NOW = Date.now()
+  const AT = NOW - 6 * 60 * 60 * 1000
+
+  await seedWork(page, ADDRESSES, {
+    // Четыре перезвона на сегодня и два взятых в работу — состав кадра `kNd9b`.
+    calls: ADDRESSES.slice(0, 4).map((address, index) => ({
+      id: `c${index}`,
+      address,
+      at: AT + index,
+      outcome: 'не дозвонился',
+      note: 'две попытки без ответа',
+      // Два перезвона просрочены, два ещё впереди — состав кадра.
+      remindAt: index < 2 ? NOW - 60 * 60 * 1000 : NOW + 60 * 60 * 1000,
+      by: 'Смирнова Ирина',
+    })),
+    // Один объект в стоп-листе: строка «звонок запрещён» в макете есть, и без
+    // неё проверка не поймала бы, что запрет перестал рисоваться.
+    stopList: ['Стахановцев ул., 14'],
+    savedSearches: [
+      {
+        id: 's1',
+        name: 'Красногвардейский 2-к до 15',
+        createdAt: AT,
+        query: { districts: [], rooms: [], priceCap: 15, tab: 'all', sort: 'fresh' },
+      },
+    ],
+  })
   await page.setViewportSize({ width: 1440, height: 1024 })
   await page.goto('/screen/today')
   await page.waitForSelector('[data-slot="today-section"]')
