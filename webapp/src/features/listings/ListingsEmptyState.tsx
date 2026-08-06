@@ -118,7 +118,7 @@ function ListingsEmptyState({
                   className={cn(
                     // Высота 36 при кегле 14 — так в макете на всех досках
                     // состояний, независимо от плотности экрана.
-                    "flex h-9 cursor-pointer items-center justify-center rounded-lg px-4",
+                    "flex h-9 cursor-pointer items-center justify-center rounded-full px-4",
                     "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
                     action.primary ? "bg-fg text-surface" : "bg-warm text-fg",
                   )}

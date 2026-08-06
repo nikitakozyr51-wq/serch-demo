@@ -93,7 +93,12 @@ function TextField({
             // Кольца фокуса у поля нет: фокус сказан самой линией, ставшей
             // вдвое толще и графитовой. Кольцо поверх линии дало бы две
             // разные отметки одного состояния.
-            "outline-none",
+            //
+            // `focus-visible:outline-none` обязателен отдельно от `outline-none`:
+            // в основе стоит общее правило `*:focus-visible { outline: 2px }`,
+            // и без явной отмены живое поле получало кольцо, которого нет
+            // ни в макете, ни в демонстрации состояний на полигоне.
+            "outline-none focus-visible:outline-none",
             invalid
               ? "border-b-2 border-err-text"
               : [
@@ -101,7 +106,10 @@ function TextField({
                   "hover:border-text-2 data-[demo=hover]:border-text-2",
                   "focus-visible:border-b-2 focus-visible:border-fg",
                   "data-[demo=focus]:border-b-2 data-[demo=focus]:border-fg",
-                  "active:border-fg data-[demo=press]:border-fg",
+                  // Нажатие в поле и есть установка фокуса, поэтому линия
+                  // та же: графитовая и вдвое толще.
+                  "active:border-b-2 active:border-fg",
+                  "data-[demo=press]:border-b-2 data-[demo=press]:border-fg",
                 ],
             "disabled:border-line-2 disabled:bg-transparent disabled:text-text-3",
           )}

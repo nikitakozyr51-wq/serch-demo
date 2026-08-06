@@ -27,6 +27,15 @@ type Expected = {
   fill?: string
   stroke?: string
   strokeWidth?: number
+  /**
+   * Поле ввода: рамки по кругу у него нет, есть линия снизу.
+   *
+   * Отдельные ключи, а не `stroke`, потому что это другая величина: у рамки
+   * четыре стороны и радиус, у линии — одна сторона и ничего больше. Свести
+   * их в одно поле значило бы позволить коробке вернуться незаметно.
+   */
+  strokeBottom?: number
+  strokeColor?: string
   radius?: number
   padding?: [number, number]
   ring?: { color: string; width: number; gap?: string }
@@ -87,6 +96,10 @@ test('контролы: каждое состояние совпадает с э
         paddingBottom: style.paddingBottom,
         paddingLeft: style.paddingLeft,
         paddingRight: style.paddingRight,
+        borderBottomWidth: style.borderBottomWidth,
+        borderBottomColor: style.borderBottomColor,
+        borderLeftWidth: style.borderLeftWidth,
+        borderRightWidth: style.borderRightWidth,
         outlineColor: style.outlineColor,
         outlineWidth: style.outlineWidth,
         outlineStyle: style.outlineStyle,
@@ -123,13 +136,72 @@ test('контролы: каждое состояние совпадает с э
       diffs.push({ key, property: 'заливка', expected: `${want.fill} = ${hexToRgb(want.fill)}`, actual: got.backgroundColor! })
     }
     if (want.stroke) {
-      if (got.borderColor !== hexToRgb(want.stroke)) {
-        diffs.push({ key, property: 'цвет границы', expected: `${want.stroke} = ${hexToRgb(want.stroke)}`, actual: got.borderColor! })
-      }
-      if (want.strokeWidth !== undefined && !near(Number.parseFloat(got.borderWidth!), want.strokeWidth)) {
-        diffs.push({ key, property: 'толщина границы', expected: `${want.strokeWidth}px`, actual: got.borderWidth! })
+      /**
+       * Кольцо вокруг контрола браузер умеет рисовать двумя способами —
+       * рамкой и обводкой, — и выглядят они одинаково. В макете кольцо всегда
+       * обводка узла, потому что другого инструмента у Pencil нет; в коде
+       * фокус намеренно сделан обводкой, чтобы не съедать высоту контрола
+       * и не сдвигать соседей.
+       *
+       * Поэтому сверяется НАЛИЧИЕ кольца нужного цвета и толщины, а не то,
+       * каким свойством оно нарисовано. Требовать именно рамку значило бы
+       * проверять способ, а не результат — и заставлять контрол прыгать
+       * на два пикселя при получении фокуса.
+       */
+      const wantColor = hexToRgb(want.stroke)
+      const byBorder =
+        got.borderColor === wantColor &&
+        (want.strokeWidth === undefined || near(Number.parseFloat(got.borderWidth!), want.strokeWidth))
+      const byOutline =
+        got.outlineStyle !== 'none' &&
+        got.outlineColor === wantColor &&
+        (want.strokeWidth === undefined || near(Number.parseFloat(got.outlineWidth!), want.strokeWidth))
+      // Зазор двойного кольца рисуется тенью — это тот же способ показать
+      // ту же линию, и он законен по той же причине.
+      const byShadow = got.boxShadow !== 'none' && got.boxShadow!.includes(wantColor)
+
+      if (!byBorder && !byOutline && !byShadow) {
+        diffs.push({
+          key,
+          property: 'кольцо контрола',
+          expected: `${want.strokeWidth ?? 1}px ${want.stroke} = ${wantColor}`,
+          actual: `рамка ${got.borderWidth} ${got.borderColor} · обводка ${got.outlineWidth} ${got.outlineColor}`,
+        })
       }
     }
+    if (want.strokeBottom !== undefined) {
+      // Линия снизу — и ничего сверху и по бокам: коробки у поля больше нет.
+      if (!near(Number.parseFloat(got.borderBottomWidth!), want.strokeBottom)) {
+        diffs.push({
+          key,
+          property: 'линия снизу',
+          expected: `${want.strokeBottom}px`,
+          actual: got.borderBottomWidth!,
+        })
+      }
+      for (const [side, value] of [
+        ['сверху', got.borderWidth],
+        ['слева', got.borderLeftWidth],
+        ['справа', got.borderRightWidth],
+      ] as const) {
+        if (Number.parseFloat(value!) > 0.5) {
+          diffs.push({ key, property: `лишняя рамка ${side}`, expected: '0px', actual: value! })
+        }
+      }
+      if (want.strokeColor && got.borderBottomColor !== hexToRgb(want.strokeColor)) {
+        diffs.push({
+          key,
+          property: 'цвет линии',
+          expected: `${want.strokeColor} = ${hexToRgb(want.strokeColor)}`,
+          actual: got.borderBottomColor!,
+        })
+      }
+      // У поля без коробки радиуса быть не может: скруглять нечего.
+      if (Number.parseFloat(got.borderRadius!) > 0.5) {
+        diffs.push({ key, property: 'у поля остался радиус', expected: '0px', actual: got.borderRadius! })
+      }
+    }
+
     if (want.radius !== undefined) {
       const actualRadius = Number.parseFloat(got.borderRadius!)
       // Капсула: браузер отдаёт фактический радиус, а не 999.

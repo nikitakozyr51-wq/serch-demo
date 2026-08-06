@@ -140,7 +140,7 @@ export function MobileCallScreenPage() {
                     ? undefined
                     : () => void navigate({ to: "/m/record" })
                 }
-                className="flex h-11 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-md border border-border-control bg-warm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+                className="flex h-11 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-full border border-border-control bg-warm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
               >
                 <Typography variant="controlLabel" tone="default">
                   {label}

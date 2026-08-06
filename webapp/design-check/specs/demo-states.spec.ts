@@ -69,6 +69,24 @@ test('полигон не врёт: живые состояния совпада
         const computed = getComputedStyle(element)
         const result: Record<string, string> = {}
         for (const property of props) result[property] = computed[property as never] as string
+
+        /**
+         * Ненарисованная обводка не имеет ни ширины, ни цвета.
+         *
+         * Браузер сообщает `outline-width` даже при `outline-style: none` —
+         * и сообщает РАЗНОЕ: там, где ширину задали и погасили стилем, это
+         * заданное число, а там, где не задавали вовсе, — начальное `medium`,
+         * то есть 3 px. Оба случая рисуют ровно ничего, но сравнение видело
+         * «2 px против 3 px» и называло расхождением то, чего на экране нет.
+         *
+         * Поле ввода как раз такой случай: с 05.08 его фокус — это линия
+         * снизу, а не кольцо, и обводки у него нет ни в жизни, ни на полигоне.
+         */
+        if (result.outlineStyle === 'none') {
+          result.outlineWidth = '0px'
+          result.outlineColor = 'нет обводки'
+        }
+
         return result
       },
       { check, selector, props: [...WATCHED] },

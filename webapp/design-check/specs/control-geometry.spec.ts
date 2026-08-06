@@ -4,44 +4,32 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 
 /**
- * Высота и радиус — пара, а не два независимых значения.
+ * ФОРМА ОТВЕЧАЕТ НА ВОПРОС «ЧТО ЭТО», А НЕ «КАКОЙ ОНО ВЫСОТЫ».
  *
- * Обновление 04.08: в макете сверено 437 кнопкоподобных узлов, **64 нарушали
- * связку**. Все исправлены. Число говорит само за себя: на глаз эта связка
- * не держится, её обязана держать проверка.
+ * Передача 05.08.2026, раздел 1. Прежняя карта из семи радиусов, назначаемых
+ * по высоте, ОТМЕНЕНА — вместе с проверкой, которая её держала. Она отвечала
+ * на вопрос о размере, а человек, глядя на экран, спрашивает о роли.
  *
- * Карта из обновления. Радиус **берётся из неё**, а не считается от высоты:
+ * | Что | Форма |
+ * |---|---|
+ * | Всё, что нажимается и совершает действие | капсула |
+ * | Поле ввода, селект, поисковая строка | линия снизу, коробки нет |
+ * | Чекбокс | квадрат `r-6` — единственное исключение |
  *
- *   24            → r-6
- *   28 · 32       → r-8
- *   36 · 40       → r-10
- *   44 · 48       → r-control (12)
- *   строка 64/88  → r-control (12)
- *   панели, диалоги → r-media (16)
- *   pill          → primary, чип фильтра, круглые фигуры
+ * **Острого угла в продукте больше нет нигде**, кроме полей ввода, у которых
+ * коробки нет вовсе.
  *
- * Прежнее правило «радиус ÷ высота = 0,22–0,27» отменено: пять пар из девяти
- * в самой карте в него не попадают.
+ * Почему это проверяет машина. В файле на момент передачи: капсул 889, мягких
+ * углов 132, линий снизу 122. Правило простое на словах и разъезжается на
+ * первом же экране, собранном по памяти, — ровно как разъехалась прежняя
+ * связка «высота — радиус» на 64 узлах из 437.
  *
- * **Пилюля означает «нажми меня».** Ненажимаемое её не получает никогда —
- * это отдельное утверждение, и оно проверяется отдельно.
+ * Поверхности — панели, строки-карточки, плашки — сюда не попадают: у них
+ * мягкий угол по высоте, и это другой слой, который смотрит не на контролы.
  */
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const artifactsDir = resolve(currentDir, '../.artifacts')
-
-/** Высота → единственно верный радиус. */
-const RADIUS_BY_HEIGHT: Record<number, number> = {
-  24: 6,
-  28: 8,
-  32: 8,
-  36: 10,
-  40: 10,
-  44: 12,
-  48: 12,
-  64: 12,
-  88: 12,
-}
 
 const PAGES = [
   '/screen/search',
@@ -56,7 +44,7 @@ const PAGES = [
 
 type Violation = { page: string; kind: string; text: string; detail: string }
 
-test('геометрия контролов: высота и радиус берутся из карты', async ({ page }) => {
+test('геометрия контролов: форма отвечает роли', async ({ page }) => {
   const violations: Violation[] = []
 
   for (const path of PAGES) {
@@ -65,114 +53,137 @@ test('геометрия контролов: высота и радиус бер
     await page.waitForSelector('[data-slot]')
     await page.evaluate(() => document.fonts.ready)
 
-    const onPage: Violation[] = await page.evaluate(
-      ({ path, RADIUS_BY_HEIGHT }: { path: string; RADIUS_BY_HEIGHT: Record<number, number> }) => {
-        const result: Violation[] = []
+    const onPage: Violation[] = await page.evaluate((path: string) => {
+      const result: Violation[] = []
 
-        /**
-         * Пилюля законна у главного действия, у чипа фильтра и у круглых фигур:
-         * аватар, точка логотипа, полоса прогресса. Всё остальное её не носит.
-         */
-        const PILL_ALLOWED = new Set(['filter-chip', 'mobile-filters'])
+      /**
+       * Поля ввода: коробки нет, линия снизу.
+       *
+       * Сюда же поисковая строка в шапке кабинета — она тоже поле, открытое
+       * нажатием, а не кнопка, и коробку получает только при фокусе.
+       */
+      const FIELDS = new Set(['text-field', 'auth-field', 'global-search'])
 
-        /**
-         * Кого карта не касается:
-         *
-         *   nav-item   высота идёт от содержимого, а не со ступени: длинное
-         *              название поиска переносится, и пункт растёт до 56–64
-         *   mobile-action, mobile-call-secondary
-         *              **открытый вопрос владельца от 04.08**: лестница даёт
-         *              44 / r-8, карта радиусов — r-control. Девятнадцать узлов,
-         *              в исправленные 64 не входят. Пока стоит r-8 по лестнице;
-         *              трогать нельзя, пока вопрос не решён
-         */
-        const OUT_OF_MAP = new Set(['nav-item', 'mobile-action', 'mobile-call-secondary'])
+      /** Квадрат — единственное исключение из капсулы. */
+      const SQUARES = new Set(['checkbox'])
 
-        function label(node: Element) {
-          return (node.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 28)
-        }
+      /**
+       * Кого правило формы не касается вовсе:
+       *
+       *   map-card       ссылка-карточка стенда, а не продукта
+       *   palette-item   строка списка внутри окна: это поверхность
+       *   preset-card    карточка готового набора условий — тоже поверхность
+       *   listing-row,
+       *   today-row      строки списков: поверхность, а не контрол
+       */
+      const SKIP = new Set(['map-card', 'palette-item', 'preset-card', 'listing-row', 'today-row'])
 
-        const controls = document.querySelectorAll(
-          'button, [role="button"], [role="switch"], [role="radio"], input, [data-slot="status-chip"], [data-slot="blocked-action"], [data-slot="qualification"]',
-        )
+      function label(node: Element) {
+        return (node.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 28)
+      }
 
-        for (const node of controls) {
-          const style = getComputedStyle(node)
-          if (style.display === 'none' || style.visibility === 'hidden') continue
+      const controls = document.querySelectorAll(
+        'button, [role="button"], [role="switch"], [role="radio"], input, textarea',
+      )
 
-          const box = node.getBoundingClientRect()
-          const height = Math.round(box.height)
-          const radius = Number.parseFloat(style.borderTopLeftRadius)
-          const slot = node.getAttribute('data-slot') ?? node.tagName.toLowerCase()
-          if (OUT_OF_MAP.has(slot)) continue
+      for (const node of controls) {
+        const style = getComputedStyle(node)
+        if (style.display === 'none' || style.visibility === 'hidden') continue
 
-          /**
-           * Карта — про плашки, а не про любую нажимаемую надпись.
-           * «Сбросить 7», «Изменить», «Показать все 8» и табы поверхности
-           * не имеют: у них нет ни заливки, ни рамки по кругу. Радиус нуля
-           * у них законен, и требовать от них ступень бессмысленно.
-           */
-          const filled =
-            style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent'
-          const framed =
-            Number.parseFloat(style.borderTopWidth) > 0 &&
-            Number.parseFloat(style.borderBottomWidth) > 0 &&
-            Number.parseFloat(style.borderLeftWidth) > 0
-          if (!filled && !framed) continue
+        const box = node.getBoundingClientRect()
+        if (box.width === 0 || box.height === 0) continue
 
-          // Капсула: браузер отдаёт огромное число, а не 999.
-          const isPill = radius >= Math.max(box.width, box.height)
-          const round = Math.abs(box.width - box.height) < 1.5
+        const height = Math.round(box.height)
+        const radius = Number.parseFloat(style.borderTopLeftRadius)
+        const slot = node.getAttribute('data-slot') ?? node.tagName.toLowerCase()
+        if (SKIP.has(slot)) continue
 
-          if (isPill) {
-            const variant = node.getAttribute('data-variant')
-            const pillOk =
-              round ||
-              PILL_ALLOWED.has(slot) ||
-              variant === 'primary' ||
-              variant === 'money' ||
-              variant === 'pending'
-            if (!pillOk) {
-              result.push({
-                page: path,
-                kind: 'лишняя пилюля',
-                text: label(node),
-                detail: `${slot} · высота ${height} · пилюля разрешена главному действию, чипу фильтра и круглым фигурам`,
-              })
-            }
-            continue
-          }
+        // Капсула: браузер отдаёт огромное число, а не 999.
+        const isPill = radius >= Math.max(box.width, box.height)
 
-          const want = RADIUS_BY_HEIGHT[height]
-          if (want === undefined) continue
-          if (Math.abs(radius - want) > 0.5) {
+        if (SQUARES.has(slot)) {
+          if (Math.abs(radius - 6) > 0.5) {
             result.push({
               page: path,
-              kind: 'радиус не по карте',
+              kind: 'квадрат потерял радиус',
               text: label(node),
-              detail: `${slot} · высота ${height} → нужен r-${want}, стоит ${radius}`,
+              detail: `${slot} · нужен r-6, стоит ${radius}`,
             })
           }
+          continue
         }
 
-        return result
-      },
-      { path, RADIUS_BY_HEIGHT },
-    )
+        const isField = FIELDS.has(slot) || node.tagName === 'INPUT' || node.tagName === 'TEXTAREA'
+        if (isField) {
+          const width = (side: string) =>
+            Number.parseFloat(style.getPropertyValue(`border-${side}-width`))
+          const top = width('top')
+          const right = width('right')
+          const bottom = width('bottom')
+          const left = width('left')
+          const boxed = top > 0 || right > 0 || left > 0
+
+          // Коробка законна ровно в одном состоянии — в фокусе, — и проверка
+          // смотрит покой: фокуса на странице нет ни у одного поля.
+          if (boxed || radius > 0.5) {
+            result.push({
+              page: path,
+              kind: 'у поля осталась коробка',
+              text: label(node),
+              detail: `${slot} · рамка ${top}/${right}/${bottom}/${left}, радиус ${radius} — нужна только линия снизу`,
+            })
+          } else if (bottom <= 0) {
+            result.push({
+              page: path,
+              kind: 'у поля нет линии снизу',
+              text: label(node),
+              detail: `${slot} · поле обязано быть видно даже пустым`,
+            })
+          }
+          continue
+        }
+
+        /**
+         * Всё остальное нажимается и совершает действие, значит капсула.
+         *
+         * Кроме тех, у кого нет поверхности вовсе: «Сбросить 7», «Изменить»,
+         * «Показать все 8» — нажимаемые надписи без заливки и рамки. Радиус
+         * им назначать не на чем, и требовать от них форму бессмысленно.
+         */
+        const filled =
+          style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent'
+        const framed =
+          Number.parseFloat(style.borderTopWidth) > 0 &&
+          Number.parseFloat(style.borderBottomWidth) > 0 &&
+          Number.parseFloat(style.borderLeftWidth) > 0
+        if (!filled && !framed) continue
+
+        if (!isPill) {
+          result.push({
+            page: path,
+            kind: 'не капсула',
+            text: label(node),
+            detail: `${slot} · высота ${height} · радиус ${radius} — нажимаемое носит капсулу`,
+          })
+        }
+      }
+
+      return result
+    }, path)
 
     violations.push(...onPage)
   }
 
   const report = [
     `Проверено экранов: ${PAGES.length}`,
-    `Нарушений связки «высота — радиус»: ${violations.length}`,
+    `Контролов не по правилу формы: ${violations.length}`,
     '',
-    ...violations.map((v) => `${v.kind.padEnd(18)} ${v.page.padEnd(26)} «${v.text}» — ${v.detail}`),
+    ...violations.map((v) => `${v.kind.padEnd(26)} ${v.page.padEnd(24)} «${v.text}» — ${v.detail}`),
   ].join('\n')
 
   await mkdir(artifactsDir, { recursive: true })
   await writeFile(resolve(artifactsDir, 'control-geometry.txt'), report, 'utf8')
   if (violations.length > 0) console.log(report)
 
-  expect(violations, 'контролы, у которых радиус не из карты').toEqual([])
+  expect(violations, 'контролы, форма которых не отвечает роли').toEqual([])
 })

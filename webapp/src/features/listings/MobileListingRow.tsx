@@ -144,7 +144,7 @@ function MobileListingRow({
             onAction?.()
           }}
           className={cn(
-            "flex h-11 w-37.5 shrink-0 items-center justify-center rounded-md px-4",
+            "flex h-11 w-37.5 shrink-0 items-center justify-center rounded-full px-4",
             "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
             blocked
               ? "bg-warm text-text-2 outline-solid outline-1 -outline-offset-1 outline-border-control"

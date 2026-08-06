@@ -86,14 +86,19 @@ const buttonVariants = cva(
          * при наведении — это в макете, а не вольность.
          */
         secondary: [
-          "bg-warm text-text-2 border-border-control",
+          // Подпись графитом с покоя — обновление доски 05.08. Прежний
+          // приглушённый `text-2` держался на прежней роли вторичной кнопки:
+          // она отступала на второй план цветом подписи. Теперь ранг несёт
+          // заливка, и приглушать подпись значит делать её хуже читаемой
+          // без всякой на то причины.
+          "bg-warm text-fg border-border-control",
           "hover:bg-warm-hover hover:text-fg",
           "active:bg-warm-press active:text-fg",
           "data-[demo=hover]:bg-warm-hover data-[demo=hover]:text-fg",
           "data-[demo=press]:bg-warm-press data-[demo=press]:text-fg",
           "focus-visible:outline-offset-0 focus-visible:border-transparent",
           "data-[demo=focus]:outline-offset-0 data-[demo=focus]:border-transparent",
-          "disabled:bg-surface disabled:border-border-control disabled:text-text-dense",
+          "disabled:bg-warm disabled:border-border-control disabled:text-text-3",
         ],
         /**
          * Действие в строке выдачи. Снято с компонента `w2pux` C Кнопка · 32:
@@ -240,7 +245,15 @@ function Button({
       // размера, и конфликты утилит разрешает `cn`, а не порядок в собранном
       // CSS. Так уже ловили радиус 12 вместо 999, когда pill стоял только
       // у главного действия.
-      className={cn(buttonVariants({ variant: resolvedVariant, size }), block && "w-full")}
+      className={cn(
+        buttonVariants({ variant: resolvedVariant, size }),
+        // Кнопка во всю ширину колонки — тот же случай, что чип, сегмент
+        // и вкладка: её ширину задаёт ряд, а не подпись, и правило «воздух =
+        // 0,75 высоты» на неё не распространяется. С полем 24 подпись
+        // «Раскрыть · 199 ₽» переставала помещаться в колонку действия 144
+        // и обрезалась — поймано проверкой переполнения.
+        block && "w-full px-4",
+      )}
       {...props}
     >
       {iconLeft}

@@ -685,7 +685,11 @@ export function CallModeScreenPage() {
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={1}
-                className="flex h-12 w-full resize-none rounded-xl border border-border-control bg-bg px-3 py-2.5 text-text-dense outline-none focus-visible:border-transparent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg"
+                // Поле, а не коробка: линия снизу, ни заливки, ни рамки по
+                // кругу, ни бокового отступа — правило формы от 05.08. Фокус
+                // сказан самой линией: она становится графитовой и вдвое
+                // толще, и высота от этого не едет.
+                className="flex h-12 w-full resize-none border-0 border-b border-solid border-border-control bg-transparent py-2.5 text-text-dense outline-none transition-colors hover:border-text-2 focus-visible:border-b-2 focus-visible:border-fg"
               />
             </Typography>
           </div>

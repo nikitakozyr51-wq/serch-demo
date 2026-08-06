@@ -126,8 +126,10 @@ function ResultTabs({
         onClick={onToggleDensity}
         aria-pressed={dense}
         className={cn(
-          "flex h-ctl-xs cursor-pointer items-center gap-1.5 rounded-md bg-warm px-2.5",
-          "compact:rounded-sm",
+          "flex h-ctl-xs cursor-pointer items-center gap-1.5 rounded-full bg-warm px-2.5",
+          // Плотность меняет высоту, а не форму: правило «форма отвечает роли»
+          // (05.08) не знает про плотность вовсе. Прежний `compact:rounded-sm`
+          // остался от карты радиусов по высоте — она отменена.
           "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg",
         )}
       >

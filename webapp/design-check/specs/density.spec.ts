@@ -33,7 +33,14 @@ const PAIRS: Expected[] = [
   { what: 'полоса табов', selector: '[data-slot="result-tabs"]', prop: 'height', spacious: 36, compact: 32 },
   { what: 'шапка выдачи', selector: '[data-slot="results-header"]', prop: 'height', spacious: 40, compact: 36 },
   { what: 'кнопка вида', selector: '[data-slot="density-toggle"]', prop: 'height', spacious: 28, compact: 24 },
-  { what: 'радиус кнопки вида', selector: '[data-slot="density-toggle"]', prop: 'borderRadius', spacious: 8, compact: 6 },
+  /**
+   * Радиус из этой таблицы УБРАН.
+   *
+   * Плотность меняет высоту и поля — то, сколько всего помещается на экране.
+   * Форму она не меняет: с 05.08 форма отвечает на вопрос «что это», а не
+   * «какой оно высоты», и кнопка вида остаётся капсулой в обоих режимах.
+   * Прежняя пара 8 → 6 была следствием отменённой карты радиусов по высоте.
+   */
   { what: 'поле колонки фильтров', selector: '[data-slot="filter-panel"]', prop: 'paddingLeft', spacious: 14, compact: 12 },
 ]
 
