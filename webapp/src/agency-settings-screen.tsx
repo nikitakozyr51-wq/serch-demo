@@ -4,6 +4,7 @@ import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { useOwnAgency, useSession } from "@/features/auth"
+import { accountingDocument, download, fileName, useNow } from "@/features/workspace"
 import { AgencyShell, FormField, SettingRow } from "@/features/agency"
 
 /**
@@ -52,6 +53,52 @@ export function AgencySettingsPage() {
   // стенд сверки, который обязан показывать замеренные данные независимо от
   // того, кто вошёл. Прямая проверка поля оставляла стенд пустым.
   const own = useOwnAgency()
+  const now = useNow()
+  const agencyName = own ? (session?.agency ?? "") : "Невский проспект"
+
+  /**
+   * Договор и согласие отдаются текстом.
+   *
+   * PDF без подписи и печати всё равно не документ, а текст открывается
+   * везде и виден целиком. Когда появится сервер, подписанный файл придёт
+   * оттуда — содержимое останется тем же.
+   */
+  const downloadContract = () => {
+    download(
+      fileName("договор", now, "txt"),
+      accountingDocument({
+        kind: "Договор оказания услуг",
+        number: "СЧ-2026",
+        at: now,
+        agency: agencyName,
+        lines: [
+          ["Доступ к сервису для агентства целиком, до 20 сотрудников", "3 000 ₽ / мес"],
+          ["Раскрытие контакта собственника", "199 ₽ / шт"],
+        ],
+        total: "по факту использования",
+      }),
+      "text/plain;charset=utf-8",
+    )
+  }
+
+  const downloadConsent = () => {
+    download(
+      fileName("согласие-на-обработку", now, "txt"),
+      accountingDocument({
+        kind: "Согласие на обработку персональных данных",
+        number: "1",
+        at: now,
+        agency: agencyName,
+        lines: [
+          ["Оператор", "ООО «Сёрчь»"],
+          ["Уведомление в Роскомнадзор", "№ 78-19-004182"],
+          ["Цель обработки", "поиск собственников недвижимости"],
+        ],
+        total: "бессрочно до отзыва",
+      }),
+      "text/plain;charset=utf-8",
+    )
+  }
 
   return (
     <AgencyShell
@@ -64,7 +111,7 @@ export function AgencySettingsPage() {
       }
       action={
         // Договор с агентством отдаётся файлом, а экрана документа в макете нет.
-        <Button variant="quiet" size="sm" data-action="скачан договор с агентством">
+        <Button variant="quiet" size="sm" onClick={downloadContract}>
           Скачать договор
         </Button>
       }
@@ -188,7 +235,7 @@ export function AgencySettingsPage() {
             title="Согласие на обработку персональных данных"
             note="подписано 12.06.2026 при создании агентства"
             control={
-              <Button variant="quiet" size="sm" data-action="скачана копия согласия агентства">
+              <Button variant="quiet" size="sm" onClick={downloadConsent}>
                 Скачать копию
               </Button>
             }

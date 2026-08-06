@@ -4,6 +4,14 @@ import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { useOwnAgency } from "@/features/auth"
+import {
+  csv,
+  download,
+  fileName,
+  formatMoment,
+  useNow,
+  useWorkspace,
+} from "@/features/workspace"
 import { AgencyEmpty, AgencyShell, DataTable } from "@/features/agency"
 
 /**
@@ -64,6 +72,35 @@ export function AgencyConsentsPage() {
   // в нём нет. Показывать здесь чужой журнал — значит приписать новому
   // агентству разговоры, которых не было.
   const own = useOwnAgency()
+  const now = useNow()
+  /**
+   * Согласия и отказы — тот же журнал, но про обращения к человеку.
+   * В своём агентстве сюда попадают отметки «просил не звонить»: они
+   * единственные из этого набора, которые продукт умеет ставить сегодня.
+   */
+  const workspace = useWorkspace()
+  const events: ConsentEvent[] = own
+    ? workspace.stopList.map((address, index) => ({
+        id: `stop-${index}`,
+        when: formatMoment(now),
+        who: "",
+        what: "Отметка «просил не звонить»",
+        object: address,
+        answer: "Отказ от звонков",
+        channel: "звонок",
+      }))
+    : EVENTS
+
+  /** Выгрузка для проверяющего: те же строки, что на экране, без телефонов. */
+  const exportConsents = () => {
+    download(
+      fileName("согласия-и-отказы", now),
+      csv(
+        ["Дата и время", "Кто инициировал", "Что произошло", "Объект", "Ответ", "Канал"],
+        events.map((e) => [e.when, e.who, e.what, e.object, e.answer, e.channel]),
+      ),
+    )
+  }
 
   return (
     <AgencyShell
@@ -72,7 +109,7 @@ export function AgencyConsentsPage() {
       note="фильтр журнала: запросы подтверждения и отметки об отказе"
       action={
         // Выгрузка для проверяющего: файла в макете нет, действие названо.
-        <Button variant="secondary" size="sm" data-action="выгружены согласия и отказы для проверки">
+        <Button variant="secondary" size="sm" onClick={exportConsents}>
           Выгрузить для проверки
         </Button>
       }
@@ -89,12 +126,12 @@ export function AgencyConsentsPage() {
         <div className="h-px flex-1" />
         <Typography variant="metaText" tone="dense">
           {own
-            ? "нет событий за 30 дней"
+            ? `${events.length === 0 ? "нет событий" : `${events.length} событий`} за 30 дней`
             : "12 событий за 30 дней · 5 подтверждений, 3 отказа, 2 без ответа, 1 ждём ответа, 1 заблокирован"}
         </Typography>
       </div>
 
-      {own ? (
+      {events.length === 0 ? (
         <AgencyEmpty
           title="Журнал пуст"
           text="Сюда попадают запросы подтверждения и отметки об отказе — по одной строке на каждое обращение к собственнику. Первая запись появится после первого раскрытия контакта в выдаче."
@@ -110,7 +147,7 @@ export function AgencyConsentsPage() {
           { head: "ОТВЕТ", width: "w-col-216", numeric: true },
           { head: "КАНАЛ", width: "w-col-120", numeric: true },
         ]}
-        rows={EVENTS.map((event) => ({
+        rows={events.map((event) => ({
           id: event.id,
           cells: [
             <Typography key="when" variant="denseText" tone="secondary">{event.when}</Typography>,

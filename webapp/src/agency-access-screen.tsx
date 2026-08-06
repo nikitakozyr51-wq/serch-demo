@@ -4,6 +4,14 @@ import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { useOwnAgency } from "@/features/auth"
+import {
+  csv,
+  download,
+  fileName,
+  formatMoment,
+  useNow,
+  useWorkspace,
+} from "@/features/workspace"
 import { AgencyEmpty, AgencyShell, DataTable } from "@/features/agency"
 
 /**
@@ -64,11 +72,61 @@ export function AgencyAccessPage() {
   // В своём агентстве журнал начинается с нуля: обращаться к контактам ещё
   // никто не успел.
   const own = useOwnAgency()
-  const all = own ? [] : EVENTS
+  const now = useNow()
+  /**
+   * Журнал собирается из работы агентства, а не стоит константой.
+   *
+   * Каждое раскрытие и каждый звонок оставляют здесь строку — это и есть
+   * ответ проверяющему на вопрос «откуда у вас номер этого человека».
+   * IP браузер знать не может, и выдумывать его нельзя: вместо числа стоит
+   * прочерк, а не правдоподобная ложь.
+   */
+  const workspace = useWorkspace()
+  const mine: AccessEvent[] = own
+    ? [
+        ...workspace.disclosures.map((item) => ({
+          id: item.id,
+          when: formatMoment(item.at),
+          who: item.by,
+          action: item.refunded ? "Возврат за брак" : "Раскрытие контакта",
+          object: item.address,
+          sum: item.trial ? "0 ₽" : `${item.amount} ₽`,
+          charged: !item.trial,
+          ip: "—",
+        })),
+        ...workspace.calls.map((item) => ({
+          id: item.id,
+          when: formatMoment(item.at),
+          who: item.by,
+          action: `Звонок: ${item.outcome}`,
+          object: item.address,
+          sum: "0 ₽",
+          ip: "—",
+        })),
+      ].sort((a, b) => (a.when < b.when ? 1 : -1))
+    : EVENTS
+
+  const all = mine
   const events =
     filter === "Только раскрытия"
       ? all.filter((event) => event.action === "Раскрытие контакта")
       : all
+
+  /**
+   * Выгрузка настоящая: файл собирается из показанных строк и уходит на диск.
+   *
+   * Телефонов в нём нет — это правило продукта, а не упрощение: файл, который
+   * можно унести с собой, не должен уносить контакты собственников.
+   */
+  const exportLog = () => {
+    download(
+      fileName("журнал-доступа", now),
+      csv(
+        ["Дата и время", "Сотрудник", "Действие", "Объект", "Сумма", "IP"],
+        events.map((event) => [event.when, event.who, event.action, event.object, event.sum, event.ip]),
+      ),
+    )
+  }
 
   return (
     <AgencyShell
@@ -78,7 +136,7 @@ export function AgencyAccessPage() {
       action={
         // Журнал выгружается по запросу проверяющего; экрана выгрузки в макете
         // нет, поэтому действие названо и ничего не рисует.
-        <Button variant="quiet" size="sm" data-action="выгружен журнал доступа">
+        <Button variant="quiet" size="sm" onClick={exportLog}>
           Выгрузить журнал
         </Button>
       }

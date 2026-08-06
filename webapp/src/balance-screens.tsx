@@ -9,7 +9,16 @@ import { AgencyChip, AgencyEmpty, DataTable, NoticeBar } from "@/features/agency
 import { useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
 import { FillBar, groupDigits, plural } from "@/features/listings"
-import { formatMoment, subjectiveRefunds, useNow, useWorkspace } from "@/features/workspace"
+import {
+  accountingDocument,
+  download,
+  fileName,
+  formatMoment,
+  spentLast30Days,
+  subjectiveRefunds,
+  useNow,
+  useWorkspace,
+} from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
 /** Раскрытие стоит 199 ₽ — цена продукта, а не число экрана. */
@@ -136,6 +145,41 @@ function keyNumbers(balance: number) {
  * одни и те же, с какой бы стороны на них ни смотрели. Различаются только
  * заголовок и полоса вкладок.
  */
+/**
+ * Акт, счёт или счёт-фактура — файлом, из настоящих чисел агентства.
+ *
+ * Живёт рядом с каркасом баланса, потому что нужен трём экранам сразу:
+ * шапке денег, вкладке документов и экрану пополнения. Три копии этой
+ * функции разъехались бы на первой же правке суммы.
+ */
+function usePaper() {
+  const session = useSession()
+  const workspace = useWorkspace()
+  const now = useNow()
+
+  return (kind: string) => {
+    const spent = spentLast30Days(workspace, now)
+    const topped = workspace.topUps.reduce((sum, item) => sum + item.amount, 0)
+
+    download(
+      fileName(kind.toLowerCase().replace(/[^а-яё]/gi, "-"), now, "txt"),
+      accountingDocument({
+        kind,
+        number: String(1000 + workspace.disclosures.length),
+        at: now,
+        agency: session?.agency ?? "",
+        lines: [
+          ["Раскрытие контактов за 30 дней", `${spent} ₽`],
+          ["Пополнения счёта", `${topped} ₽`],
+          ["Остаток на счету", `${session?.balance ?? 0} ₽`],
+        ],
+        total: `${spent} ₽`,
+      }),
+      "text/plain;charset=utf-8",
+    )
+  }
+}
+
 function BalanceShell({
   title,
   note,
@@ -155,6 +199,7 @@ function BalanceShell({
   const session = useSession()
   const navigate = useNavigate()
   const balance = session?.balance ?? DEMO_BALANCE
+  const paper = usePaper()
 
   return (
     <CabinetShell activeId="balance">
@@ -167,13 +212,13 @@ function BalanceShell({
             {note}
           </Typography>
           <div className="h-px flex-1" />
-          {/* Акт и счёт — файлы, а не экраны: печатать их будет сервер, которого
-              за демонстрацией нет. Действие названо, но ничего не рисует:
-              плашка «скоро будет» была бы обещанием вместо документа. */}
-          <Button variant="quiet" size="sm" data-action="скачать акт за месяц">
+          {/* Акт и счёт — настоящие файлы. Сервер нужен, чтобы ПОДПИСАТЬ
+              документ печатью; чтобы СОБРАТЬ его из чисел, которые уже перед
+              глазами, сервер не нужен, и притворяться иначе было незачем. */}
+          <Button variant="quiet" size="sm" onClick={() => paper("Акт")}>
             Скачать акт
           </Button>
-          <Button variant="quiet" size="sm" data-action="скачать счёт на пополнение">
+          <Button variant="quiet" size="sm" onClick={() => paper("Счёт")}>
             Скачать счёт
           </Button>
           {/* Пополнение — нарисованный экран, и человек должен попадать на него
@@ -540,15 +585,22 @@ const DOCUMENTS: {
  * съела бы две трети строки, поэтому в файле здесь не кнопка, а подпись,
  * по которой можно нажать.
  */
-function RowAction({ doc, children }: { doc: string; children: string }) {
+function RowAction({
+  doc,
+  children,
+  onClick,
+}: {
+  doc: string
+  children: string
+  onClick?: () => void
+}) {
   return (
     <button
       type="button"
       data-slot="row-action"
-      // Файл выдаёт сервер, которого за демонстрацией нет, поэтому нажатие
-      // названо и ничего не рисует. Имя документа стоит в подписи для чтения
-      // с экрана: девять одинаковых «Скачать» подряд ничего не различают.
-      data-action={`скачать ${doc}`}
+      // Имя документа стоит в подписи для чтения с экрана: девять одинаковых
+      // «Скачать» подряд ничего не различают.
+      onClick={onClick}
       aria-label={`${children} ${doc}`}
       className="inline-flex h-6 shrink-0 cursor-pointer items-center rounded-sm bg-transparent px-2 hover:bg-warm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg"
     >
@@ -567,6 +619,7 @@ export function BalanceDocumentsPage() {
    * лежат последние — поэтому число во вкладке больше числа строк.
    */
   const [tab, setTab] = useState("all")
+  const paper = usePaper()
   const shown = DOCUMENTS.filter((row) => {
     if (tab === "invoices") return row.kind === "invoice"
     if (tab === "acts") return row.kind === "act"
@@ -605,7 +658,9 @@ export function BalanceDocumentsPage() {
             <Typography key="state" variant="denseText" tone="secondary">{row.state}</Typography>,
             <Typography key="file" variant="denseText" tone="dense">{row.file}</Typography>,
             <Typography key="sum" variant="numericDense" tone="default">{row.sum}</Typography>,
-            <RowAction key="get" doc={row.doc}>Скачать</RowAction>,
+            <RowAction key="get" doc={row.doc} onClick={() => paper(row.doc)}>
+              Скачать
+            </RowAction>,
           ],
         }))}
       />

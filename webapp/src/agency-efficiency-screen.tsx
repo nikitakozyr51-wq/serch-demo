@@ -6,6 +6,14 @@ import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { useOwnAgency, useSession } from "@/features/auth"
+import {
+  csv,
+  download,
+  fileName,
+  funnel,
+  useNow,
+  useWorkspace,
+} from "@/features/workspace"
 import { AgencyEmpty, AgencyShell, DataTable } from "@/features/agency"
 import { OwnerAvatar } from "@/features/listings"
 
@@ -115,6 +123,29 @@ export function AgencyEfficiencyPage() {
   // стенд сверки, который обязан показывать замеренные данные независимо от
   // того, кто вошёл. Прямая проверка поля оставляла стенд пустым.
   const own = useOwnAgency()
+  const workspace = useWorkspace()
+  const now = useNow()
+
+  /**
+   * Отчёт руководителя файлом: воронка и работа по объектам за 30 дней.
+   * Собирается из журналов, поэтому в нём ровно то, что на экране.
+   */
+  const exportReport = () => {
+    const f = funnel(workspace, now, 30)
+    download(
+      fileName("эффективность-30-дней", now),
+      csv(
+        ["Показатель", "Значение"],
+        [
+          ["Раскрыто контактов", f.disclosed],
+          ["Дозвонов", f.reached],
+          ["Отказов", f.refused],
+          ["Оказались посредниками", f.brokers],
+          ["Потрачено, ₽", f.spent],
+        ],
+      ),
+    )
+  }
 
   return (
     <AgencyShell
@@ -149,7 +180,7 @@ export function AgencyEfficiencyPage() {
           <Button
             variant="quiet"
             size="sm"
-            data-action="выгружен отчёт по эффективности без телефонов"
+            onClick={exportReport}
             iconLeft={<Download aria-hidden className="size-3.5" strokeWidth={2} />}
           >
             Выгрузить, без телефонов

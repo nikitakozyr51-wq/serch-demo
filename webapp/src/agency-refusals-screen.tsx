@@ -3,6 +3,14 @@ import { Lock } from "lucide-react"
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { useOwnAgency } from "@/features/auth"
+import {
+  csv,
+  download,
+  fileName,
+  formatMoment,
+  useNow,
+  useWorkspace,
+} from "@/features/workspace"
 import { AgencyChip, AgencyEmpty, AgencyShell, DataTable } from "@/features/agency"
 
 /**
@@ -70,7 +78,35 @@ export function AgencyRefusalsPage() {
   // Стоп-лист ведёт агентство: сюда попадают собственники, которые просили
   // не звонить именно ему. Своё агентство ещё никому не звонило.
   const own = useOwnAgency()
-  const refusals = own ? [] : REFUSALS
+  const workspace = useWorkspace()
+  const now = useNow()
+
+  /**
+   * Стоп-лист своего агентства: отметки «просил не звонить», поставленные
+   * в панели звонка. Снять их нельзя, поэтому список только растёт.
+   */
+  const refusals: Refusal[] = own
+    ? workspace.stopList.map((address, index) => ({
+        id: `stop-${index}`,
+        phone: "скрыт",
+        object: address,
+        who: "",
+        date: formatMoment(now),
+        removal: "навсегда",
+        status: "hidden" as Refusal["status"],
+      }))
+    : REFUSALS
+
+  /** Выгрузка для проверяющего. Телефонов в файле нет: они и есть предмет отказа. */
+  const exportStopList = () => {
+    download(
+      fileName("стоп-лист", now),
+      csv(
+        ["Объект", "Кто отметил", "Дата", "Срок удаления", "Статус"],
+        refusals.map((row) => [row.object, row.who, row.date, row.removal, row.status]),
+      ),
+    )
+  }
 
   return (
     <AgencyShell
@@ -80,7 +116,7 @@ export function AgencyRefusalsPage() {
       action={
         // Выгрузка стоп-листа для проверяющего: файла в макете нет, и рисовать
         // его подтверждение было бы обещанием того, чего продукт пока не делает.
-        <Button variant="quiet" size="sm" data-action="выгружен стоп-лист для проверки">
+        <Button variant="quiet" size="sm" onClick={exportStopList}>
           Экспорт для проверки
         </Button>
       }

@@ -231,6 +231,7 @@ function Button({
   const labelVariant = size === "lg" ? "controlLabelLg" : "controlLabel"
   const resolvedVariant = pending ? "pending" : (variant ?? "secondary")
 
+
   return (
     <Comp
       data-slot="button"
