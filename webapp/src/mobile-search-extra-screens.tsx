@@ -5,7 +5,7 @@ import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { MobileBottomNav, MobileHeader } from "@/features/cabinet"
+import { MobileBottomNav, MobileHeader, PhoneFrame } from "@/features/cabinet"
 import { MobileListingRow } from "@/features/listings"
 import { cn } from "@/lib/utils"
 
@@ -43,19 +43,9 @@ function PhoneStand({
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-svh w-full items-start justify-center bg-line-1 p-10">
-      <div
-        data-slot="mobile-screen"
-        className={cn(
-          "relative flex h-[844px] w-[390px] flex-col overflow-hidden",
-          "outline-solid outline-1 -outline-offset-1 outline-line-2",
-          surface === "bg" && "bg-bg",
-          surface === "dark" && "bg-fg",
-        )}
-      >
-        {children}
-      </div>
-    </div>
+    <PhoneFrame slot="mobile-screen" surface={surface}>
+      {children}
+    </PhoneFrame>
   )
 }
 

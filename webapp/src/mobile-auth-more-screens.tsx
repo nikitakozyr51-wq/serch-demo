@@ -4,7 +4,7 @@ import type { ReactNode } from "react"
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { signIn } from "@/features/auth"
-import { MobileAuthLogo } from "@/features/cabinet"
+import { MobileAuthLogo, PhoneFrame } from "@/features/cabinet"
 import { cn } from "@/lib/utils"
 
 /**
@@ -52,17 +52,12 @@ function MobileAuthFrame({ children }: { children: ReactNode }) {
   return (
     // Кадр телефона на десктопном экране: 390 × 844 по центру, чтобы стенд
     // можно было смотреть в обычном браузере рядом с макетом.
-    <div className="flex min-h-svh w-full items-start justify-center bg-line-1 p-10">
-      <div
-        data-slot="mobile-auth-screen"
-        className="flex h-[844px] w-[390px] flex-col overflow-hidden bg-bg outline-solid outline-1 -outline-offset-1 outline-line-2"
-      >
-        <MobileAuthLogo />
-        <div className="flex min-h-0 w-full flex-1 flex-col gap-8 overflow-y-auto px-4 py-8">
-          <>{children}</>
-        </div>
+    <PhoneFrame slot="mobile-auth-screen">
+      <MobileAuthLogo />
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-8 overflow-y-auto px-4 py-8">
+        <>{children}</>
       </div>
-    </div>
+    </PhoneFrame>
   )
 }
 

@@ -5,7 +5,7 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { MobileBottomNav, MobileSectionHeader } from "@/features/cabinet"
+import { MobileBottomNav, MobileSectionHeader, PhoneFrame } from "@/features/cabinet"
 import { cn } from "@/lib/utils"
 
 /**
@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils"
  * а эти три экрана прижимают действия к низу кадра 844 — вне этой высоты
  * распорка теряет смысл.
  */
-function PhoneFrame({
+function PersonScreen({
   header,
   activeTab,
   children,
@@ -40,16 +40,11 @@ function PhoneFrame({
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-svh w-full items-start justify-center bg-line-1 p-10">
-      <div
-        data-slot="mobile-screen"
-        className="flex h-[844px] w-[390px] flex-col overflow-hidden bg-bg outline-solid outline-1 -outline-offset-1 outline-line-2"
-      >
-        <>{header}</>
-        {children}
-        <MobileBottomNav activeId={activeTab} />
-      </div>
-    </div>
+    <PhoneFrame slot="mobile-screen">
+      <>{header}</>
+      {children}
+      <MobileBottomNav activeId={activeTab} />
+    </PhoneFrame>
   )
 }
 
@@ -163,7 +158,7 @@ const PERSON_STATS = [
  */
 export function MobilePersonPage() {
   return (
-    <PhoneFrame
+    <PersonScreen
       activeTab="more"
       header={
         <MobileSectionHeader
@@ -271,7 +266,7 @@ export function MobilePersonPage() {
           </button>
         </div>
       </div>
-    </PhoneFrame>
+    </PersonScreen>
   )
 }
 
@@ -299,7 +294,7 @@ export function MobileInviteAgentPage() {
   const [limit, setLimit] = useState(INVITE_LIMITS[0])
 
   return (
-    <PhoneFrame
+    <PersonScreen
       activeTab="more"
       header={
         <MobileSectionHeader
@@ -393,7 +388,7 @@ export function MobileInviteAgentPage() {
           Отправить приглашение
         </Button>
       </div>
-    </PhoneFrame>
+    </PersonScreen>
   )
 }
 
@@ -443,7 +438,7 @@ const PLAN_FACTS = [
  */
 export function MobilePlanPage() {
   return (
-    <PhoneFrame activeTab="more" header={<MobileSectionHeader title="Тариф" />}>
+    <PersonScreen activeTab="more" header={<MobileSectionHeader title="Тариф" />}>
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5">
         {PLAN_FACTS.map((fact) => (
           <Fragment key={fact.label}>
@@ -489,6 +484,6 @@ export function MobilePlanPage() {
           </Button>
         </div>
       </div>
-    </PhoneFrame>
+    </PersonScreen>
   )
 }

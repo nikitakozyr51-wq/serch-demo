@@ -2,6 +2,7 @@ import { Navigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { useSession } from "@/features/auth"
+import { loginPath } from "./platform"
 
 /**
  * Кабинет закрыт для тех, кто не вошёл.
@@ -26,7 +27,11 @@ function CabinetGuard({ children }: { children: ReactNode }) {
   // `returnTo` объявлен в маршруте входа обязательным параметром поиска,
   // поэтому передаётся явно. Пустое значение честнее выдуманного адреса:
   // куда человек шёл, знает он, а не дверь.
-  if (!session) return <Navigate to="/login" search={{ returnTo: undefined }} replace />
+  // Вход выбирается по ширине экрана: на телефоне десктопный кадр входа
+  // 1440 × 1024 нечитаем, и человек упирался в него вместо формы.
+  if (!session) {
+    return <Navigate to={loginPath()} search={{ returnTo: undefined }} replace />
+  }
 
   return <>{children}</>
 }

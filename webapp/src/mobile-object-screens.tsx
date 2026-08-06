@@ -6,7 +6,7 @@ import type { MouseEvent, ReactNode } from "react"
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { useSession, useSessionActions } from "@/features/auth"
-import { MobileBottomNav, MobileHeader } from "@/features/cabinet"
+import { MobileBottomNav, MobileHeader, PhoneFrame } from "@/features/cabinet"
 import {
   ListingPhoto,
   MarketDeviation,
@@ -46,23 +46,6 @@ function pressProps(onPress: () => void) {
   }
 }
 
-/**
- * Кадр телефона на десктопном стенде: 390 × 844 по центру.
- * Ровно тот же, что у `mobile-search-screen` и `mobile-call-screen`, —
- * стенд смотрят в обычном браузере рядом с макетом.
- */
-function PhoneFrame({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-svh w-full items-start justify-center bg-line-1 p-10">
-      <div
-        data-slot="mobile-screen"
-        className="flex h-[844px] w-[390px] flex-col overflow-hidden bg-bg outline-solid outline-1 -outline-offset-1 outline-line-2"
-      >
-        <>{children}</>
-      </div>
-    </div>
-  )
-}
 
 /**
  * Шапка возврата: 56, поля [0, 16], зазор 8, стрелка 18 и подпись 14/600
@@ -320,7 +303,7 @@ export function MobileObjectPage() {
   const navigate = useNavigate()
 
   return (
-    <PhoneFrame>
+    <PhoneFrame slot="mobile-screen">
       <ObjectBackBar label="К списку" to="/screen/mobile" status="disclosed" />
 
       <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-bg">
@@ -397,7 +380,7 @@ export function MobileObjectBeforePage() {
   const actions = useSessionActions()
 
   return (
-    <PhoneFrame>
+    <PhoneFrame slot="mobile-screen">
       <ObjectBackBar label="К списку" to="/screen/mobile" status="new" />
 
       <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-bg">
@@ -544,7 +527,7 @@ export function MobileObjectSimilarPage() {
   const navigate = useNavigate()
 
   return (
-    <PhoneFrame>
+    <PhoneFrame slot="mobile-screen">
       <ObjectBackBar label="К списку" to="/screen/mobile" status="disclosed" />
 
       <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-bg">
@@ -723,7 +706,7 @@ export function MobileSimilarListPage() {
       : SIMILAR_ROWS
 
   return (
-    <PhoneFrame>
+    <PhoneFrame slot="mobile-screen">
       <ObjectBackBar label="Ленская ул., 10" to="/m/object" />
 
       <div className="flex min-h-0 w-full flex-1 flex-col gap-3 overflow-y-auto p-4">
@@ -873,7 +856,7 @@ export function MobileTakenByColleaguesPage() {
   const session = useSession()
 
   return (
-    <PhoneFrame>
+    <PhoneFrame slot="mobile-screen">
       <MobileHeader
         balance={session?.balance ?? 8610}
         initials={session?.initials ?? "ИС"}

@@ -3,8 +3,10 @@ import {
   createRoute,
   createRouter,
   lazyRouteComponent,
+  redirect,
 } from '@tanstack/react-router'
 
+import { platformTwin } from '@/features/cabinet'
 import { RootLayout } from './root-layout'
 
 const rootRoute = createRootRoute({
@@ -45,6 +47,12 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   validateSearch: returnToSearch,
+  // Вход тоже выбирает экран по устройству: на 390 десктопный кадр
+  // 1440 × 1024 даёт боковую прокрутку и нечитаемую форму.
+  beforeLoad: () => {
+    const twin = platformTwin('/login')
+    if (twin !== null) throw redirect({ to: twin, replace: true })
+  },
   component: lazyRouteComponent(() => import('./auth-screens'), 'LoginPage'),
 })
 
@@ -345,6 +353,19 @@ function productRoute<TModule extends Record<string, unknown>, const TPath exten
   return createRoute({
     getParentRoute: () => rootRoute,
     path,
+    /**
+     * Экран, подходящий устройству, выбирается ДО отрисовки.
+     *
+     * Раньше это делал эффект после первого кадра — и дрался с охраной
+     * кабинета, которая рисует переход на вход прямо во время отрисовки.
+     * Двое переходов подряд перебрасывали управление друг другу, пока React
+     * не останавливал это словами «Maximum update depth exceeded», и экран
+     * оставался белым.
+     */
+    beforeLoad: () => {
+      const twin = platformTwin(path)
+      if (twin !== null) throw redirect({ to: twin, replace: true })
+    },
     component: lazyRouteComponent(load, name),
   })
 }

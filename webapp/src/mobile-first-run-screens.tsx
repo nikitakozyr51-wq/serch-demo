@@ -4,7 +4,7 @@ import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { MobileAuthLogo, MobileBottomNav } from "@/features/cabinet"
+import { MobileAuthLogo, MobileBottomNav, PhoneFrame } from "@/features/cabinet"
 import { cn } from "@/lib/utils"
 
 /**
@@ -39,14 +39,9 @@ function MobilePhoneFrame({
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-svh w-full items-start justify-center bg-line-1 p-10">
-      <div
-        data-slot={slot}
-        className="flex h-[844px] w-[390px] flex-col overflow-hidden bg-bg outline-solid outline-1 -outline-offset-1 outline-line-2"
-      >
-        {children}
-      </div>
-    </div>
+    <PhoneFrame slot={slot}>
+      {children}
+    </PhoneFrame>
   )
 }
 

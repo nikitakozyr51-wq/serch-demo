@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 
 import { Typography } from "@/components/typography"
-import { MobileBottomNav, MobileHeader } from "@/features/cabinet"
+import { MobileBottomNav, MobileHeader, PhoneFrame } from "@/features/cabinet"
 import { MobileListingRow } from "@/features/listings"
 
 /**
@@ -73,45 +73,40 @@ export function MobileSearchScreenPage() {
   return (
     // Кадр телефона на десктопном экране: 390 × 844 по центру, чтобы стенд
     // можно было смотреть в обычном браузере рядом с макетом.
-    <div className="flex min-h-svh w-full items-start justify-center bg-line-1 p-10">
-      <div
-        data-slot="mobile-screen"
-        className="flex h-[844px] w-[390px] flex-col overflow-hidden bg-bg outline-solid outline-1 -outline-offset-1 outline-line-2"
-      >
-        <MobileHeader balance={8610} initials="ИС" />
+    <PhoneFrame slot="mobile-screen">
+      <MobileHeader balance={8610} initials="ИС" />
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-          <div className="flex h-11 w-full shrink-0 items-center gap-2">
-            <Typography variant="panelTitle" tone="default" as="h1">
-              Поиск
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+        <div className="flex h-11 w-full shrink-0 items-center gap-2">
+          <Typography variant="panelTitle" tone="default" as="h1">
+            Поиск
+          </Typography>
+          <div className="h-px flex-1" />
+          <Typography variant="denseText" tone="dense">
+            247 объектов
+          </Typography>
+          {/* Фильтры на телефоне — лист снизу, он нарисован кадром `gFIin`
+              и живёт своим адресом. */}
+          <button
+            type="button"
+            data-slot="mobile-filters"
+            onClick={() => void navigate({ to: "/m/filters" })}
+            className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-surface px-3.5 outline-solid outline-1 -outline-offset-1 outline-border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          >
+            <Typography variant="controlLabel" tone="default">
+              Фильтры 7
             </Typography>
-            <div className="h-px flex-1" />
-            <Typography variant="denseText" tone="dense">
-              247 объектов
-            </Typography>
-            {/* Фильтры на телефоне — лист снизу, он нарисован кадром `gFIin`
-                и живёт своим адресом. */}
-            <button
-              type="button"
-              data-slot="mobile-filters"
-              onClick={() => void navigate({ to: "/m/filters" })}
-              className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-surface px-3.5 outline-solid outline-1 -outline-offset-1 outline-border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-            >
-              <Typography variant="controlLabel" tone="default">
-                Фильтры 7
-              </Typography>
-            </button>
-          </div>
-
-          <div className="flex w-full flex-col gap-2">
-            {ROWS.map((row) => (
-              <MobileListingRow key={row.address} {...row} />
-            ))}
-          </div>
+          </button>
         </div>
 
-        <MobileBottomNav activeId={tab} onSelect={setTab} />
+        <div className="flex w-full flex-col gap-2">
+          {ROWS.map((row) => (
+            <MobileListingRow key={row.address} {...row} />
+          ))}
+        </div>
       </div>
-    </div>
+
+      <MobileBottomNav activeId={tab} onSelect={setTab} />
+    </PhoneFrame>
   )
 }

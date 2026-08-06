@@ -1,6 +1,8 @@
 export { isOverlayOpen, useOverlayOpen } from './overlay-state'
 export { CabinetGuard } from './CabinetGuard'
 export { AvatarMenu } from './AvatarMenu'
+export { PhoneFrame } from './PhoneFrame'
+export { isNarrow, loginPath, platformTwin } from './platform'
 export { usePlatformRoute } from './usePlatformRoute'
 export { requestPalette } from './overlay-state'
 export { CabinetHeader } from './CabinetHeader'
