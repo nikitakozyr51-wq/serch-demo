@@ -14,8 +14,26 @@ import { cn } from "@/lib/utils"
  * ошибки закладывается заранее, поэтому форма не прыгает в момент ошибки —
  * это отдельное правило доски, а не деталь вёрстки.
  *
- * Ошибка рисуется границей внутрь и **заменяет** обычную границу, а не
- * добавляется к ней. Кольцо фокуса рисуется снаружи и соседей не смещает.
+ * КОРОБКИ У ПОЛЯ БОЛЬШЕ НЕТ (передача 05.08.2026, раздел 1). Поле — это не
+ * контейнер, а строка, в которую пишут, и рисуется оно одной линией снизу.
+ * Заливки нет, рамки с четырёх сторон нет, радиуса нет.
+ *
+ * | состояние | линия |
+ * |---|---|
+ * | покой     | `border-control`, 1 px |
+ * | наведение | `text-2`, 1 px |
+ * | фокус     | `fg`, **2 px** |
+ * | нажатие   | `fg`, 1 px |
+ * | ошибка    | `err-text`, **2 px** плюс подпись под полем тем же цветом |
+ * | выключено | `line-2`, 1 px, значение `text-3` |
+ *
+ * БОКОВОЕ ПОЛЕ 12 СНЯТО: значение выровнено по левому краю колонки, то есть
+ * по своей подписи сверху. С коробкой отступ был нужен, чтобы текст не липнул
+ * к рамке; без коробки он только сдвигал значение относительно метки.
+ *
+ * Кольцо фокуса рисуется снаружи и соседей не смещает. Толщина линии при
+ * фокусе меняется с 1 на 2 внутрь — высота контрола от этого не едет,
+ * потому что линия нижняя, а не рамка по кругу.
  */
 type TextFieldProps = Omit<
   ComponentPropsWithoutRef<"input">,
@@ -67,16 +85,25 @@ function TextField({
           aria-invalid={invalid || undefined}
           aria-describedby={error || hint ? messageId : undefined}
           className={cn(
-            "h-ctl-md w-full rounded-lg bg-surface px-3 text-fg",
-            "border transition-colors",
+            "h-ctl-md w-full bg-transparent text-fg",
+            // Линия только снизу. `border-b-*` вместо `border`: рамка по кругу
+            // вернула бы коробку, которой у поля больше нет.
+            "border-0 border-b border-solid transition-colors",
             "placeholder:text-text-dense",
-            "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg",
-            "focus-visible:border-transparent",
-            "data-[demo=focus]:outline-solid data-[demo=focus]:outline-2 data-[demo=focus]:outline-offset-0 data-[demo=focus]:outline-fg data-[demo=focus]:border-transparent",
+            // Кольца фокуса у поля нет: фокус сказан самой линией, ставшей
+            // вдвое толще и графитовой. Кольцо поверх линии дало бы две
+            // разные отметки одного состояния.
+            "outline-none",
             invalid
-              ? "border-2 border-err-text"
-              : "border-border-control hover:border-text-2 active:border-fg data-[demo=hover]:border-text-2 data-[demo=press]:border-fg",
-            "disabled:border-line-2 disabled:bg-warm disabled:text-text-dense",
+              ? "border-b-2 border-err-text"
+              : [
+                  "border-border-control",
+                  "hover:border-text-2 data-[demo=hover]:border-text-2",
+                  "focus-visible:border-b-2 focus-visible:border-fg",
+                  "data-[demo=focus]:border-b-2 data-[demo=focus]:border-fg",
+                  "active:border-fg data-[demo=press]:border-fg",
+                ],
+            "disabled:border-line-2 disabled:bg-transparent disabled:text-text-3",
           )}
           {...props}
         />

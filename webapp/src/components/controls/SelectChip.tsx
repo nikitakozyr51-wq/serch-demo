@@ -39,7 +39,11 @@ function SelectChip({ label, hotkey, selected = false, disabled = false, onClick
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex h-ctl-chip shrink-0 cursor-pointer items-center gap-2 rounded-md border px-2.5",
+        // Капсула: чип нажимается и совершает действие, значит форма у него
+        // та же, что у кнопки (передача 05.08.2026, раздел 1). Боковое поле
+        // при этом остаётся 10, а не 0,75 высоты: у чипа ширина служит ряду,
+        // а не подписи, и правило воздуха на него не распространяется.
+        "flex h-ctl-chip shrink-0 cursor-pointer items-center gap-2 rounded-full border px-2.5",
         "transition-colors outline-none",
         "focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
         selected

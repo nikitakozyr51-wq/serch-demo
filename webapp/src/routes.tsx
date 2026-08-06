@@ -369,8 +369,31 @@ const productRoutes = [
       typeof search.at === 'string' ? { at: search.at } : {},
     component: lazyRouteComponent(() => import('./search-screen'), 'SearchScreenPage'),
   }),
-  productRoute('/object', () => import('./object-card-screen'), 'ObjectCardScreenPage'),
-  productRoute('/object/disclosed', () => import('./object-card-disclosed-screen'), 'ObjectCardDisclosedPage'),
+  /**
+   * Карточка объекта — того, на который нажали.
+   *
+   * Адрес уезжает параметром `at`. До этого карточка была одна на всю базу:
+   * адрес стоял в ней константой, и все 260 строк выдачи вели в одну и ту же
+   * квартиру. Тот же приём, что у выдачи выше, и по той же причине.
+   */
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/object',
+    validateSearch: (search: Record<string, unknown>): { at?: string } =>
+      typeof search.at === 'string' ? { at: search.at } : {},
+    component: lazyRouteComponent(() => import('./object-card-screen'), 'ObjectCardScreenPage'),
+  }),
+  /** Раскрытая карточка — того же объекта, за который заплатили. */
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/object/disclosed',
+    validateSearch: (search: Record<string, unknown>): { at?: string } =>
+      typeof search.at === 'string' ? { at: search.at } : {},
+    component: lazyRouteComponent(
+      () => import('./object-card-disclosed-screen'),
+      'ObjectCardDisclosedPage',
+    ),
+  }),
   productRoute('/call', () => import('./call-mode-screen'), 'CallModeScreenPage'),
   productRoute('/balance', () => import('./balance-screens'), 'BalanceChargesPage'),
   productRoute('/balance/refunds', () => import('./balance-screens'), 'BalanceRefundsPage'),
@@ -386,6 +409,7 @@ const productRoutes = [
   productRoute('/agency/consents', () => import('./agency-consents-screen'), 'AgencyConsentsPage'),
   productRoute('/agency/settings', () => import('./agency-settings-screen'), 'AgencySettingsPage'),
   productRoute('/agency/plan', () => import('./agency-plan-screen'), 'AgencyPlanPage'),
+  productRoute('/profile', () => import('./profile-security-screen'), 'ProfilePage'),
   productRoute('/profile/login-policy', () => import('./profile-security-screen'), 'LoginPolicyPage'),
   productRoute('/dialogs', () => import('./dialog-screens'), 'DialogsPage'),
   // Первый вход. Адреса отдельные, а не состояние `/search`: эти экраны

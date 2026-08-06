@@ -1,9 +1,12 @@
 export {
   demoPhone,
   disclose,
+  hasAccounts,
   initialsOf,
+  refund,
   signIn,
   signOut,
+  setIdleMinutes,
   signUp,
   topUp,
   useOwnAgency,

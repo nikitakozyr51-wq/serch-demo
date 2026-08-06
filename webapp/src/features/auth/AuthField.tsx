@@ -59,9 +59,12 @@ function AuthField({
   const generatedId = useId()
   const fieldId = `${generatedId}-field`
 
+  // Коробки у поля больше нет: одна линия снизу, ни заливки, ни радиуса,
+  // ни бокового отступа (передача 05.08.2026, раздел 1). Значение стоит по
+  // левому краю колонки — то есть ровно под своей подписью.
   const frame = cn(
-    "flex h-ctl-md w-full items-center rounded-lg bg-surface px-3",
-    error ? "border-2 border-err-text" : "border border-border-control",
+    "flex h-ctl-md w-full items-center border-0 border-b border-solid bg-transparent",
+    error ? "border-b-2 border-err-text" : "border-border-control",
   )
 
   return (
@@ -87,7 +90,11 @@ function AuthField({
             className={cn(
               frame,
               "text-fg transition-colors placeholder:text-text-dense",
-              "outline-none focus-visible:border-transparent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg",
+              // Фокус сказан самой линией: она становится графитовой и вдвое
+              // толще. Кольцо поверх линии дало бы две отметки одного
+              // состояния, а линия снизу от толщины высоту не меняет.
+              "outline-none",
+              error ? "" : "hover:border-text-2 focus-visible:border-b-2 focus-visible:border-fg",
             )}
           />
         </Typography>

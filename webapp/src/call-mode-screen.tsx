@@ -1,12 +1,23 @@
 import { Copy, Phone, X } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 
 import { Button } from "@/components/controls/Button"
 import { Checkbox } from "@/components/controls/Checkbox"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
+import { ALL_ROWS } from "@/data/search-rows"
+import { demoPhone, useSession } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
+import {
+  addToStopList,
+  callbacksDue,
+  recordCall,
+  takenNotCalled,
+  useNow,
+  useWorkspace,
+  type CallOutcome,
+} from "@/features/workspace"
 import { MarketDeviation, OwnerAvatar } from "@/features/listings"
 
 /**
@@ -145,6 +156,7 @@ const REMIND = [
  * Живёт константой, потому что нужен в двух местах: на карточке слева
  * и в адресе выхода — `Esc` возвращает выдачу на эту строку.
  */
+/** Объект по умолчанию — для стенда сверки, который открывает прозвон без списка. */
 const OBJECT_ADDRESS = "Ленская ул., 10"
 
 const PHONE = "+7 900 000-99-87"
@@ -168,17 +180,73 @@ export function CallModeScreenPage() {
    * В демонстрации она ведёт себя так же, иначе показ обещал бы неправду.
    */
   const [doNotCall, setDoNotCall] = useState(false)
-  const [index, setIndex] = useState(7)
+  const [index, setIndex] = useState(0)
+
+  /**
+   * СПИСОК, ПО КОТОРОМУ ИДЁТ ПРОЗВОН.
+   *
+   * Раньше объект был один и тот же двадцать четыре раза: счётчик двигался,
+   * полоса росла, а карточка слева не менялась никогда. Теперь список
+   * настоящий — это раскрытые контакты, по которым ещё не звонили, плюс
+   * назначенные на сегодня перезвоны. То есть ровно то, ради чего режим
+   * и существует: пройти подряд то, за что заплачено.
+   */
+  const workspace = useWorkspace()
+  const now = useNow()
+  const session = useSession()
+
+  const queue = useMemo(() => {
+    const due = callbacksDue(workspace, now).map((item) => item.address)
+    const taken = takenNotCalled(workspace).map((item) => item.address)
+    const all = [...due, ...taken.filter((address) => !due.includes(address))]
+    return all.filter((address) => !workspace.stopList.includes(address))
+  }, [workspace, now])
+
+  /**
+   * Позиция прижимается к длине очереди на каждой отрисовке.
+   *
+   * Очередь укорачивается прямо во время работы: записал исход — объект из
+   * неё ушёл. Без этого счётчик показывал «2 из 1», а карточка — пустоту.
+   */
+  const position = queue.length === 0 ? 0 : Math.min(index, queue.length - 1)
+  const address = queue[position] ?? OBJECT_ADDRESS
+  const listing = ALL_ROWS.find((item) => item.address === address)
+  const phone = queue.length === 0 ? PHONE : demoPhone(address)
   /**
    * Что записано по последнему звонку.
    *
-   * До этой правки «2» и «3» ставили результат и тут же обнуляли панель —
-   * то есть отметка исчезала, не оставив следа, и нажатие превращалось
-   * в простое «дальше». Настоящий продукт отправил бы исход в журнал;
-   * журнала за демонстрацией нет, поэтому исход остаётся здесь и виден
-   * в разметке. Это честнее, чем делать вид, что записывать некуда.
+   * **Теперь исход уходит в журнал по-настоящему.** Раньше он жил в состоянии
+   * экрана и исчезал при уходе: агент отмечал «дозвонился», возвращался
+   * в выдачу — и объект снова выглядел нетронутым. Журнал звонков появился,
+   * и из него собираются «Сегодня», статус строки в выдаче и вся
+   * эффективность.
    */
   const [recorded, setRecorded] = useState<string | null>(null)
+
+  /**
+   * Записать исход разговора.
+   *
+   * Заметка, кто ответил и назначенный перезвон уходят вместе с ним: они
+   * отвечают на вопрос «на чём остановились», и порознь бесполезны.
+   */
+  const save = (outcome: CallOutcome, label: string) => {
+    setRecorded(label)
+    if (queue.length === 0) return
+
+    recordCall({
+      address,
+      outcome,
+      answered: answered ?? undefined,
+      note: note.trim() || undefined,
+      remindAt: outcome === "отложен" ? now + 24 * 60 * 60 * 1000 : undefined,
+      by: session?.name ?? "",
+    })
+
+    // Просьба не звонить — необратима и уходит в стоп-лист агентства сразу,
+    // а не «после сохранения»: между отметкой и записью человек может уйти
+    // с экрана, и тогда просьба потеряется.
+    if (doNotCall) addToStopList(address)
+  }
 
   /**
    * К следующему объекту с чистой панелью.
@@ -189,7 +257,7 @@ export function CallModeScreenPage() {
    * выдуманными — врать про данные, которых в демонстрации нет.
    */
   function goNext() {
-    setIndex((current) => Math.min(current + 1, 24))
+    setIndex((current) => Math.min(current + 1, Math.max(queue.length - 1, 0)))
     setDial(null)
     setAnswered(null)
     setResult("В работе")
@@ -221,15 +289,15 @@ export function CallModeScreenPage() {
      * не звали.
      */
     "2": () => {
-      setRecorded("Прозвонен")
+      save("дозвонился", "Прозвонен")
       goNext()
     },
     "3": () => {
-      setRecorded("Отказ")
+      save("отказ", "Отказ")
       goNext()
     },
-    j: () => setIndex((current) => Math.min(current + 1, 24)),
-    k: () => setIndex((current) => Math.max(current - 1, 1)),
+    j: () => setIndex((current) => Math.min(current + 1, Math.max(queue.length - 1, 0))),
+    k: () => setIndex((current) => Math.max(current - 1, 0)),
     /**
      * `N` открывает заметку — она обещана и в спеке, и в нарисованной карте
      * клавиш, а обработчика не было вовсе: единственная клавиша карты,
@@ -275,7 +343,7 @@ export function CallModeScreenPage() {
      * хотя человек его сознательно пропустил.
      */
     h: () => {
-      setRecorded("Отложен")
+      save("отложен", "Отложен")
       goNext()
     },
     /**
@@ -288,7 +356,7 @@ export function CallModeScreenPage() {
     Escape: () =>
       void navigate({
         to: "/search",
-        search: { at: OBJECT_ADDRESS },
+        search: { at: address },
       }),
   })
 
@@ -329,7 +397,7 @@ export function CallModeScreenPage() {
 
         <CallProgress done={index} total={24} />
         <Typography variant="numericDense" tone="default">
-          {`${index} из 24`}
+          {queue.length === 0 ? "нечего прозванивать" : `${position + 1} из ${queue.length}`}
         </Typography>
 
         <div className="h-px flex-1" />
@@ -368,7 +436,7 @@ export function CallModeScreenPage() {
               </Typography>
             </div>
             <Typography variant="rowPrice" tone="default">
-              {`${OBJECT_ADDRESS} · 2-комн · 58 м² · 4/9 эт`}
+              {listing ? `${listing.address}${listing.meta}` : `${address} · 2-комн · 58 м² · 4/9 эт`}
             </Typography>
             <Typography variant="denseText" tone="dense">
               Ладожская · 6 мин пешком · Красногвардейский район
@@ -401,7 +469,7 @@ export function CallModeScreenPage() {
 
           <div className="flex w-full shrink-0 items-center gap-4">
             <Typography variant="cardPrice" tone="default">
-              {PHONE}
+              {phone}
             </Typography>
             {/*
               Звонок уходит в телефон агента — своего окна у него нет ни в макете,
@@ -435,7 +503,7 @@ export function CallModeScreenPage() {
               data-key="c"
               data-action="номер скопирован"
               onPointerDown={() =>
-                void navigator.clipboard?.writeText(PHONE).catch(() => undefined)
+                void navigator.clipboard?.writeText(phone).catch(() => undefined)
               }
               iconLeft={<Copy aria-hidden className="size-4" strokeWidth={2} />}
             >

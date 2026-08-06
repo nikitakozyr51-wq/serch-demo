@@ -1,8 +1,9 @@
-import { useNavigate } from "@tanstack/react-router"
+import { useNavigate, useSearch } from "@tanstack/react-router"
 import { Users } from "lucide-react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
+import { ALL_ROWS } from "@/data/search-rows"
 import { useSessionActions } from "@/features/auth"
 import {
   AgeAndPriceBlock,
@@ -41,7 +42,13 @@ import {
  * уже платило, и второй раз деньги за него не спишутся — ни с этого экрана,
  * ни из выдачи, ни у коллеги.
  */
-const ADDRESS = "Ленская ул., 6"
+/**
+ * Объект по умолчанию — тот, что нарисован в макете.
+ *
+ * Нужен стенду сверки: он открывает карточку без параметра, и там обязан
+ * стоять ровно замеренный объект. В продукте адрес всегда приходит из выдачи.
+ */
+const FALLBACK = "Ленская ул., 6"
 
 const ANALOGUES = [
   { id: "nastavnikov", cells: ["Наставников пр., 34", "10,1 млн ₽", "180 тыс ₽/м²"], strongAt: 1 },
@@ -55,9 +62,35 @@ const PRICE_HISTORY = [
   { id: "05-07", cells: ["05.07", "8,8 млн ₽", "первое наблюдение"], strongAt: 1 },
 ]
 
+/**
+ * Цена за метр из строки выдачи.
+ *
+ * Считается, а не хранится: два числа про одно и то же — цена и цена за метр —
+ * разъезжаются на первом же изменении цены, и разъезжаются молча.
+ */
+function perMeterOf(row: { priceValue: number; area: number }): string {
+  const value = Math.round(row.priceValue / row.area / 1000)
+  return `${value} тыс ₽/м²`
+}
+
 export function ObjectCardScreenPage() {
   const navigate = useNavigate()
   const actions = useSessionActions()
+
+  /**
+   * Какой объект открыт.
+   *
+   * Адрес приезжает параметром из выдачи. Раньше он стоял здесь константой,
+   * и все 260 строк вели в одну и ту же квартиру — владелец назвал это прямо:
+   * «не могу выйти на карточку товара».
+   *
+   * Цена, метро, площадь и отклонение берутся из той же строки выдачи, что
+   * человек видел секунду назад. Иначе карточка показывала бы другие числа
+   * про тот же объект, и это заметно сразу.
+   */
+  const { at } = useSearch({ from: "/object", shouldThrow: false }) ?? { at: undefined }
+  const address = at ?? FALLBACK
+  const row = ALL_ROWS.find((item) => item.address === address)
 
   /**
    * Раскрытие контакта: 199 ₽ уходят со счёта агентства, и человек попадает
@@ -73,8 +106,12 @@ export function ObjectCardScreenPage() {
    * а окна отказа в файле нет, и выдумывать его я не стал.
    */
   const discloseContact = () => {
-    const result = actions.disclose(ADDRESS)
-    void navigate({ to: result === "no-money" ? "/balance/top-up" : "/object/disclosed" })
+    const result = actions.disclose(address)
+    void navigate(
+      result === "no-money"
+        ? { to: "/balance/top-up" }
+        : { to: "/object/disclosed", search: { at: address } },
+    )
   }
 
   return (
@@ -85,12 +122,14 @@ export function ObjectCardScreenPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           <CardHeading
             data={{
-              price: "8,8 млн ₽",
-              deviation: -10,
-              perMeter: "154 тыс ₽/м²",
+              price: row?.price ?? "8,8 млн ₽",
+              deviation: row?.deviation ?? -10,
+              perMeter: row ? perMeterOf(row) : "154 тыс ₽/м²",
               status: "new",
-              address: `${ADDRESS} · 2-комн · 57 м² · 8/9 эт`,
-              metro: "Ладожская · 5 мин пешком · Красногвардейский район",
+              address: row ? `${row.address}${row.meta}` : `${address} · 2-комн · 57 м² · 8/9 эт`,
+              metro: row
+                ? `${row.metro} · ${row.districtName} район`
+                : "Ладожская · 5 мин пешком · Красногвардейский район",
             }}
           />
 

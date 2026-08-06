@@ -54,3 +54,26 @@ export function useOverlayOpen(): boolean {
 export function isOverlayOpen(): boolean {
   return openCount > 0
 }
+
+/**
+ * Запрос «открой палитру» от того, кто до неё не дотягивается.
+ *
+ * Строка поиска живёт в шапке, палитра — в окнах, и общего родителя с
+ * состоянием у них нет: оба висят на каркасе соседями. Поднимать состояние
+ * палитры в каркас значило бы перерисовывать весь кабинет на каждое нажатие
+ * `⌘K`.
+ *
+ * Поэтому здесь лежит не состояние, а СИГНАЛ: кто угодно может попросить
+ * открыть палитру, а окна на эту просьбу подписаны. Это тот же приём, что
+ * уже используется выше для счётчика открытых окон.
+ */
+const paletteListeners = new Set<() => void>()
+
+export function requestPalette() {
+  for (const listener of paletteListeners) listener()
+}
+
+export function onPaletteRequest(listener: () => void) {
+  paletteListeners.add(listener)
+  return () => paletteListeners.delete(listener)
+}

@@ -1,10 +1,17 @@
-import { useSearch } from "@tanstack/react-router"
+import { useNavigate, useSearch } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 
 import { Typography } from "@/components/typography"
 
 import { ALL_ROWS, DISTRICTS, MEASURED_ROWS, type SearchRow } from "@/data/search-rows"
-import { useOwnAgency, useSessionActions } from "@/features/auth"
+import { initialsOf, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
+import {
+  CollectionPicker,
+  disclosureOf,
+  lastCall,
+  useWorkspace,
+  type Workspace,
+} from "@/features/workspace"
 import { CabinetShell, useHotkeys } from "@/features/cabinet"
 import {
   FilterPanel,
@@ -80,17 +87,73 @@ type Row = SearchRow
  */
 const OWNER_FACTS = new Set(["stop-list", "no-phone", "revoked"])
 
-function withoutAgencyWork(row: SearchRow): SearchRow {
+/**
+ * Как исход разговора выглядит в строке выдачи.
+ *
+ * Словарь один, и он здесь: два перевода — в панели звонка и в строке —
+ * разъехались бы на первом же новом исходе, и объект показывал бы «в работе»
+ * там, где агент отметил отказ.
+ */
+const OUTCOME_STATUS: Record<string, SearchRow["status"]> = {
+  "в работе": "in-progress",
+  дозвонился: "called",
+  "не дозвонился": "called",
+  отказ: "refused",
+  посредник: "refused",
+  отложен: "in-progress",
+}
+
+/**
+ * Наложить на объект работу СВОЕГО агентства.
+ *
+ * Раньше здесь просто стиралось всё чужое, и строка навсегда оставалась
+ * «новой»: человек платил 199 ₽, деньги списывались, счётчик отсчитывал —
+ * а кнопка по-прежнему предлагала раскрыть за 199 ₽. Продукт не помнил, что
+ * вы заплатили, и это первое, обо что спотыкались.
+ *
+ * Теперь состояние строки собирается из журналов: раскрыт — «Открыть · 0 ₽»,
+ * прозвонен — исход последнего звонка, в стоп-листе — не звонить.
+ *
+ * Факты о собственнике не трогаются: стоп-лист, отсутствие телефона и отзыв
+ * согласия верны для всех агентств одинаково.
+ */
+function withAgencyWork(row: SearchRow, workspace: Workspace): SearchRow {
   if (row.status !== undefined && OWNER_FACTS.has(row.status)) {
     return { ...row, takenBy: undefined, selected: undefined }
   }
 
+  if (workspace.stopList.includes(row.address)) {
+    return {
+      ...row,
+      takenBy: undefined,
+      selected: undefined,
+      status: "stop-list",
+      action: { kind: "blocked", label: "Просил не звонить" },
+    }
+  }
+
+  const paid = disclosureOf(workspace, row.address)
+  const call = lastCall(workspace, row.address)
+
+  if (paid === undefined) {
+    return {
+      ...row,
+      takenBy: undefined,
+      selected: undefined,
+      status: "new",
+      action: { kind: "disclose", price: 199 },
+    }
+  }
+
   return {
     ...row,
-    takenBy: undefined,
+    // Инициалы того, кто раскрыл. Пока агентство одно — свои, но поле уже
+    // отвечает на вопрос «кто взял», а не показывает выдуманного коллегу.
+    takenBy: initialsOf(paid.by) || undefined,
     selected: undefined,
-    status: "new",
-    action: { kind: "disclose", price: 199 },
+    status: call ? (OUTCOME_STATUS[call.outcome] ?? "called") : "disclosed",
+    // Второй раз агентство не платит — и кнопка обязана это говорить.
+    action: { kind: "open" },
   }
 }
 
@@ -117,8 +180,14 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
    * для всех одинаково.
    */
   const own = useOwnAgency()
+  const session = useSession()
+  const navigate = useNavigate()
+  const workspace = useWorkspace()
   const base = dataset === "measured" ? MEASURED_ROWS : ALL_ROWS
-  const rows = useMemo(() => (own ? base.map(withoutAgencyWork) : base), [own, base])
+  const rows = useMemo(
+    () => (own ? base.map((row) => withAgencyWork(row, workspace)) : base),
+    [own, base, workspace],
+  )
   const [activeTab, setActiveTab] = useState("all")
   const [dense, setDense] = useState(false)
   const [sort, setSort] = useState<SortId>("fresh")
@@ -168,6 +237,17 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
     chosen ?? at ?? rows.find((row) => row.selected)?.address ?? null
 
   const setCursorAddress = setChosen
+
+  /**
+   * Открыть карточку объекта.
+   *
+   * Адрес уезжает параметром: карточка обязана показывать ТОТ объект, на
+   * который нажали. До этого карточка была одна на всю базу — адрес стоял
+   * в ней константой, и все 260 строк вели в одну и ту же квартиру.
+   */
+  const openCard = (address: string) => {
+    void navigate({ to: "/object", search: { at: address } })
+  }
   /**
    * След последнего нажатия.
    *
@@ -178,6 +258,12 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
    * и увидит следующий разработчик, а человеку ничего лишнего не показано.
    */
   const [trace, setTrace] = useState<string | null>(null)
+
+  /**
+   * Объект, который кладут в подборку. Адрес, а не флаг: окно должно знать,
+   * что именно добавляет, и подпись в нём это называет.
+   */
+  const [collecting, setCollecting] = useState<string | null>(null)
 
   /**
    * Плотность живёт на корне документа, а не в пропсах.
@@ -279,13 +365,30 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
     ArrowUp: () => step(-1),
     j: () => step(1),
     k: () => step(-1),
-    b: () => act("в подборку"),
     s: () => act("сменить статус"),
     h: () => act("напомнить"),
     n: () => act("заметка"),
+    /**
+     * `Enter` открывает карточку объекта под курсором.
+     *
+     * Раньше он сразу раскрывал контакт — то есть списывал 199 ₽ одним
+     * нажатием, без экрана, на котором видно, за что платишь. Это опасно и
+     * это не то, чего ждут: `Enter` в списке значит «открыть».
+     *
+     * Платное действие осталось у кнопки в строке и у кнопки в карточке —
+     * там, где рядом написана цена.
+     */
     Enter: () => {
       const row = visible[cursor]
-      if (row) disclose(row)
+      if (row) openCard(row.address)
+    },
+    ArrowRight: () => {
+      const row = visible[cursor]
+      if (row) openCard(row.address)
+    },
+    b: () => {
+      const row = visible[cursor]
+      if (row) setCollecting(row.address)
     },
     Escape: () => {
       setCursorAddress(null)
@@ -436,13 +539,29 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
                   key={row.address}
                   {...row}
                   selected={row.address === cursorAddress}
-                  onOpen={() => setCursorAddress(row.address)}
+                  // Первое нажатие ставит курсор, второе — открывает карточку.
+                  // Так строка отвечает и на «выбрать», и на «посмотреть», а
+                  // человек не открывает объект случайным касанием списка.
+                  onOpen={() => {
+                    if (row.address === cursorAddress) openCard(row.address)
+                    else setCursorAddress(row.address)
+                  }}
                   onAction={() => disclose(row)}
                 />
               ))
             )}
           </div>
         </main>
+      {/* Окно выбора подборки: клавиша `B` и кнопка в строке ведут сюда.
+          Живёт на уровне экрана, а не строки: строк на экране полсотни,
+          и полсотни окон в дереве — это полсотни лишних узлов. */}
+      {collecting === null ? null : (
+        <CollectionPicker
+          address={collecting}
+          by={session?.name ?? ""}
+          onClose={() => setCollecting(null)}
+        />
+      )}
     </CabinetShell>
   )
 }

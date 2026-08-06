@@ -1,5 +1,7 @@
 export { isOverlayOpen, useOverlayOpen } from './overlay-state'
 export { CabinetGuard } from './CabinetGuard'
+export { AvatarMenu } from './AvatarMenu'
+export { requestPalette } from './overlay-state'
 export { CabinetHeader } from './CabinetHeader'
 export type { CabinetHeaderProps } from './CabinetHeader'
 export { CabinetOverlays } from './CabinetOverlays'

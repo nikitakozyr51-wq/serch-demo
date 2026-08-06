@@ -1,11 +1,19 @@
+import { useNavigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
-import { AGENCY, NAV, SAVED } from "@/cabinet-demo-nav"
+import { NAV } from "@/cabinet-demo-nav"
 import { useSession } from "@/features/auth"
+import {
+  callbacksDue,
+  takenNotCalled,
+  useNow,
+  useWorkspace,
+} from "@/features/workspace"
 import { cn } from "@/lib/utils"
 import { CabinetHeader } from "./CabinetHeader"
 import { CabinetGuard } from "./CabinetGuard"
 import { CabinetOverlays } from "./CabinetOverlays"
+import { requestPalette } from "./overlay-state"
 import { CabinetSidebar, type NavEntry } from "./CabinetSidebar"
 
 /**
@@ -43,8 +51,8 @@ function CabinetShell({
   balance,
   trial,
   initials,
-  savedSearches = SAVED,
-  agencySearches = AGENCY,
+  savedSearches,
+  agencySearches,
   children,
 }: CabinetShellProps) {
   /**
@@ -56,21 +64,58 @@ function CabinetShell({
    * стендовые экраны показывают состояние, которого у зрителя нет.
    */
   const session = useSession()
+  const navigate = useNavigate()
+  const workspace = useWorkspace()
+  const now = useNow()
+
+  /**
+   * Меню считает то, что есть на самом деле.
+   *
+   * Раньше «Сегодня 7» и «Подборки 4» стояли числами в файле навигации, и
+   * человек, создавший агентство минуту назад, видел семёрку — а открывал
+   * пустой экран. Счётчик, который нельзя посчитать, не рисуется вовсе:
+   * ноль рядом с пунктом читается как поломка, а не как «пока пусто».
+   */
+  const dueToday = callbacksDue(workspace, now).length + takenNotCalled(workspace).length
+  const nav = NAV.map((item) => {
+    if (item.id === "today") return { ...item, count: dueToday || undefined }
+    if (item.id === "collections") {
+      return { ...item, count: workspace.collections.length || undefined }
+    }
+    return item
+  })
+
+  /**
+   * Сохранённые поиски — свои. Ни одного выдуманного: раньше в списке стояли
+   * шесть чужих поисков, и ни один из них не нажимался, потому что адреса
+   * у них не было вовсе.
+   */
+  const savedFromWork: NavEntry[] = workspace.savedSearches.map((item) => ({
+    id: item.id,
+    label: item.name,
+    to: "/search",
+  }))
 
   return (
     <CabinetGuard>
       <div className="flex h-svh w-full flex-col bg-bg">
+      {/* Обработчики передаются здесь, а не на каждом экране: шапка одна
+          на весь кабинет, и без них «Пополнить» и строка поиска молчали на
+          ВСЕХ экранах сразу. Это первое, что человек трогает, и первое, что
+          не отвечало. */}
       <CabinetHeader
-        balance={balance ?? session?.balance ?? 8610}
+        balance={balance ?? session?.balance ?? 0}
         trial={trial ?? (session && session.trial > 0 ? session.trial : undefined)}
         initials={initials ?? session?.initials ?? "ИС"}
+        onTopUp={() => void navigate({ to: "/balance/top-up" })}
+        onSearch={requestPalette}
       />
 
       <div className="flex min-h-0 flex-1">
         <CabinetSidebar
-          items={NAV}
-          savedSearches={savedSearches}
-          agencySearches={agencySearches}
+          items={nav}
+          savedSearches={savedSearches ?? savedFromWork}
+          agencySearches={agencySearches ?? []}
           activeId={activeId}
         />
         <>{children}</>

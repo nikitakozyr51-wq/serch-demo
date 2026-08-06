@@ -9,6 +9,7 @@ import { AgencyChip, AgencyEmpty, DataTable, NoticeBar } from "@/features/agency
 import { useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
 import { FillBar, groupDigits, plural } from "@/features/listings"
+import { formatMoment, subjectiveRefunds, useNow, useWorkspace } from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
 /** Раскрытие стоит 199 ₽ — цена продукта, а не число экрана. */
@@ -280,10 +281,48 @@ const CHARGES = [
 ]
 
 export function BalanceChargesPage() {
-  // Своё агентство ещё ничего не тратило: ни раскрытий, ни списания за доступ.
-  // Чужие девять строк здесь читались бы как собственная история расходов.
+  /**
+   * Выписка собирается из журнала раскрытий, а не пишется руками.
+   *
+   * Раньше здесь стояли девять чужих строк, и ваши раскрытия в них не
+   * попадали НИКОГДА: сеанс запоминал раскрытия голым списком адресов —
+   * ни времени, ни суммы, ни автора. Владелец назвал это «баланс выдуманный»,
+   * и это была правда.
+   */
   const own = useOwnAgency()
-  const charges = own ? [] : CHARGES
+  const workspace = useWorkspace()
+  const session = useSession()
+
+  /**
+   * Остаток в каждой строке считается назад от текущего счёта.
+   *
+   * Хранить остаток вместе с записью нельзя: возврат меняет все остатки ниже
+   * себя, и сохранённые числа мгновенно расходятся с балансом в шапке. Строки
+   * идут от новых к старым, поэтому остаток накапливается сверху вниз.
+   */
+  const balance = session?.balance ?? 0
+  let running = balance
+
+  const charges = own
+    ? workspace.disclosures.map((item) => {
+        const left = running
+        // Списание, за которое вернули деньги, остатка уже не уменьшало.
+        if (!item.trial && !item.refunded) running += item.amount
+        return {
+          id: item.id,
+          when: formatMoment(item.at),
+          who: item.by,
+          object: item.address,
+          result: item.refunded
+            ? "оказался посредник, возврат"
+            : item.trial
+              ? "пробное раскрытие, 0 ₽"
+              : "контакт раскрыт",
+          sum: item.trial ? "0 ₽" : `${groupDigits(item.amount)} ₽`,
+          left: `${groupDigits(left)} ₽`,
+        }
+      })
+    : CHARGES
 
   return (
     <BalanceShell
@@ -370,7 +409,22 @@ const REFUNDS = [
  */
 export function BalanceRefundsPage() {
   const own = useOwnAgency()
-  const refunds = own ? [] : REFUNDS
+  const workspace = useWorkspace()
+  const now = useNow()
+
+  const refunds = own
+    ? workspace.refunds.map((item) => ({
+        id: item.id,
+        when: formatMoment(item.at),
+        who: item.by,
+        object: item.address,
+        reason: item.reason,
+        kind: item.objective ? "объективный" : "субъективный",
+        sum: `${groupDigits(item.amount)} ₽`,
+        status: "Возвращено",
+        pending: false,
+      }))
+    : REFUNDS
 
   return (
     <BalanceShell
@@ -381,12 +435,12 @@ export function BalanceRefundsPage() {
       <NoticeBar
         rule={
           own
-            ? "Лимит возвратов по субъективным причинам: 0 из 12 за 30 дней"
+            ? `Лимит возвратов по субъективным причинам: ${subjectiveRefunds(workspace, now)} из 12 за 30 дней`
             : "Лимит возвратов по субъективным причинам: 5 из 12 за 30 дней"
         }
         aside={
           <div className="w-40 shrink-0">
-            <FillBar filled={own ? 0 : 5} total={12} />
+            <FillBar filled={own ? subjectiveRefunds(workspace, now) : 5} total={12} />
           </div>
         }
         note="объективные причины в лимит не считаются: номер не существует, объект продан, согласие отозвано"

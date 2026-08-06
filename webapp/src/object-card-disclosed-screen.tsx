@@ -1,11 +1,12 @@
-import { useNavigate } from "@tanstack/react-router"
+import { useNavigate, useSearch } from "@tanstack/react-router"
 import { Check, Copy, Phone } from "lucide-react"
 import { useState } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
-import { useSession, useSessionActions } from "@/features/auth"
+import { ALL_ROWS } from "@/data/search-rows"
+import { demoPhone, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
 import { ListingPhoto, TitledBlock } from "@/features/listings"
 import {
@@ -123,7 +124,13 @@ const SCRIPT = [
 ]
 
 /** Номер собственника. Один на экран: он же в подписи, он же уходит в буфер. */
-const PHONE = "+7 900 000-99-87"
+/**
+ * Номер по умолчанию — тот, что нарисован в макете. В продукте номер
+ * собирается из адреса объекта функцией `demoPhone`: у каждого объекта он
+ * свой, и это видно, когда открываешь два подряд.
+ */
+const FALLBACK_PHONE = "+7 900 000-99-87"
+const FALLBACK_ADDRESS = "Ленская ул., 10"
 
 /**
  * Чем кончился звонок.
@@ -330,11 +337,22 @@ export function ObjectCardDisclosedPage() {
    * в этом и состоит работа кнопки.
    */
   const copyPhone = () => {
-    void navigator.clipboard?.writeText(PHONE)
+    void navigator.clipboard?.writeText(phone)
   }
 
   /** За какие контакты агентство уже платило: у этих строк открытие стоит 0 ₽. */
   const opened = session?.disclosed ?? []
+
+  /**
+   * Какой объект раскрыт.
+   *
+   * Приходит параметром с нераскрытой карточки. Номер собирается из адреса,
+   * поэтому у каждого объекта он свой — а не один на всю базу, как было.
+   */
+  const { at } = useSearch({ from: "/object/disclosed", shouldThrow: false }) ?? { at: undefined }
+  const address = at ?? FALLBACK_ADDRESS
+  const row = ALL_ROWS.find((item) => item.address === address)
+  const phone = at ? demoPhone(address) : FALLBACK_PHONE
 
   return (
     <CardShell position="1 из 247">
@@ -344,12 +362,16 @@ export function ObjectCardDisclosedPage() {
         <div className="flex min-w-0 flex-1 flex-col">
           <CardHeading
             data={{
-              price: "8,6 млн ₽",
-              deviation: -12,
-              perMeter: "148 тыс ₽/м²",
+              price: row?.price ?? "8,6 млн ₽",
+              deviation: row?.deviation ?? -12,
+              perMeter: row
+                ? `${Math.round(row.priceValue / row.area / 1000)} тыс ₽/м²`
+                : "148 тыс ₽/м²",
               status: "in-progress",
-              address: "Ленская ул., 10 · 2-комн · 58 м² · 4/9 эт",
-              metro: "Ладожская · 6 мин пешком · Красногвардейский район",
+              address: row ? `${row.address}${row.meta}` : "Ленская ул., 10 · 2-комн · 58 м² · 4/9 эт",
+              metro: row
+                ? `${row.metro} · ${row.districtName} район`
+                : "Ладожская · 6 мин пешком · Красногвардейский район",
             }}
           />
 
@@ -374,7 +396,7 @@ export function ObjectCardDisclosedPage() {
           <div className="flex w-full flex-col gap-2">
             <div className="flex w-full items-center gap-2.5">
               <Typography variant="cardPrice" tone="default">
-                {PHONE}
+                {phone}
               </Typography>
               <div className="h-px flex-1" />
               <Button

@@ -4,8 +4,15 @@ import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
+import { TextField } from "@/components/controls/TextField"
 import { AgencyEmpty, DataTable } from "@/features/agency"
-import { useOwnAgency } from "@/features/auth"
+import { useOwnAgency, useSession } from "@/features/auth"
+import {
+  createCollection,
+  formatDay,
+  setCollectionLink,
+  useWorkspace,
+} from "@/features/workspace"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
 import { MarketDeviation } from "@/features/listings"
 
@@ -99,35 +106,84 @@ function copyLink(slug: string) {
 
 export function CollectionsPage() {
   /**
-   * У каких подборок ссылка уже есть.
+   * Подборки берутся из работы агентства, а не из констант.
    *
-   * Состояние, а не свойство данных: «Создать ссылку» обязана превращать строку
-   * в ту, что можно скопировать. Оба вида строки нарисованы в макете, и переход
-   * между ними — всё содержание этого действия.
+   * Раньше здесь стояли четыре чужие подборки, все четыре строки вели в одну
+   * и ту же, а кнопка «Новая подборка» не имела обработчика — то есть завести
+   * свою было нельзя вообще никак. Владелец назвал это «подборка потерялась».
    */
-  const [linked, setLinked] = useState<string[]>(() =>
-    COLLECTIONS.filter((row) => !row.noLink).map((row) => row.id),
-  )
-
-  // Подборка — это работа агентства с конкретным клиентом. В только что
-  // созданном агентстве такой работы ещё не было, и четыре чужие подборки
-  // с именами чужих клиентов здесь были бы самой заметной подделкой.
   const own = useOwnAgency()
-  const collections = own ? [] : COLLECTIONS
+  const workspace = useWorkspace()
+  const session = useSession()
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState("")
+
+  const collections: Collection[] = own
+    ? workspace.collections.map((item) => ({
+        id: item.id,
+        slug: item.slug,
+        name: item.name,
+        // Пояснение под названием собирается из состава: своего описания у
+        // подборки нет и не должно быть — лишнее поле в форме создания
+        // человек всё равно пропустит, а пустая строка выглядит поломкой.
+        about: item.items.length === 0
+          ? "пока пусто — добавьте объекты из выдачи клавишей B"
+          : item.items.slice(0, 2).join(" · ") + (item.items.length > 2 ? " и ещё…" : ""),
+        objects: String(item.items.length),
+        author: item.by,
+        updated: formatDay(item.updatedAt, item.updatedAt),
+        views: "—",
+        noLink: !item.linked,
+      }))
+    : COLLECTIONS
+
+  const linked = collections.filter((row) => !row.noLink).map((row) => row.id)
+
+  const setLink = (id: string, on: boolean) => {
+    if (own) setCollectionLink(id, on)
+  }
+
+  const create = () => {
+    const clean = name.trim()
+    if (!clean) return
+    createCollection(clean, session?.name ?? "")
+    setName("")
+    setNaming(false)
+  }
 
   return (
     <CollectionsShell
       title="Подборки"
       note="ссылка клиенту, телефон в ней скрыт всегда"
       action={
-        // Экрана создания подборки на десктопе не нарисовано: на телефоне это
-        // лист `/m/collections/new`, и подставлять его сюда нельзя — другая
-        // платформа. Действие названо и не рисует ничего.
-        <Button variant="primary" size="sm" data-action="создана новая подборка">
+        <Button variant="primary" size="sm" onClick={() => setNaming(true)}>
           Новая подборка
         </Button>
       }
     >
+      {naming ? (
+        <div className="flex w-full shrink-0 items-end gap-3 rounded-lg bg-warm px-4 py-3">
+          <div className="w-100">
+            <TextField
+              label="НАЗВАНИЕ ПОДБОРКИ"
+              value={name}
+              autoFocus
+              placeholder="Например: Расселение, Лиговка"
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") create()
+                if (event.key === "Escape") setNaming(false)
+              }}
+            />
+          </div>
+          <Button variant="primary" size="md" onClick={create} disabled={name.trim() === ""}>
+            Создать
+          </Button>
+          <Button variant="quiet" size="md" onClick={() => setNaming(false)}>
+            Отмена
+          </Button>
+        </div>
+      ) : null}
       <div className="flex w-full shrink-0 items-center gap-3 rounded-lg bg-warm px-4 py-3">
         <LinkIcon aria-hidden className="size-4 shrink-0 text-text-2" strokeWidth={2} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -193,7 +249,7 @@ export function CollectionsPage() {
                 size="sm"
                 onClick={() => {
                   if (hasLink) copyLink(row.slug)
-                  else setLinked((previous) => [...previous, row.id])
+                  else setLink(row.id, true)
                 }}
                 iconLeft={
                   hasLink ? <Copy aria-hidden className="size-3.5" strokeWidth={2} /> : undefined

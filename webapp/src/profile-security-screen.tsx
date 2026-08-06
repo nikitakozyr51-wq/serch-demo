@@ -1,13 +1,34 @@
-import { useNavigate } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
+import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { useSession, useSessionActions } from "@/features/auth"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
+import { cn } from "@/lib/utils"
 
 /**
- * ПРОФИЛЬ · Политика входа (`v9Z5fD`).
+ * КАБИНЕТ · Профиль — ОДИН РАЗДЕЛ С ДВУМЯ ВКЛАДКАМИ.
+ *
+ * Было два отдельных экрана: `XqdvJ` «Профиль и настройки» и `v9Z5fD`
+ * «Политика входа». Стало — «Профиль» с вкладками «Личные данные» и
+ * «Безопасность» (передача 05.08.2026, раздел 4).
+ *
+ * Почему слияние. Оба экрана отвечали на один вопрос — «что настроено про
+ * меня», — но стояли в разных местах меню, и человек, искавший смену пароля,
+ * находил её со второго захода. Вкладки собраны формой «Агентства»: высота 36,
+ * линия `line-2` снизу, активная 14/600 `fg` с подчёркиванием `fg` 2 px,
+ * спящая 14/500 `text-2`. Новой формы не заводится — она уже есть в разделе
+ * агентства и работает там же.
+ *
+ * «Выйти из аккаунта» стоит ОДИН РАЗ, в шапке раздела. Раньше выход
+ * дублировался и в шапке, и в меню аватара; два выхода в одном интерфейсе
+ * заставляют думать, отличаются ли они.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * ВКЛАДКА «БЕЗОПАСНОСТЬ» — бывший `v9Z5fD`.
  *
  * **Экран не настраивает безопасность, а показывает её.** Ни одного
  * переключателя: длина пароля, число попыток, срок кода и срок ссылки —
@@ -109,7 +130,13 @@ function SessionRow({ session }: { session: Session }) {
   )
 }
 
-export function LoginPolicyPage() {
+/**
+ * Оболочка раздела: заголовок, кто вошёл, выход и полоса вкладок.
+ *
+ * Отдельным компонентом, а не копией на каждой вкладке: заголовок и выход
+ * обязаны стоять на обеих одинаково, а копия расходится на первой же правке.
+ */
+function ProfileShell({ tab, children }: { tab: "personal" | "security"; children: ReactNode }) {
   const navigate = useNavigate()
   const session = useSession()
   const actions = useSessionActions()
@@ -125,12 +152,19 @@ export function LoginPolicyPage() {
     void navigate({ to: "/login", search: { returnTo: undefined } })
   }
 
+  const tabClass = (active: boolean) =>
+    cn(
+      "flex h-9 items-center border-b-2 px-1",
+      "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+      active ? "border-fg" : "border-transparent",
+    )
+
   return (
     <CabinetShell activeId="">
       <CabinetPage>
         <div className="flex h-7 w-full shrink-0 items-center gap-3">
           <Typography variant="panelTitle" tone="default" as="h1">
-            Политика входа
+            Профиль
           </Typography>
           <Typography variant="denseText" tone="dense">
             {`${session?.name ?? "Смирнова Ирина"} · руководитель агентства «${session?.agency ?? "Невский проспект"}»`}
@@ -141,6 +175,63 @@ export function LoginPolicyPage() {
           </Button>
         </div>
 
+        <nav
+          data-slot="profile-tabs"
+          aria-label="Разделы профиля"
+          className="flex w-full shrink-0 items-center gap-6 border-b border-line-2"
+        >
+          <Link
+            to="/profile"
+            aria-current={tab === "personal" ? "page" : undefined}
+            className={tabClass(tab === "personal")}
+          >
+            <Typography
+              variant={tab === "personal" ? "strongText" : "uiText"}
+              tone={tab === "personal" ? "default" : "secondary"}
+            >
+              Личные данные
+            </Typography>
+          </Link>
+          <Link
+            to="/profile/login-policy"
+            aria-current={tab === "security" ? "page" : undefined}
+            className={tabClass(tab === "security")}
+          >
+            <Typography
+              variant={tab === "security" ? "strongText" : "uiText"}
+              tone={tab === "security" ? "default" : "secondary"}
+            >
+              Безопасность
+            </Typography>
+          </Link>
+        </nav>
+
+        {children}
+      </CabinetPage>
+    </CabinetShell>
+  )
+}
+
+/**
+ * Ступени времени простоя. Умолчание — 2 часа: ровно то время, которое
+ * называет диалог «Сеанс истёк». Настройка ЛИЧНАЯ, а не агентства: агент
+ * в поле и руководитель за столом работают по-разному, и одно число на всех
+ * означало бы, что кому-то из них неудобно каждый день.
+ */
+const IDLE_STEPS = [
+  { minutes: 30, label: "30 минут" },
+  { minutes: 60, label: "1 час" },
+  { minutes: 120, label: "2 часа" },
+  { minutes: 480, label: "8 часов" },
+] as const
+
+export function LoginPolicyPage() {
+  const session = useSession()
+  const actions = useSessionActions()
+  const idle = session?.idleMinutes ?? 120
+
+  return (
+    <ProfileShell tab="security">
         <div className="flex w-full items-start gap-6">
           <div className="flex w-141 shrink-0 flex-col gap-6">
             <Block label="Пароль">
@@ -163,6 +254,36 @@ export function LoginPolicyPage() {
               <FactRow title="Повторная отправка" value="через 60 секунд" />
               <FactRow title="Ссылка восстановления пароля" value="1 час" />
             </Block>
+
+            {/* Единственная НАСТОЯЩАЯ настройка экрана. Остальные строки —
+                факты: длина пароля и число попыток одинаковы для всех
+                агентств, и притворяться, что человек ими управляет, нечестно.
+                Время простоя своё у каждого, поэтому оно и настраивается. */}
+            <section className="flex w-full flex-col gap-4">
+              <Typography variant="columnHeader" tone="dense">
+                Время простоя
+              </Typography>
+              <div className="flex h-12 w-full items-center gap-3 border-b border-line-1">
+                <Typography variant="uiText" tone="secondary">
+                  Выходить после простоя
+                </Typography>
+                <span className="h-px flex-1" />
+                <div role="radiogroup" aria-label="Время простоя" className="flex items-center gap-2">
+                  {IDLE_STEPS.map((step) => (
+                    <SelectChip
+                      key={step.minutes}
+                      label={step.label}
+                      selected={step.minutes === idle}
+                      onClick={() => actions.setIdleMinutes(step.minutes)}
+                    />
+                  ))}
+                </div>
+              </div>
+              <Typography variant="metaText" tone="dense">
+                Через это время кабинет попросит войти заново. Настройка личная,
+                не агентства.
+              </Typography>
+            </section>
           </div>
 
           <div className="flex w-141 shrink-0 flex-col gap-4">
@@ -195,7 +316,81 @@ export function LoginPolicyPage() {
             </div>
           </div>
         </div>
-      </CabinetPage>
-    </CabinetShell>
+    </ProfileShell>
+  )
+}
+
+/**
+ * КАБИНЕТ · Профиль → Личные данные.
+ *
+ * Вкладка, которой в коде не существовало вовсе: экран `XqdvJ` был нарисован,
+ * но не собран, и аватар вёл мимо него сразу в «Политику входа».
+ *
+ * **Что здесь настоящее, а что нет.** Имя, почта и агентство приходят из
+ * сеанса — того самого, который человек завёл при регистрации. Роль и дата
+ * входа в агентство приходят оттуда же. Телефон и уведомления пока не
+ * хранятся: за ними нужен сервер, и вместо пустого обещания стоит честная
+ * подпись.
+ *
+ * **Почта не меняется здесь.** Почта — это вход в кабинет, и её подмена
+ * означала бы смену человека. Так же устроена карточка сотрудника в разделе
+ * агентства: там почта заблокирована по той же причине, и правило обязано
+ * быть одним.
+ */
+export function ProfilePage() {
+  const session = useSession()
+
+  return (
+    <ProfileShell tab="personal">
+      <div className="flex w-full items-start gap-6">
+        <div className="flex w-141 shrink-0 flex-col gap-6">
+          <Block label="Кто вы">
+            <FactRow title="Имя" value={session?.name ?? "Смирнова Ирина"} />
+            <FactRow title="Почта" value={session?.email ?? "i.smirnova@nevsky.ru"} />
+            <FactRow
+              title="Роль"
+              value={session?.role === "agent" ? "Агент" : "Руководитель агентства"}
+            />
+          </Block>
+
+          <div className="flex">
+            {/* Форма правки имени в макете не нарисована, и придумывать её
+                нельзя. Действие названо и молчит — это честнее плашки
+                «сохранено», за которой ничего не сохраняется. */}
+            <Button variant="quiet" size="md" data-action="правка личных данных">
+              Изменить имя
+            </Button>
+          </div>
+
+          <Block label="Агентство">
+            <FactRow title="Название" value={session?.agency ?? "Невский проспект"} />
+            <FactRow
+              title="Дневной лимит раскрытий"
+              value={session?.role === "agent" ? "25" : "без лимита"}
+            />
+            <FactRow
+              title="Осталось пробных раскрытий"
+              value={session ? String(session.trial) : "0"}
+            />
+          </Block>
+        </div>
+
+        <div className="flex w-141 shrink-0 flex-col gap-4">
+          <Typography variant="columnHeader" tone="dense">
+            Уведомления
+          </Typography>
+          <div className="flex w-full flex-col">
+            <FactRow title="Новое по сохранённым поискам" value="письмом, раз в час" />
+            <FactRow title="Перезвон, назначенный на сегодня" value="письмом, утром" />
+            <FactRow title="Баланс кончается" value="письмом, при остатке ниже 1 000 ₽" />
+          </div>
+          <Typography variant="metaText" tone="dense">
+            Настройка уведомлений появится вместе с почтовой рассылкой. Пока
+            перечислено то, что продукт обещает присылать, — чтобы было видно,
+            о чём речь.
+          </Typography>
+        </div>
+      </div>
+    </ProfileShell>
   )
 }

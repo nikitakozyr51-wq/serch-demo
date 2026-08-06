@@ -1,9 +1,15 @@
-import { Link } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { AGENCY, NAV, SAVED } from "@/cabinet-demo-nav"
 import { Typography } from "@/components/typography"
-import { CabinetHeader, CabinetOverlays, CabinetSidebar } from "@/features/cabinet"
+import { useSession } from "@/features/auth"
+import {
+  CabinetHeader,
+  CabinetOverlays,
+  CabinetSidebar,
+  requestPalette,
+} from "@/features/cabinet"
 import { cn } from "@/lib/utils"
 
 /**
@@ -54,9 +60,22 @@ type AgencyShellProps = {
 }
 
 function AgencyShell({ activeTab, title, note, action, children }: AgencyShellProps) {
+  const session = useSession()
+  const navigate = useNavigate()
+
   return (
     <div className="flex h-svh w-full flex-col bg-bg">
-      <CabinetHeader balance={8610} initials="ИС" />
+      {/* Шапка берёт деньги и инициалы из сеанса, как и весь остальной
+          кабинет. Раньше здесь стояли 8 610 ₽ и «ИС» константами: человек
+          с нулём на счету переходил в «Агентство» и видел чужие деньги —
+          два разных числа на соседних экранах. */}
+      <CabinetHeader
+        balance={session?.balance ?? 0}
+        trial={session && session.trial > 0 ? session.trial : undefined}
+        initials={session?.initials ?? "ИС"}
+        onTopUp={() => void navigate({ to: "/balance/top-up" })}
+        onSearch={requestPalette}
+      />
 
       <div className="flex min-h-0 flex-1">
         <CabinetSidebar

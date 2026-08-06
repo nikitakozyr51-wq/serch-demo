@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 
 import { CommandPalette } from "./CommandPalette"
 import { HotkeysDialog } from "./dialogs"
-import { resetOverlays, setOverlayOpen } from "./overlay-state"
+import { onPaletteRequest, resetOverlays, setOverlayOpen } from "./overlay-state"
 
 /**
  * Два окна, которые открываются с клавиатуры на любом экране кабинета.
@@ -30,6 +30,15 @@ function CabinetOverlays() {
    * происходила когда придётся. Ссылка отвечает сразу и один раз.
    */
   const openRef = useRef(open)
+
+  // Строка поиска в шапке просит открыть палитру. Подписка живёт здесь,
+  // потому что состояние окна принадлежит этому компоненту.
+  useEffect(() => {
+    const off = onPaletteRequest(() => setOpen("palette"))
+    return () => {
+      off()
+    }
+  }, [])
 
   // Запись в эффекте, а не в теле рендера: рендер обязан быть чистым,
   // иначе при повторном проходе ссылка обновится дважды.

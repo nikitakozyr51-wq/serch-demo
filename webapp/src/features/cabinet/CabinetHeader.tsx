@@ -1,17 +1,30 @@
-import { Link } from "@tanstack/react-router"
 import { Search } from "lucide-react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { groupDigits, plural } from "@/features/listings"
+import { AvatarMenu } from "./AvatarMenu"
 import { useAnimatedNumber } from "./useAnimatedNumber"
 
 /**
  * Шапка кабинета.
  *
  * Геометрия снята с компонента `Vr9uG`: высота 56, зазор 24, поля [0, 24],
- * заливка `surface`, волосяная линия снизу. Внутри: логотип, глобальный поиск
- * шириной 420, распорка, справа баланс, «Пополнить» и аватар.
+ * заливка `surface`, волосяная линия снизу.
+ *
+ * ШАПКА ПОВТОРЯЕТ ТРИ ПОЛОСЫ ТЕЛА (передача 05.08.2026, раздел 3). Сетка
+ * кабинета: сайдбар `0…240`, фильтры `240…500`, выдача `500…1440`.
+ * Логотип занимает `24…216`, поиск — ровно полосу фильтров `240…500`, правый
+ * кластер прижат к 1416.
+ *
+ * Раньше поиск стоял `119…426`: он перечёркивал границу на 240 и не
+ * принадлежал ни одной полосе. Глазом это читалось как сдвинутый элемент,
+ * и владелец на это и указал.
+ *
+ * У поиска НЕТ ЗАЛИВКИ, РАМКИ И РАДИУСА: лупа, подсказка, `⌘K`. Коробка
+ * появляется только при фокусе — острый прямоугольник с границей `fg`.
+ * Это единственное место продукта, где острый угол законен: коробка здесь
+ * не форма контрола, а отметка «сюда сейчас печатают».
  *
  * **Точка в логотипе — единственное место кабинета с ярким красным.**
  * Правило «красный только там, где списываются деньги» имеет ровно одно
@@ -52,32 +65,33 @@ function CabinetHeader({ balance, trial, initials, onTopUp, onSearch }: CabinetH
       data-slot="cabinet-header"
       className="flex h-header w-full shrink-0 items-center gap-6 border-b border-line-2 bg-surface px-6"
     >
-      <div className="flex h-8 items-center gap-2">
+      {/* Логотип занимает полосу 24…216: ширина фиксирована, иначе поиск
+          съезжал бы с границы 240 при смене подписи. */}
+      <div className="flex h-8 w-48 shrink-0 items-center gap-2">
         <Typography variant="panelTitle" tone="default">
           Сёрчь
         </Typography>
         <span aria-hidden className="size-1.5 rounded-full bg-accent-bright" />
       </div>
 
-      {/*
-        Поисковая строка — свой класс лестницы: 48 / r-control / 16.
-        Обновление 04.08 подняло её с 40 и сменило радиус с r-media на r-control.
-        Это не кнопка формы и не primary — это отдельная ступень, потому что
-        поиск в шапке используют чаще всего остального в кабинете.
-      */}
+      {/* Полоса фильтров: 240…500, то есть ширина 260 при зазоре 24 от
+          логотипа шириной 192. Ступень высоты 40 — ряд «Поиск в шапке 40»
+          на доске состояний. */}
       <button
         type="button"
         data-slot="global-search"
         onClick={onSearch}
-        className="flex h-ctl-lg w-105 cursor-pointer items-center gap-2 rounded-xl border border-border-control bg-bg px-3 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+        className="flex h-ctl-md w-65 shrink-0 cursor-pointer items-center gap-2 rounded-none border-0 bg-transparent text-left outline-none focus-visible:border focus-visible:border-solid focus-visible:border-fg"
       >
         <Search aria-hidden className="size-4 shrink-0 text-text-dense" strokeWidth={2} />
-        <div className="flex-1 text-left">
-          <Typography variant="controlLabelLg" tone="dense">
-            Адрес, телефон или номер объявления
+        <div className="min-w-0 flex-1">
+          <Typography variant="controlLabel" tone="dense">
+            Адрес, телефон или номер
           </Typography>
         </div>
-        <Typography variant="metaText" tone="dense">
+        {/* Подсказка клавиши плашку потеряла: голый текст `text-dense`
+            весом 600 (передача 05.08.2026, раздел 1). */}
+        <Typography variant="metaStrong" tone="dense">
           ⌘K
         </Typography>
       </button>
@@ -100,24 +114,7 @@ function CabinetHeader({ balance, trial, initials, onTopUp, onSearch }: CabinetH
           Пополнить
         </Button>
 
-        {/*
-          Аватар ведёт в профиль, а не открывает меню.
-
-          Меню в файле не нарисовано, а придумывать его нельзя. Зато нарисован
-          экран «Политика входа» — там и живут смена пароля, активные сеансы
-          и выход из аккаунта. Аватар, который никуда не ведёт, — самая частая
-          жалоба на любой кабинет: человек жмёт его первым делом, ища выход.
-        */}
-        <Link
-          to="/profile/login-policy"
-          data-slot="user-avatar"
-          aria-label="Профиль и выход"
-          className="flex size-8 items-center justify-center rounded-full bg-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-        >
-          <Typography variant="metaStrong" tone="inverse">
-            {initials}
-          </Typography>
-        </Link>
+        <AvatarMenu initials={initials} />
       </div>
     </header>
   )

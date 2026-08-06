@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react"
 import { Button } from "@/components/controls/Button"
 import { Checkbox } from "@/components/controls/Checkbox"
 import { Typography } from "@/components/typography"
-import { AuthField, AuthShell, signIn, signUp } from "@/features/auth"
+import { AuthField, AuthShell, hasAccounts, signIn, signUp } from "@/features/auth"
 
 /**
  * ВХОД · экраны входа, регистрации и восстановления.
@@ -105,20 +105,36 @@ function Fields({ children }: { children: ReactNode }) {
  * **Форма живая, но пароль не проверяется, и это осознанно.** За кабинетом
  * пока нет сервера: демонстрация показывает продукт агентствам до того, как
  * написан бэкенд. Проверять пароль в браузере — значит выдумывать
- * безопасность, которой нет; поэтому вход пускает любого, а данные
- * введённого человека живут в его же браузере.
+ * безопасность, которой нет.
  *
- * Почта подставлена демонстрационная, чтобы кнопку можно было нажать сразу,
- * не набирая ничего. Стереть её и ввести свою — тоже работает.
+ * ПОЧТА ПРИ ЭТОМ ПРОВЕРЯЕТСЯ ПО-НАСТОЯЩЕМУ. Витрины «Невский проспект»
+ * больше нет — агентство заводит сам человек, — и вход ищет агентство с этой
+ * почтой среди заведённых на этом компьютере. Не нашёл — говорит об этом и
+ * предлагает создать. Вход, который пускает кого угодно куда угодно, — не
+ * вход, а кнопка «показать картинку».
+ *
+ * Поле пустое: подставлять чужую почту, под которой ничего не заведено,
+ * значит вести человека в ошибку с первого нажатия.
  */
 export function LoginPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState("i.smirnova@nevsky.ru")
-  const [password, setPassword] = useState("demo-parol")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
   const enter = () => {
-    signIn(email)
-    void navigate({ to: "/today" })
+    if (signIn(email)) {
+      void navigate({ to: "/today" })
+      return
+    }
+
+    // Формулировка отвечает на вопрос «что мне делать», а не сообщает об
+    // отказе. Человек на этом экране не отлаживает продукт — он хочет войти.
+    setError(
+      hasAccounts()
+        ? "Агентства с такой почтой нет. Проверьте адрес или создайте агентство."
+        : "На этом компьютере ещё не заводили агентство. Создайте — это займёт минуту.",
+    )
   }
 
   return (
@@ -134,8 +150,12 @@ export function LoginPage() {
             type="email"
             autoComplete="email"
             value={email}
-            onChange={setEmail}
-            placeholderText="i.smirnova@nevsky.ru"
+            onChange={(next) => {
+              setEmail(next)
+              setError(null)
+            }}
+            placeholderText="почта, на которую заводили агентство"
+            error={error ?? undefined}
           />
         </div>
         <div className="w-194">

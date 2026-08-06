@@ -5,7 +5,18 @@ import { useNavigate } from "@tanstack/react-router"
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { AgencyEmpty } from "@/features/agency"
+import { ALL_ROWS } from "@/data/search-rows"
 import { useOwnAgency } from "@/features/auth"
+import {
+  callbacksDue,
+  disclosureOf,
+  formatDay,
+  lastCall,
+  takenNotCalled,
+  todayTally,
+  useNow,
+  useWorkspace,
+} from "@/features/workspace"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
 import { CountPair, MarketDeviation } from "@/features/listings"
 import { cn } from "@/lib/utils"
@@ -165,7 +176,7 @@ function CallRowView({ row, last }: { row: CallRow; last: boolean }) {
             variant="primary"
             size="sm"
             block
-            onClick={() => void navigate({ to: "/object/disclosed" })}
+            onClick={() => void navigate({ to: "/object/disclosed", search: { at: row.address } })}
           >
             {row.action}
           </Button>
@@ -175,74 +186,7 @@ function CallRowView({ row, last }: { row: CallRow; last: boolean }) {
   )
 }
 
-const CALLBACKS: CallRow[] = [
-  {
-    id: "lenskaya-10",
-    address: "Ленская ул., 10",
-    price: "8,6 млн ₽",
-    deviation: -12,
-    note: "Вы раскрыли сегодня в 14:12, две попытки без ответа",
-    when: "Сегодня, 16:00",
-    whenNote: "через 40 минут",
-    action: "Позвонить",
-  },
-  {
-    id: "stahanovcev-14",
-    address: "Стахановцев ул., 14",
-    price: "12,4 млн ₽",
-    deviation: 0,
-    note: "Напоминание от 10.07 · номер ушёл в реестр отказов 12.07",
-    when: "Звонок запрещён",
-    whenNote: "снять отметку нельзя",
-    blocked: true,
-    action: "Стоп-лист",
-  },
-  {
-    id: "grazhdansky-114",
-    address: "Гражданский пр., 114",
-    price: "12,8 млн ₽",
-    deviation: -12,
-    note: "Анна Т. · вчера в 18:40 · «перезвонить после 17:00, будет на объекте»",
-    when: "Сегодня, 17:00",
-    whenNote: "через 1 час 40 минут",
-    action: "Позвонить",
-  },
-  {
-    id: "peredovikov-21",
-    address: "Передовиков ул., 21",
-    price: "9,8 млн ₽",
-    deviation: -6,
-    note: "Вы · 22.07 · «торг возможен, но не сейчас, вернуться через неделю»",
-    when: "Сегодня, 17:30",
-    whenNote: "через 2 часа 10 минут",
-    action: "Позвонить",
-  },
-]
 
-const TAKEN: CallRow[] = [
-  {
-    id: "dalnevostochny-68",
-    address: "Дальневосточный пр., 68",
-    price: "6,3 млн ₽",
-    deviation: -9,
-    note: "взял Максим Л. · 22.07, 10:14 · ни одного звонка",
-    when: "2 дня без звонка",
-    whenNote: "контакт раскрыт, 199 ₽",
-    overdue: true,
-    action: "Позвонить",
-  },
-  {
-    id: "shotmana-8",
-    address: "Шотмана ул., 8",
-    price: "7,4 млн ₽",
-    deviation: 0,
-    note: "взяла Анна Т. · 23.07, 09:40 · ни одного звонка",
-    when: "1 день без звонка",
-    whenNote: "контакт раскрыт, 199 ₽",
-    overdue: true,
-    action: "Позвонить",
-  },
-]
 
 const FRESH = [
   { id: "s1", label: "Красногвардейский 2-к до 15", note: "12 новых · последнее 14 минут назад" },
@@ -256,6 +200,54 @@ export function TodayScreenPage() {
   // в чужое готовое агентство»: восемнадцать звонков, четыре перезвона
   // и три сохранённых поиска у агентства, которому пять минут от роду.
   const own = useOwnAgency()
+  const workspace = useWorkspace()
+  const now = useNow()
+
+  /**
+   * «Сегодня» собирается из журналов, а не стоит константой.
+   *
+   * Секции ровно те, что нарисованы: перезвонить сегодня — из назначенных
+   * напоминаний; взяты в работу и не прозвонены — раскрытые контакты, по
+   * которым нет ни одного звонка. Обе строятся сами, поэтому завтра экран
+   * покажет вчерашнюю работу, а не одно и то же навсегда.
+   */
+  const rowsFor = (addresses: string[], noteOf: (address: string) => string): CallRow[] =>
+    addresses.map((address) => {
+      const listing = ALL_ROWS.find((item) => item.address === address)
+      const stopped = workspace.stopList.includes(address)
+      return {
+        id: address,
+        address,
+        price: listing?.price ?? "",
+        deviation: listing?.deviation ?? 0,
+        note: noteOf(address),
+        when: stopped ? "Звонок запрещён" : "Сегодня",
+        whenNote: stopped ? "снять отметку нельзя" : "",
+        blocked: stopped,
+        action: stopped ? "Стоп-лист" : "Позвонить",
+      }
+    })
+
+  const callbacks = rowsFor(
+    callbacksDue(workspace, now).map((item) => item.address),
+    (address) => {
+      const call = lastCall(workspace, address)
+      return call ? `${call.outcome}${call.note ? ` · ${call.note}` : ""}` : "перезвон назначен"
+    },
+  )
+
+  const taken = rowsFor(
+    takenNotCalled(workspace).map((item) => item.address),
+    (address) => {
+      const paid = disclosureOf(workspace, address)
+      return paid
+        ? `контакт раскрыт ${formatDay(paid.at, now)}, звонка ещё не было`
+        : "контакт раскрыт, звонка ещё не было"
+    },
+  )
+
+  const tally = todayTally(workspace, now)
+  const nothing = callbacks.length === 0 && taken.length === 0
 
   return (
     <CabinetShell activeId="today">
@@ -293,18 +285,14 @@ export function TodayScreenPage() {
 
           {/* Счёт дня: сделанное, а не показатели эффективности. */}
           <div className="flex h-6 w-full items-center gap-6">
-            <CountPair value={own ? "0" : "18"} label="звонков" large />
-            <CountPair value={own ? "0" : "3"} label={own ? "диалогов" : "диалога"} large />
-            <CountPair value={own ? "0" : "1"} label={own ? "встреч" : "встреча"} large />
-            <CountPair
-              value={own ? "0" : "1"}
-              label={own ? "раскрытий" : "раскрытие на 199 ₽"}
-              large
-            />
+            <CountPair value={String(tally.calls)} label="звонков" large />
+            <CountPair value={String(tally.dialogs)} label="диалогов" large />
+            <CountPair value={String(tally.disclosures)} label="раскрытий" large />
+            <CountPair value={`${tally.spent} ₽`} label="потрачено" large />
           </div>
         </div>
 
-        {own ? (
+        {nothing ? (
           <AgencyEmpty
             title="Смена не начата"
             text="«Сегодня» собирается сам из работы агентства: сюда попадают перезвоны, назначенные в панели звонка, контакты, взятые в работу и ещё не прозвоненные, и находки по сохранённым поискам. Начните с выдачи — задайте район и цену, и первые строки появятся здесь."
@@ -317,19 +305,24 @@ export function TodayScreenPage() {
           />
         ) : (
           <>
-        <Section label="ПЕРЕЗВОНИТЬ СЕГОДНЯ" count={4}>
-          {CALLBACKS.map((row, index) => (
-            <CallRowView key={row.id} row={row} last={index === CALLBACKS.length - 1} />
-          ))}
-        </Section>
+        {callbacks.length === 0 ? null : (
+          <Section label="ПЕРЕЗВОНИТЬ СЕГОДНЯ" count={callbacks.length}>
+            {callbacks.map((row, index) => (
+              <CallRowView key={row.id} row={row} last={index === callbacks.length - 1} />
+            ))}
+          </Section>
+        )}
 
-        <Section label="ВЗЯТЫ В РАБОТУ, НЕ ПРОЗВОНЕНЫ" count={2}>
-          {TAKEN.map((row, index) => (
-            <CallRowView key={row.id} row={row} last={index === TAKEN.length - 1} />
-          ))}
-        </Section>
+        {taken.length === 0 ? null : (
+          <Section label="ВЗЯТЫ В РАБОТУ, НЕ ПРОЗВОНЕНЫ" count={taken.length}>
+            {taken.map((row, index) => (
+              <CallRowView key={row.id} row={row} last={index === taken.length - 1} />
+            ))}
+          </Section>
+        )}
 
-        <Section label="НОВОЕ ПО МОИМ ПОИСКАМ" count={20}>
+        {workspace.savedSearches.length === 0 ? null : (
+        <Section label="НОВОЕ ПО МОИМ ПОИСКАМ" count={workspace.savedSearches.length}>
           {FRESH.map((item, index) => (
             <div
               key={item.id}
@@ -364,6 +357,7 @@ export function TodayScreenPage() {
             </div>
           ))}
         </Section>
+        )}
           </>
         )}
       </CabinetPage>
