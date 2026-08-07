@@ -35,17 +35,42 @@ type Problem = { kind: string; where: string; text: string; detail: string }
 
 const PAGES = ['/kitchen-sink', '/screen/search']
 
+/**
+ * Обе плотности, а не только просторная.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Плотный режим сжимает поле ячейки с 16 до 12, высоты контролов на ступень
+ * и кегль подписи с 14 до 13 — то есть меняет ровно те величины, из-за
+ * которых текст перестаёт помещаться. Проверять переполнение только
+ * в просторном значит не проверять его там, где оно и случается: владелец
+ * описал плотный режим словами «текст слипается», и полоса при этом
+ * была зелёной.
+ *
+ * Плотность ставится атрибутом на корень документа — тем же, что ставит
+ * продукт (`@/platform/density`). Отдельного пути для проверки нет: проверка
+ * обязана видеть ровно тот механизм, который работает у человека.
+ */
+const DENSITIES = ['spacious', 'compact'] as const
+
 test('переполнение: ни одна подпись не вылезает, не обрезается и не наезжает', async ({ page }) => {
   await seedSession(page)
   const all: Problem[] = []
 
-  for (const path of PAGES) {
+  for (const [path, density] of PAGES.flatMap((path) =>
+    DENSITIES.map((density) => [path, density] as const),
+  )) {
     await page.setViewportSize({ width: 1440, height: 1024 })
     await page.goto(path)
     await page.waitForSelector('[data-slot]')
+    await page.evaluate((density: string) => {
+      if (density === 'compact') document.documentElement.dataset.density = 'compact'
+      else delete document.documentElement.dataset.density
+    }, density)
     await page.evaluate(() => document.fonts.ready)
 
-    const found: Problem[] = await page.evaluate((path: string) => {
+    const found: Problem[] = await page.evaluate((where0: string) => {
+      const path = where0
       const result: Problem[] = []
 
       function where(element: Element) {
@@ -158,7 +183,7 @@ test('переполнение: ни одна подпись не вылезае
       }
 
       return result
-    }, path)
+    }, `${path} · ${density === 'compact' ? 'плотно' : 'просторно'}`)
 
     all.push(...found)
   }

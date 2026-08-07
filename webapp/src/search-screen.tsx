@@ -1,5 +1,5 @@
 import { useNavigate, useSearch } from "@tanstack/react-router"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { Typography } from "@/components/typography"
 
@@ -15,6 +15,7 @@ import {
   type Workspace,
 } from "@/features/workspace"
 import { CabinetShell, useHotkeys } from "@/features/cabinet"
+import { useDensity } from "@/platform/density"
 import {
   FilterBar,
   FilterPanel,
@@ -233,7 +234,15 @@ function SearchScreenBody({
   navigate: ReturnType<typeof useNavigate>
 }) {
   const [activeTab, setActiveTab] = useState(opened?.query.tab ?? "all")
-  const [dense, setDense] = useState(false)
+  /**
+   * Плотность — общая настройка человека, а не состояние этого экрана.
+   *
+   * Раньше она жила здесь в `useState` и снималась при уходе с выдачи:
+   * агент включал плотный режим, шёл в подборки и возвращался в просторный.
+   * Теперь выбор помнится между заходами и действует на все таблицы сразу
+   * (`@/platform/density`).
+   */
+  const [dense, setDense] = useDensity()
   const [sort, setSort] = useState<SortId>((opened?.query.sort as SortId | undefined) ?? "fresh")
   /** Потолок цены в миллионах. 0 — без потолка. */
   const [priceCap, setPriceCap] = useState(opened?.query.priceCap ?? 15)
@@ -316,22 +325,6 @@ function SearchScreenBody({
    * что именно добавляет, и подпись в нём это называет.
    */
   const [collecting, setCollecting] = useState<string | null>(null)
-
-  /**
-   * Плотность живёт на корне документа, а не в пропсах.
-   *
-   * Она переключает токены — высоты, поле ячейки, кегль подписи, — и потому
-   * обязана быть выше всех компонентов сразу. Иначе пришлось бы протаскивать
-   * признак через каждый узел, и первый же забытый остался бы просторным.
-   */
-  useEffect(() => {
-    const root = document.documentElement
-    if (dense) root.dataset.density = "compact"
-    else delete root.dataset.density
-    return () => {
-      delete root.dataset.density
-    }
-  }, [dense])
 
   /**
    * Что видно после всех условий.
@@ -654,7 +647,7 @@ function SearchScreenBody({
               setSort(ids[(ids.indexOf(sort) + 1) % ids.length]!)
             }}
             dense={dense}
-            onToggleDensity={() => setDense((value) => !value)}
+            onToggleDensity={() => setDense(!dense)}
           />
 
           {/* Панель обрезает содержимое своим скруглением 16 и тянется на всю
