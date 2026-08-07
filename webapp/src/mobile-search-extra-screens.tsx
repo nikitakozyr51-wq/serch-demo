@@ -1,13 +1,40 @@
-import { ChevronRight, Plus, Search } from "lucide-react"
+import { ChevronRight, ListFilter, Plus, Search } from "lucide-react"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { MobileBottomNav, MobileHeader, PhoneFrame } from "@/features/cabinet"
-import { MobileListingRow } from "@/features/listings"
+import { ALL_ROWS } from "@/data/search-rows"
+import { useSession } from "@/features/auth"
+import {
+  MobileBottomNav,
+  MobileEmptyState,
+  MobileHeader,
+  PhoneFrame,
+} from "@/features/cabinet"
+import { countQuery, MobileListingRow } from "@/features/listings"
+import { touchSavedSearch, useWorkspace, type SavedSearch } from "@/features/workspace"
 import { cn } from "@/lib/utils"
+
+/**
+ * Условия поиска одной строкой: «Красногвардейский · 2-к · до 15 млн».
+ *
+ * Описание одно на телефон и компьютер по смыслу, но живёт в двух местах —
+ * и это осознанный размен: вынести его в общий модуль значило бы завести
+ * зависимость мобильного экрана от десктопного ради одной функции. Если
+ * появится третье место, вынесем.
+ */
+function describeQuery(query: SavedSearch["query"]): string {
+  const parts: string[] = [
+    query.districts.length === 0
+      ? "весь город"
+      : `${query.districts.length} ${query.districts.length === 1 ? "район" : "района"}`,
+  ]
+  if (query.rooms.length > 0) parts.push(query.rooms.map((room) => `${room}-к`).join(", "))
+  if (query.priceCap > 0) parts.push(`до ${query.priceCap} млн`)
+  return parts.join(" · ")
+}
 
 /**
  * МОБАЙЛ · Поиски, массовые действия, пуши.
@@ -135,6 +162,7 @@ function ListRow({
   trailing,
   to,
   action,
+  onOpen,
 }: {
   title: string
   meta: string
@@ -143,6 +171,8 @@ function ListRow({
   to?: ObjectRoute
   /** Действие без нарисованного экрана: названо и ничего не рисует. */
   action?: string
+  /** Строка нажимается и что-то делает. Тогда это кнопка, а не ссылка. */
+  onOpen?: () => void
 }) {
   const shell = cn(
     "flex h-16 w-full cursor-pointer items-center gap-2.5 rounded-lg bg-surface px-3.5 text-left",
@@ -173,7 +203,13 @@ function ListRow({
   }
 
   return (
-    <button type="button" data-slot="mobile-list-row" data-action={action} className={shell}>
+    <button
+      type="button"
+      data-slot="mobile-list-row"
+      data-action={action}
+      onClick={onOpen}
+      className={cn(shell, "row-tap")}
+    >
       <>{body}</>
     </button>
   )
@@ -228,6 +264,8 @@ function QuietPill({
   to?: SheetRoute
   /** Действие без нарисованного экрана: названо и ничего не рисует. */
   action?: string
+  /** Строка нажимается и что-то делает. Тогда это кнопка, а не ссылка. */
+  onOpen?: () => void
 }) {
   const shell = cn(
     "flex h-12 w-full cursor-pointer items-center justify-center rounded-full bg-warm px-6",
@@ -259,26 +297,6 @@ function QuietPill({
 /* ────────────────────────────────────────────────────────────────────────────
    МОБАЙЛ · Сохранённые поиски (`LlJyw`)
    ──────────────────────────────────────────────────────────────────────── */
-
-const MY_SEARCHES = [
-  {
-    title: "Красногвардейский 2-к до 15",
-    meta: "Красногвардейский · 2-комн · 6–15 млн",
-    found: 12,
-  },
-  { title: "Комнаты Центральный", meta: "Центральный · комнаты и доли", found: 3 },
-  { title: "Снизили цену за 3 дня", meta: "весь Петербург · цена снижалась", found: 5 },
-  { title: "Расселение", meta: "Лиговка · коммуналки целиком", found: 0 },
-]
-
-const AGENCY_SEARCHES = [
-  {
-    title: "Расселение, центр",
-    meta: "Центральный, Адмиралтейский · комнаты и доли",
-    found: 4,
-  },
-  { title: "Доли и комнаты", meta: "весь Петербург · до 5 млн", found: 2 },
-]
 
 /**
  * Счётчик находок с прошлой проверки.
@@ -324,17 +342,37 @@ function FoundCounter({ found }: { found: number }) {
  * Строка 64 — вся строка и есть цель нажатия, счётчик и шеврон внутри неё
  * отдельно не нажимаются.
  *
- * **Ни один сохранённый поиск никуда не ведёт, и это не забытый обработчик.**
- * Сохранённый поиск открывает выдачу, а мобильной выдачи под собственным
- * адресом в продукте пока нет: собранный кадр живёт на стенде. Поэтому строки
- * названы действием и молчат — до того дня, когда выдача получит адрес. Вести
- * их на десктопный `/search` значило бы выкинуть человека с телефона в чужой
- * интерфейс.
+ * **Поиски свои, а не выдуманные, и каждый открывает выдачу.**
+ *
+ * Здесь стояли шесть придуманных поисков — «Красногвардейский 2-к до 15»,
+ * «Расселение, центр», — и ни один не открывался. Комментарий на этом месте
+ * объяснял, что мобильной выдачи под собственным адресом ещё нет, и это была
+ * правда ровно до того дня, когда у `/m/search` появился маршрут.
+ *
+ * Нашла это перепись кабинета, а не глаз: пока экран не был объявлен парой
+ * десктопной главной, перепись до него не доходила вовсе. Дыра пряталась
+ * за другой дырой.
  */
 export function MobileSavedSearchesPage() {
+  const workspace = useWorkspace()
+  const session = useSession()
+  const navigate = useNavigate()
+
+  const mine = workspace.savedSearches.filter((item) => !item.shared)
+  const shared = workspace.savedSearches.filter((item) => item.shared)
+
+  /** Сколько объектов приносит поиск сейчас. Считается, а не хранится. */
+  const found = (search: (typeof workspace.savedSearches)[number]) =>
+    countQuery(ALL_ROWS, search.query).fresh
+
+  const open = (id: string) => {
+    touchSavedSearch(id)
+    void navigate({ to: "/m/search", search: { saved: id } })
+  }
+
   return (
     <PhoneStand>
-      <MobileHeader balance={8610} initials="ИС" />
+      <MobileHeader balance={session?.balance ?? 0} initials={session?.initials ?? ""} />
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
         <div className="flex w-full shrink-0 items-center gap-2.5">
@@ -361,47 +399,61 @@ export function MobileSavedSearchesPage() {
           </Link>
         </div>
 
-        <LabelledSection label="МОИ ПОИСКИ">
-          {MY_SEARCHES.map((search) => (
-            <ListRow
-              key={search.title}
-              title={search.title}
-              meta={search.meta}
-              action={`Открыть выдачу поиска «${search.title}»`}
-              trailing={
-                <>
-                  <FoundCounter found={search.found} />
-                  <ChevronRight
-                    aria-hidden
-                    className="size-4 shrink-0 text-text-dense"
-                    strokeWidth={2}
-                  />
-                </>
-              }
-            />
-          ))}
-        </LabelledSection>
+        {/* Раздел без единого поиска не рисуется вовсе: заголовок над
+            пустотой обещает раздел, которым ещё нечем пользоваться. */}
+        {mine.length === 0 && shared.length === 0 ? (
+          <MobileEmptyState
+            icon={ListFilter}
+            title="Поисков ещё нет"
+            text="Задайте условия на выдаче и нажмите «Сохранить поиск». Он появится здесь и будет приносить новое сам."
+          />
+        ) : null}
 
-        <LabelledSection label="ПОИСКИ АГЕНТСТВА">
-          {AGENCY_SEARCHES.map((search) => (
-            <ListRow
-              key={search.title}
-              title={search.title}
-              meta={search.meta}
-              action={`Открыть выдачу поиска агентства «${search.title}»`}
-              trailing={
-                <>
-                  <FoundCounter found={search.found} />
-                  <ChevronRight
-                    aria-hidden
-                    className="size-4 shrink-0 text-text-dense"
-                    strokeWidth={2}
-                  />
-                </>
-              }
-            />
-          ))}
-        </LabelledSection>
+        {mine.length === 0 ? null : (
+          <LabelledSection label="МОИ ПОИСКИ">
+            {mine.map((search) => (
+              <ListRow
+                key={search.id}
+                title={search.name}
+                meta={describeQuery(search.query)}
+                onOpen={() => open(search.id)}
+                trailing={
+                  <>
+                    <FoundCounter found={found(search)} />
+                    <ChevronRight
+                      aria-hidden
+                      className="size-4 shrink-0 text-text-dense"
+                      strokeWidth={2}
+                    />
+                  </>
+                }
+              />
+            ))}
+          </LabelledSection>
+        )}
+
+        {shared.length === 0 ? null : (
+          <LabelledSection label="ПОИСКИ АГЕНТСТВА">
+            {shared.map((search) => (
+              <ListRow
+                key={search.id}
+                title={search.name}
+                meta={describeQuery(search.query)}
+                onOpen={() => open(search.id)}
+                trailing={
+                  <>
+                    <FoundCounter found={found(search)} />
+                    <ChevronRight
+                      aria-hidden
+                      className="size-4 shrink-0 text-text-dense"
+                      strokeWidth={2}
+                    />
+                  </>
+                }
+              />
+            ))}
+          </LabelledSection>
+        )}
 
         <div className="flex-1" />
       </div>
@@ -928,6 +980,8 @@ function BulkActionRow({
   to?: SheetRoute
   /** Действие без нарисованного экрана: названо и ничего не рисует. */
   action?: string
+  /** Строка нажимается и что-то делает. Тогда это кнопка, а не ссылка. */
+  onOpen?: () => void
 }) {
   const shell = cn(
     "flex h-12 w-full cursor-pointer items-center rounded-xl px-4 text-left",

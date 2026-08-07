@@ -24,7 +24,7 @@ import { resolveDesignWebPort } from './e2e/ports'
  * Запуск: `bun run --cwd webapp cabinet:check`
  */
 const frontendRoot = fileURLToPath(new URL('.', import.meta.url))
-const webPort = await resolveDesignWebPort()
+const webPort = await resolveDesignWebPort('census')
 const webUrl = `http://127.0.0.1:${webPort}`
 
 export default defineConfig({

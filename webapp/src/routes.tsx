@@ -480,6 +480,7 @@ const productRoutes = [
   productRoute('/call', () => import('./call-mode-screen'), 'CallModeScreenPage'),
   productRoute('/balance', () => import('./balance-screens'), 'BalanceChargesPage'),
   productRoute('/balance/refunds', () => import('./balance-screens'), 'BalanceRefundsPage'),
+  productRoute('/balance/top-ups', () => import('./balance-screens'), 'BalanceTopUpsPage'),
   productRoute('/balance/documents', () => import('./balance-screens'), 'BalanceDocumentsPage'),
   productRoute('/balance/top-up', () => import('./balance-screens'), 'BalanceTopUpPage'),
   productRoute('/collections', () => import('./collections-screens'), 'CollectionsPage'),
@@ -569,6 +570,32 @@ const mobileRoutes = [
     component: lazyRouteComponent(
       () => import('./mobile-call-screen'),
       'MobileCallScreenPage',
+    ),
+  }),
+  /**
+   * Выдача на телефоне.
+   *
+   * Экран был собран, пара объявлена в `TWINS` — маршрута не было. То есть
+   * человек, открывший поиск с телефона, попадал на адрес, которого нет.
+   * Это второй случай той же поломки после прозвона, и оба раза её нашла
+   * не рука, а сверка: у КАЖДОГО адреса из пары обязан быть маршрут.
+   * Проверка ниже теперь держит это правило.
+   */
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/m/search',
+    validateSearch: (search: Record<string, unknown>): { at?: string; saved?: string } => ({
+      ...(typeof search.at === 'string' ? { at: search.at } : {}),
+      ...(typeof search.saved === 'string' ? { saved: search.saved } : {}),
+    }),
+    beforeLoad: () => {
+      if (!hasSession()) {
+        throw redirect({ to: loginPath(), search: { returnTo: undefined }, replace: true })
+      }
+    },
+    component: lazyRouteComponent(
+      () => import('./mobile-search-screen'),
+      'MobileSearchScreenPage',
     ),
   }),
   productRoute('/m/object', () => import('./mobile-object-screens'), 'MobileObjectPage'),

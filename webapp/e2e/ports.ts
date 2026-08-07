@@ -72,16 +72,26 @@ export async function resolveE2ePorts(): Promise<PortPlan> {
  * ни база, ни бэкенд ему не нужны и в план портов не входят. Логика поиска
  * свободного порта берётся та же, что у E2E, — она живёт в одном месте.
  */
-export async function resolveDesignWebPort(): Promise<number> {
+/**
+ * Порт для полосы сверки с макетом и для переписи кабинета.
+ *
+ * `slot` разводит их по разным портам, и это не удобство. Полосы гоняются
+ * подряд, `reuseExistingServer` включён, и на общем порту вторая полоса
+ * доставалась серверу, занятому первой: тайм-ауты появлялись не там, где
+ * поломка, а там, где расписание. Красное по расписанию хуже отсутствия
+ * проверки — ему перестают верить.
+ */
+export async function resolveDesignWebPort(slot: 'design' | 'census' = 'design'): Promise<number> {
+  const envName = slot === 'census' ? 'CENSUS_WEB_PORT' : 'DESIGN_WEB_PORT'
   const port = await resolvePort({
-    envName: 'DESIGN_WEB_PORT',
-    preferredPort: preferredDesignWebPort,
+    envName,
+    preferredPort: slot === 'census' ? preferredDesignWebPort + 1 : preferredDesignWebPort,
     reservedPorts: new Set<number>(),
   })
   // Конфиг читается и главным процессом, и рабочим. Без закрепления второй
   // вызов увидит порт занятым поднятым же Vite и уедет на соседний,
   // а тест пойдёт стучаться не туда.
-  process.env.DESIGN_WEB_PORT ??= String(port)
+  process.env[envName] ??= String(port)
 
   return port
 }

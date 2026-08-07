@@ -84,14 +84,7 @@ function balanceTabs(workspace: Workspace): BalanceTab[] {
   return [
     { id: "charges", label: "Списания", count: workspace.disclosures.length, to: "/balance" },
     { id: "refunds", label: "Возвраты", count: workspace.refunds.length, to: "/balance/refunds" },
-    // Экран пополнений в макете есть (`ruMMX`), в продукте его пока нет.
-    // Вкладка поэтому названа действием, а не ведёт на выдуманный адрес.
-    {
-      id: "topups",
-      label: "Пополнения",
-      count: workspace.topUps.length,
-      action: "открыть список пополнений",
-    },
+    { id: "topups", label: "Пополнения", count: workspace.topUps.length, to: "/balance/top-ups" },
   ]
 }
 
@@ -579,6 +572,136 @@ export function BalanceRefundsPage() {
         }))}
       />
       )}
+    </BalanceShell>
+  )
+}
+
+/**
+ * БАЛАНС · Пополнения (`ruMMX`).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Третья вкладка денег. Кадр был нарисован давно, а маршрута не было —
+ * и вкладка оставалась кнопкой без действия. Она же была одной из семи
+ * мёртвых кнопок переписи.
+ *
+ * Колонки сняты с кадра: дата со временем 144, кто 168, способ тянется,
+ * документ 216, сумма 96 вправо, состояние 120 вправо.
+ *
+ * **Способ и документ — не одно и то же.** Картой платят мгновенно и без
+ * счёта; на юрлицо выставляется счёт с номером, и бухгалтер ищет строку
+ * именно по нему. Свести их в одну колонку значило бы заставить его искать
+ * номер внутри слова «Счёт на юрлицо».
+ *
+ * **Состояние всегда «Зачислено».** Очереди рассмотрения у пополнения нет:
+ * деньги в продукте зачисляются в момент пополнения. Показывать «В обработке»
+ * значило бы рисовать этап, которого не существует.
+ */
+export function BalanceTopUpsPage() {
+  const workspace = useWorkspace()
+
+  /**
+   * Номер счёта считается от порядка пополнений, а не хранится.
+   *
+   * Тот же приём, что на вкладке документов, и то же основание: счёт
+   * выставляется на пополнение, значит его номер — свойство порядка,
+   * а не отдельное поле, которое может разойтись с ним.
+   */
+  const ordered = [...workspace.topUps].sort((a, b) => a.at - b.at)
+
+  const rows = [...ordered].reverse().map((item) => {
+    const byCard = item.method.toLowerCase().includes("карт")
+    return {
+      id: item.id,
+      when: formatMoment(item.at),
+      // Кто пополнил, в журнале пополнения не записан: платит агентство,
+      // а не сотрудник. Пока пополнение делает тот, кто вошёл, — это он.
+      who: workspace.people[0]?.name ?? "—",
+      method: byCard ? "Картой" : "Счёт на юрлицо",
+      document: byCard ? "без счёта" : `№ ${1000 + ordered.indexOf(item) + 1}`,
+      sum: `${groupDigits(item.amount)} ₽`,
+    }
+  })
+
+  return (
+    <BalanceShell
+      title="Баланс"
+      note="общий счёт агентства, платят не за пользователей"
+      activeTab="topups"
+    >
+      <NoticeBar
+        rule="Счёт выставляется на юридическое лицо, акт приходит первого числа"
+        note="деньги приходят в течение банковского дня, картой — сразу"
+      />
+
+      {rows.length === 0 ? (
+        <AgencyEmpty
+          title="Пополнений не было"
+          text="Счёт агентства пополняется картой или по счёту на юридическое лицо. Картой деньги приходят сразу, по счёту — в течение банковского дня."
+          note="Каждое пополнение появляется здесь строкой, а счёт к нему — на вкладке документов."
+        />
+      ) : (
+        <DataTable
+          columns={[
+            { head: "ДАТА И ВРЕМЯ", width: "w-col-144" },
+            { head: "КТО", width: "w-col-168" },
+            { head: "СПОСОБ" },
+            { head: "ДОКУМЕНТ", width: "w-col-216" },
+            { head: "СУММА", width: "w-col-96", numeric: true },
+            { head: "СОСТОЯНИЕ", width: "w-col-120", numeric: true },
+          ]}
+          rows={rows.map((row) => ({
+            id: row.id,
+            cells: [
+              <Typography key="when" variant="denseText" tone="secondary">{row.when}</Typography>,
+              <Typography key="who" variant="denseText" tone="secondary">{row.who}</Typography>,
+              <Typography key="method" variant="denseText" tone="default">{row.method}</Typography>,
+              <Typography key="doc" variant="denseText" tone="default">{row.document}</Typography>,
+              <Typography key="sum" variant="numericDense" tone="default">{row.sum}</Typography>,
+              <Typography key="state" variant="numericDense" tone="ok">Зачислено</Typography>,
+            ],
+          }))}
+        />
+      )}
+
+      {/* «Как пополнить» — три способа, снятые с кадра. Стоят под таблицей,
+          а не над ней: человек, открывший вкладку, чаще ищет своё прошлое
+          пополнение, чем читает, как пополнять. */}
+      <div className="flex w-full shrink-0 flex-col gap-3">
+        <Typography variant="columnHeader" tone="dense">
+          КАК ПОПОЛНИТЬ
+        </Typography>
+        <div className="flex w-full items-start">
+          {[
+            [
+              "Счёт на юридическое лицо",
+              "Скачайте счёт и оплатите с расчётного счёта. Деньги приходят в течение банковского дня, акт — первого числа.",
+            ],
+            [
+              "Картой",
+              "Мгновенно, до 30 000 ₽ за раз. Подходит, когда контакт нужен сейчас, а бухгалтерия подождёт.",
+            ],
+            [
+              "Автопополнение",
+              "Когда на счёте остаётся меньше 2 000 ₽, счёт пополняется сам на выбранную сумму.",
+            ],
+          ].map(([title, text], index) => (
+            <>
+              {index === 0 ? null : (
+                <span key={`d${index}`} aria-hidden className="mx-6 h-13 w-px shrink-0 bg-line-1" />
+              )}
+              <div key={title} className="flex min-w-0 flex-1 flex-col gap-1">
+                <Typography variant="numericDense" tone="default">
+                  <>{title}</>
+                </Typography>
+                <Typography variant="metaText" tone="dense">
+                  <>{text}</>
+                </Typography>
+              </div>
+            </>
+          ))}
+        </div>
+      </div>
     </BalanceShell>
   )
 }
