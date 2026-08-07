@@ -42,6 +42,7 @@
     "demo:check": "node scripts/check-demo.mjs serch-demo",
     "demo:publish": "node scripts/publish-demo.mjs",
     "demo:dead-buttons": "node scripts/find-dead-buttons.mjs",
+    "pencil:coverage": "node scripts/pencil-coverage.mjs",
     "listings:generate": "node scripts/generate-listings.mjs",
     "deploy:do:specs": "bun scripts/prepare-do-specs.mjs",
     "typecheck": "bun run --filter '*' --sequential typecheck",

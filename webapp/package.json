@@ -15,6 +15,7 @@
     "e2e:install": "playwright install chromium",
     "design:check": "playwright test -c playwright.design.config.ts",
     "cabinet:check": "playwright test -c playwright.census.config.ts",
+    "pencil:coverage": "node ../scripts/pencil-coverage.mjs",
     "ui": "shadcn",
     "ui:add": "shadcn add",
     "ui:info": "shadcn info"
