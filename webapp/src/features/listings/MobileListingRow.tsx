@@ -77,13 +77,21 @@ function MobileListingRow({
     <div
       data-slot="mobile-listing-row"
       data-blocked={blocked || undefined}
-      onClick={blocked ? undefined : onOpen}
+      // Карточка открывается у любого объекта, включая заблокированный:
+      // ровно так же, как на компьютере. Раньше здесь стояло `blocked ?
+      // undefined : onOpen` — и объект, по которому нельзя звонить, нельзя
+      // было и посмотреть. Запрет относится к раскрытию контакта, а карточка
+      // как раз и объясняет, почему по этому объекту работать нельзя.
+      onClick={onOpen}
       className={cn(
-        "flex w-full flex-col gap-2.5 rounded-2xl px-3.5 py-3",
+        "flex w-full cursor-pointer flex-col gap-2.5 rounded-2xl px-3.5 py-3",
         // Обводка, а не рамка: в файле она рисуется внутрь и содержимое
         // не сжимает. Рамкой карточка стала бы на 2 px уже.
         "outline-solid outline-1 -outline-offset-1 outline-line-2",
-        blocked ? "bg-warm" : "cursor-pointer bg-surface",
+        // Отклик на касание — общее правило кабинета, см. `index.css`.
+        // На телефоне наведения нет вовсе, работает только нажатие.
+        "row-tap",
+        blocked ? "bg-warm" : "bg-surface",
       )}
     >
       {/* Верх: фото 96 держит высоту карточки. */}

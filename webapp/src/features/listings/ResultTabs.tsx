@@ -2,6 +2,7 @@ import { ArrowDownNarrowWide, ChevronDown, Rows3, Rows4 } from "lucide-react"
 
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
+import { useAnimatedNumber } from "@/platform/motion"
 
 /**
  * Табы выдачи, сортировка и переключатель плотности.
@@ -50,6 +51,28 @@ type ResultTabsProps = {
   onToggleDensity?: () => void
 }
 
+/**
+ * Счётчик вкладки.
+ *
+ * Число доезжает до нового значения за 200 мс — потолок диапазона кабинета,
+ * а не 600 мс баланса. Разница намеренная: у баланса движение обязано быть
+ * заметным, потому что оно подтверждает списание денег. Счётчик вкладки
+ * ничего не подтверждает, он лишь не даёт числу подмениться незаметно, когда
+ * сменили фильтр и «Все 247» стало «Все 31».
+ *
+ * При отключённом движении хук меняет число мгновенно — это его правило,
+ * не наше исключение.
+ */
+function TabCount({ value }: { value: number }) {
+  const shown = useAnimatedNumber(value, 200)
+
+  return (
+    <Typography variant="metaText" tone="dense">
+      <>{shown}</>
+    </Typography>
+  )
+}
+
 function ResultTabs({
   tabs,
   activeId,
@@ -78,7 +101,12 @@ function ResultTabs({
             className={cn(
               "flex h-row-head cursor-pointer items-center gap-1.5 border-b-2 bg-transparent",
               "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg",
-              active ? "border-fg" : "border-transparent",
+              // Подчёркивание переезжает цветом границы, а не сдвигом: сдвиг
+              // потребовал бы анимировать раскладку, что запрещено везде.
+              // Неактивный таб под пальцем показывает будущее подчёркивание
+              // светлой линией — отклик есть, а решение ещё не принято.
+              "transition-colors duration-120",
+              active ? "border-fg" : "border-transparent active:border-line-2",
             )}
           >
             <Typography
@@ -87,11 +115,7 @@ function ResultTabs({
             >
               {tab.label}
             </Typography>
-            {tab.count === undefined ? null : (
-              <Typography variant="metaText" tone="dense">
-                {tab.count}
-              </Typography>
-            )}
+            {tab.count === undefined ? null : <TabCount value={tab.count} />}
           </button>
         )
       })}

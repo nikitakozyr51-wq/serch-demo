@@ -337,6 +337,16 @@ export function demoPhone(id: string): string {
   return `+7 900 ${a}-${b}-${c}`
 }
 
+/**
+ * Есть ли сеанс — вне React.
+ *
+ * Нужен охране маршрута: она решает, пускать ли внутрь, ДО того как
+ * что-нибудь отрисуется. Хук здесь не подходит — его негде вызвать.
+ */
+export function hasSession(): boolean {
+  return current !== null
+}
+
 /** Текущий сеанс. `null` — человек не вошёл. */
 export function useSession(): DemoSession | null {
   return useSyncExternalStore(subscribe, snapshot, () => null)

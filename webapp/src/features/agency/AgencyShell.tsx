@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
-import { AGENCY, NAV, SAVED } from "@/cabinet-demo-nav"
 import { Typography } from "@/components/typography"
 import { useSession } from "@/features/auth"
 import {
@@ -9,6 +8,7 @@ import {
   CabinetOverlays,
   CabinetSidebar,
   requestPalette,
+  useCabinetNav,
 } from "@/features/cabinet"
 import { cn } from "@/lib/utils"
 
@@ -62,6 +62,7 @@ type AgencyShellProps = {
 function AgencyShell({ activeTab, title, note, action, children }: AgencyShellProps) {
   const session = useSession()
   const navigate = useNavigate()
+  const nav = useCabinetNav()
 
   return (
     <div className="flex h-svh w-full flex-col bg-bg">
@@ -78,10 +79,13 @@ function AgencyShell({ activeTab, title, note, action, children }: AgencyShellPr
       />
 
       <div className="flex min-h-0 flex-1">
+        {/* Меню берётся из общего источника, а не из констант файла
+            навигации: раньше здесь стояли шесть чужих поисков без адреса,
+            и ни один из них не нажимался. */}
         <CabinetSidebar
-          items={NAV}
-          savedSearches={SAVED}
-          agencySearches={AGENCY}
+          items={nav.items}
+          savedSearches={nav.savedSearches}
+          agencySearches={nav.agencySearches}
           activeId="agency"
         />
 

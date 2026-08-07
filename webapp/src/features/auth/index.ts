@@ -2,6 +2,7 @@ export {
   demoPhone,
   disclose,
   hasAccounts,
+  hasSession,
   initialsOf,
   refund,
   signIn,

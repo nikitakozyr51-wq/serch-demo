@@ -5,9 +5,17 @@ import type { MouseEvent, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { useOwnAgency, useSession } from "@/features/auth"
+import { useSession } from "@/features/auth"
 import { MobileEmptyState, MobileScreen, MobileSectionHeader, MobileSheet } from "@/features/cabinet"
 import { groupDigits, plural } from "@/features/listings"
+import {
+  disclosedSince,
+  formatDay,
+  formatMoment,
+  useNow,
+  useWorkspace,
+  type Workspace,
+} from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
 /**
@@ -55,16 +63,40 @@ function pressProps(onPress: () => void) {
  */
 const DISCLOSURE_PRICE = 199
 
+/** Тридцать дней в миллисекундах: окно, за которое считаются деньги наверху. */
+const MONTH = 30 * 24 * 60 * 60 * 1000
+
 /** «43 раскрытия», «100 раскрытий», «251 раскрытие» — счёт со склонением. */
 function disclosures(rubles: number) {
   const count = Math.floor(rubles / DISCLOSURE_PRICE)
   return `${count} ${plural(count, "раскрытие", "раскрытия", "раскрытий")}`
 }
 
-/** Остаток на счету агентства. Без сеанса остаётся число стенда. */
+/**
+ * Остаток на счету агентства.
+ *
+ * Без сеанса — ноль, а не число из макета: кабинет закрыт охраной, и попасть
+ * сюда, не войдя, нельзя. Стоявшие здесь 8 610 ₽ были остатком чужого
+ * агентства и не двигались ни от раскрытия, ни от пополнения.
+ */
 function useBalance() {
   const session = useSession()
-  return session?.balance ?? 8610
+  return session?.balance ?? 0
+}
+
+/**
+ * На кого выставляются документы.
+ *
+ * Реквизитов юрлица продукт пока не спрашивает: ни ИНН, ни названия ООО
+ * в сеансе нет. Стоявшие в этом файле ООО «Невский проспект» и ИНН 7806154392
+ * были образцом текста из макета, а чужое юрлицо в счёте хуже, чем его
+ * отсутствие. Названо поэтому только то, что известно, — имя своего агентства.
+ */
+function useLegalEntity(): string {
+  const session = useSession()
+  return session?.agency
+    ? `юридическое лицо агентства «${session.agency}»`
+    : "юридическое лицо агентства"
 }
 
 /**
@@ -141,10 +173,10 @@ function TopUpButton() {
 /**
  * Остаток: число 40/600 и строка-объяснение 14/500 под ним, зазор 4.
  *
- * **Число здесь не всегда остаток.** На вкладке возвратов это «9 / 1 791 ₽» —
- * сколько заявок и на какую сумму вернули за месяц, на пополнениях — сколько
- * внесли. Одно место экрана отвечает на вопрос открытой вкладки, а объяснение
- * под числом говорит, что именно посчитано. Без этой строки число врёт.
+ * **Число здесь не всегда остаток.** На вкладке возвратов это «сколько заявок
+ * и на какую сумму вернули за месяц», на пополнениях — сколько внесли. Одно
+ * место экрана отвечает на вопрос открытой вкладки, а объяснение под числом
+ * говорит, что именно посчитано. Без этой строки число врёт.
  */
 function BalanceHero({ value, caption }: { value: string; caption: string }) {
   return (
@@ -279,6 +311,11 @@ function OperationRow({
  * («В работе», «Раскрыт», «Стоп-лист»…), а здесь состояние не объекта, а заявки
  * на деньги — «В обработке» и «Возвращено». Заливки и цвета подписи те же
  * токены `warn-tint`/`warn-text` и `ok-tint`/`ok-text`, что снято замером.
+ *
+ * **В списке сегодня стоит только «Возвращено».** Продукт зачисляет возврат
+ * сразу, очереди рассмотрения за ним нет, и рисовать «В обработке» значило бы
+ * обещать проверку, которой не происходит. Ожидание оставлено в компоненте —
+ * оно снято с файла и понадобится, когда возвраты начнёт подтверждать сервер.
  */
 function RefundChip({ tone, label }: { tone: "pending" | "done"; label: string }) {
   return (
@@ -298,47 +335,54 @@ function RefundChip({ tone, label }: { tone: "pending" | "done"; label: string }
 
 /* ── МОБАЙЛ · Баланс, списания (`hRN4n`) ──────────────────────────────────── */
 
-const SPENDINGS = [
-  {
-    title: "Ленская ул., 10",
-    what: "Раскрытие контакта · вы",
-    when: "Сегодня, 14:12",
-    amount: "199 ₽",
-  },
-  {
-    title: "Индустриальный пр., 26",
-    what: "Раскрытие контакта · Анна Т.",
-    when: "Сегодня, 11:47",
-    amount: "199 ₽",
-  },
-  {
-    title: "Заневский пр., 32",
-    what: "Раскрытие контакта · Пётр Г.",
-    when: "Сегодня, 09:38",
-    amount: "199 ₽",
-  },
-  {
-    title: "Наставников пр., 34",
-    what: "Раскрытие контакта · вы",
-    when: "23.07, 09:20",
-    amount: "199 ₽",
-  },
-]
+/**
+ * Строки списаний собираются из журнала раскрытий, а не пишутся руками.
+ *
+ * Прежде здесь лежали четыре чужие строки — чужие адреса и чужие имена, — и
+ * ваши раскрытия в них не попадали НИКОГДА. Это были образцы текста из макета:
+ * дизайнер пишет их, чтобы кадр не был пустым, а в коде они превратились в
+ * данные и показывались живым людям.
+ *
+ * Своё имя заменяется на «вы»: человек не читает себя в третьем лице. Чужое
+ * остаётся как есть — это и есть ответ на вопрос «кто тратит».
+ */
+function spendingRows(workspace: Workspace, now: number, me: string) {
+  return workspace.disclosures.map((item) => {
+    const who = item.by === me ? "вы" : item.by
+
+    return {
+      id: item.id,
+      title: item.address,
+      // Вторая строка всегда отвечает «за что». Пробное раскрытие и раскрытие
+      // с оформленным возвратом стоят в истории на своих местах: журнал денег
+      // обязан помнить и то, за что не заплатили.
+      what: item.refunded
+        ? `Раскрытие контакта, возврат · ${who}`
+        : item.trial
+          ? `Пробное раскрытие · ${who}`
+          : `Раскрытие контакта · ${who}`,
+      when: formatDay(item.at, now),
+      amount: `${groupDigits(item.amount)} ₽`,
+    }
+  })
+}
 
 /**
  * МОБАЙЛ · Баланс (`hRN4n`) — список списаний.
  *
- * **В каждой строке написано, кто потратил.** «вы», «Анна Т.», «Пётр Г.» — это
- * не украшение истории, а единственное место продукта, где руководитель агентства
- * видит, чьи именно раскрытия съели баланс. Без имени строка отвечала бы только
- * на вопрос «куда ушли деньги», но не на «кто их тратит».
+ * **В каждой строке написано, кто потратил.** Имя автора раскрытия — не
+ * украшение истории, а единственное место продукта на телефоне, где руководитель
+ * агентства видит, чьи именно раскрытия съели баланс. Без имени строка отвечала
+ * бы только на вопрос «куда ушли деньги», но не на «кто их тратит».
  */
 export function MobileBalancePage() {
   // Число берётся из сеанса: раскрытие контакта тут же уменьшает остаток,
   // и человек видит, куда ушли деньги, а не читает нарисованную цифру.
   const balance = useBalance()
-  // Свой кабинет начинается пустым: чужие списания сюда не переходят.
-  const own = useOwnAgency()
+  const session = useSession()
+  const workspace = useWorkspace()
+  const now = useNow()
+  const rows = spendingRows(workspace, now, session?.name ?? "")
 
   return (
     <MobileScreen
@@ -354,15 +398,21 @@ export function MobileBalancePage() {
         <TopUpButton />
         <BalanceSegments active="Списания" />
         <div className="flex w-full flex-col">
-          {own ? (
+          {rows.length === 0 ? (
             <MobileEmptyState
               icon={Wallet}
               title="Списаний ещё не было"
               text="Здесь появится каждое движение денег: 199 ₽ за раскрытый контакт и 3 000 ₽ за доступ агентства."
             />
           ) : (
-          SPENDINGS.map((row) => (
-              <OperationRow key={row.title} {...row} />
+            rows.map((row) => (
+              <OperationRow
+                key={row.id}
+                title={row.title}
+                what={row.what}
+                when={row.when}
+                amount={row.amount}
+              />
             ))
           )}
         </div>
@@ -373,55 +423,50 @@ export function MobileBalancePage() {
 
 /* ── МОБАЙЛ · Баланс, возвраты (`nJc69`) ──────────────────────────────────── */
 
-const REFUNDS = [
-  {
-    title: "Индустриальный пр., 26",
-    what: "Это агент, посредник · Анна Т.",
-    when: "Сегодня, 15:40",
-    amount: "199 ₽",
-    tone: "pending" as const,
-    status: "В обработке",
-  },
-  {
-    title: "Товарищеский пр., 22",
-    what: "Номер не существует · Анна Т.",
-    when: "23.07, 17:20",
-    amount: "199 ₽",
-    tone: "done" as const,
-    status: "Возвращено",
-  },
-  {
-    title: "Энтузиастов пр., 47",
-    what: "Номер чужой · Дмитрий К.",
-    when: "23.07, 12:40",
-    amount: "199 ₽",
-    tone: "done" as const,
-    status: "Возвращено",
-  },
-  {
-    title: "Наставников пр., 34",
-    what: "Собственник отозвал согласие · вы",
-    when: "23.07, 10:05",
-    amount: "199 ₽",
-    tone: "done" as const,
-    status: "Возвращено",
-  },
-]
+/**
+ * Строки возвратов собираются из журнала возвратов.
+ *
+ * Возврат существует только тогда, когда его оформили: четыре строки, стоявшие
+ * здесь раньше, были образцом текста из макета — чужие адреса, чужие имена и
+ * причины, которых никто не называл.
+ */
+function refundRows(workspace: Workspace, now: number, me: string) {
+  return workspace.refunds.map((item) => ({
+    id: item.id,
+    title: item.address,
+    what: `${item.reason} · ${item.by === me ? "вы" : item.by}`,
+    when: formatDay(item.at, now),
+    amount: `${groupDigits(item.amount)} ₽`,
+  }))
+}
 
 /**
  * МОБАЙЛ · Баланс, возвраты (`nJc69`).
  *
- * **Возвраты показаны не суммой, а долей: «9 / 1 791 ₽ · 5 % раскрытий».**
- * Доля — это оценка качества базы, а не бухгалтерия: пять процентов брака агентство
- * терпит, двадцать пять означают, что продукт продаёт мусор. Число видно раньше
- * списка, чтобы этот вопрос задавался сам.
+ * **Возвраты показаны не суммой, а долей: сколько заявок на сколько денег и
+ * какой это процент раскрытий.** Доля — это оценка качества базы, а не
+ * бухгалтерия: пять процентов брака агентство терпит, двадцать пять означают,
+ * что продукт продаёт мусор. Число видно раньше списка, чтобы этот вопрос
+ * задавался сам.
+ *
+ * Доли без раскрытий не существует: делить не на что, и «0 %» соврало бы про
+ * качество базы. Тогда строка молчит о проценте, а не выдумывает его.
  *
  * Причина возврата стоит там же, где на вкладке списаний стояло «Раскрытие
  * контакта», — вторая строка всегда отвечает «за что», меняется только ответ.
  */
 export function MobileBalanceRefundsPage() {
-  // Свой кабинет начинается пустым: чужие строки сюда не переходят.
-  const own = useOwnAgency()
+  const session = useSession()
+  const workspace = useWorkspace()
+  const now = useNow()
+  const rows = refundRows(workspace, now, session?.name ?? "")
+
+  const since = now - MONTH
+  const monthly = workspace.refunds.filter((item) => item.at >= since)
+  const returned = monthly.reduce((sum, item) => sum + item.amount, 0)
+  const disclosed = disclosedSince(workspace, since)
+  const share =
+    disclosed > 0 ? ` · ${Math.round((monthly.length / disclosed) * 100)} % раскрытий` : ""
 
   return (
     <MobileScreen
@@ -431,27 +476,29 @@ export function MobileBalanceRefundsPage() {
     >
       <MoneyBody>
         <BalanceHero
-          value="9 / 1 791 ₽"
-          caption="возвращено за 30 дней · 5 % раскрытий"
+          value={`${monthly.length} / ${groupDigits(returned)} ₽`}
+          caption={`возвращено за 30 дней${share}`}
         />
         <TopUpButton />
         <BalanceSegments active="Возвраты" />
         <div className="flex w-full flex-col">
-          {own ? (
+          {rows.length === 0 ? (
             <MobileEmptyState
               icon={Undo2}
               title="Возвратов не было"
               text="Если по номеру ответил не собственник, возврат отмечается в панели звонка и деньги вернутся на счёт."
             />
           ) : (
-          REFUNDS.map((row) => (
+            rows.map((row) => (
               <OperationRow
-                key={row.title}
+                key={row.id}
                 title={row.title}
                 what={row.what}
                 when={row.when}
                 amount={row.amount}
-                chip={<RefundChip tone={row.tone} label={row.status} />}
+                // Деньги вернулись в момент оформления: другого состояния
+                // у заявки сегодня не бывает, см. пояснение у `RefundChip`.
+                chip={<RefundChip tone="done" label="Возвращено" />}
               />
             ))
           )}
@@ -463,44 +510,64 @@ export function MobileBalanceRefundsPage() {
 
 /* ── МОБАЙЛ · Баланс, пополнения (`FA4Dt`) ────────────────────────────────── */
 
-const TOP_UPS = [
-  {
-    title: "Счёт № 1042",
-    what: "Счёт на юрлицо · оплачен",
-    when: "Сегодня, 09:12",
-    amount: "20 000 ₽",
-  },
-  {
-    title: "Счёт № 1035",
-    what: "Счёт на юрлицо · оплачен",
-    when: "14.07, 11:20",
-    amount: "20 000 ₽",
-  },
-  {
-    title: "Картой",
-    what: "Мгновенное зачисление · вы",
-    when: "28.06, 19:05",
-    amount: "5 000 ₽",
-  },
-  {
-    title: "Счёт № 1021",
-    what: "Счёт на юрлицо · оплачен",
-    when: "04.07, 15:40",
-    amount: "20 000 ₽",
-  },
-]
+/**
+ * Оплата картой — единственный способ без номера счёта.
+ *
+ * Способ записывается в журнал строкой в момент пополнения, и сравнение идёт
+ * с ней, а не с придуманным перечислением: список способов задаёт тот, кто
+ * пополняет, а не тот, кто показывает историю.
+ */
+function isCard(method: string) {
+  return method === "карта"
+}
+
+/**
+ * Номер счёта считается от порядка пополнений, а не хранится строкой.
+ *
+ * Пополнения лежат от новых к старым, а нумерация растёт со временем: у самого
+ * свежего счёта самый большой номер. Точно так же он считается в кабинете на
+ * большом экране — иначе бухгалтер получил бы два разных номера на один платёж.
+ */
+function invoiceNumber(total: number, index: number) {
+  return total - index
+}
+
+/**
+ * Строки пополнений собираются из журнала пополнений.
+ *
+ * Четыре строки, стоявшие здесь раньше, были образцом текста из макета: чужие
+ * номера счетов и чужие двадцать тысяч у агентства, которое ещё ничего не
+ * пополняло.
+ */
+function topUpRows(workspace: Workspace, now: number) {
+  const total = workspace.topUps.length
+
+  return workspace.topUps.map((item, index) => ({
+    id: item.id,
+    title: isCard(item.method) ? "Картой" : `Счёт № ${invoiceNumber(total, index)}`,
+    // Деньги зачисляются в момент пополнения, поэтому «оплачен» — не обещание,
+    // а факт: остаток наверху уже включает эту сумму.
+    what: isCard(item.method) ? "Мгновенное зачисление" : "Счёт на юрлицо · оплачен",
+    when: formatDay(item.at, now),
+    amount: `${groupDigits(item.amount)} ₽`,
+  }))
+}
 
 /**
  * МОБАЙЛ · Баланс, пополнения (`FA4Dt`).
  *
- * **Строка пополнения названа документом, а не суммой: «Счёт № 1042».** Агентство
+ * **Строка пополнения названа документом, а не суммой: «Счёт № 7».** Агентство
  * платит по счетам и сверяется с бухгалтерией по их номерам, поэтому номер стоит
  * там, где у списаний стоял адрес объекта, — на месте, которым строка себя называет.
  * Карта — исключение: у неё номера счёта нет, и она честно называется «Картой».
  */
 export function MobileBalanceTopUpsPage() {
-  // Свой кабинет начинается пустым: чужие строки сюда не переходят.
-  const own = useOwnAgency()
+  const workspace = useWorkspace()
+  const now = useNow()
+  const rows = topUpRows(workspace, now)
+
+  const monthly = workspace.topUps.filter((item) => item.at >= now - MONTH)
+  const added = monthly.reduce((sum, item) => sum + item.amount, 0)
 
   return (
     <MobileScreen
@@ -510,21 +577,27 @@ export function MobileBalanceTopUpsPage() {
     >
       <MoneyBody>
         <BalanceHero
-          value="65 000 ₽"
-          caption="пополнено за 30 дней · четыре платежа"
+          value={`${groupDigits(added)} ₽`}
+          caption={`пополнено за 30 дней · ${monthly.length} ${plural(monthly.length, "платёж", "платежа", "платежей")}`}
         />
         <TopUpButton />
         <BalanceSegments active="Пополнения" />
         <div className="flex w-full flex-col">
-          {own ? (
+          {rows.length === 0 ? (
             <MobileEmptyState
               icon={ArrowDownToLine}
               title="Пополнений не было"
               text="Первое пополнение появится здесь. Пока идёт пробный старт: пять раскрытий не стоят ничего."
             />
           ) : (
-          TOP_UPS.map((row) => (
-              <OperationRow key={row.title} {...row} />
+            rows.map((row) => (
+              <OperationRow
+                key={row.id}
+                title={row.title}
+                what={row.what}
+                when={row.when}
+                amount={row.amount}
+              />
             ))
           )}
         </div>
@@ -581,23 +654,27 @@ function DocumentTabs({ active }: { active: string }) {
   )
 }
 
-const DOCUMENTS = [
-  {
-    title: "Счёт на подписку",
-    meta: "01.08.2026 · доступ агентства за август",
-    amount: "3 000 ₽",
-  },
-  {
-    title: "Акт об оказанных услугах",
-    meta: "01.07.2026 · раскрытия за июнь",
-    amount: "35 422 ₽",
-  },
-  {
-    title: "Счёт на пополнение",
-    meta: "01.07.2026 · оплачен",
-    amount: "20 000 ₽",
-  },
-]
+/**
+ * Документы собираются из пополнений, а не лежат списком.
+ *
+ * Три строки, стоявшие здесь раньше, были образцом текста из макета: счёт на
+ * подписку за август, акт «на 35 422 ₽ за июнь» и чужие двадцать тысяч —
+ * у агентства, которое ещё ничего не пополняло.
+ *
+ * **Актов здесь пока нет, и выдумывать их нельзя.** Списание за доступ
+ * агентства в продукте ещё не происходит: первого числа никто ничего не
+ * снимает, значит и закрывать актом нечего.
+ */
+function documentRows(workspace: Workspace) {
+  const total = workspace.topUps.length
+
+  return workspace.topUps.map((item, index) => ({
+    id: item.id,
+    title: `Счёт № ${invoiceNumber(total, index)}`,
+    meta: `${formatMoment(item.at)} · оплачен и зачислен`,
+    amount: `${groupDigits(item.amount)} ₽`,
+  }))
+}
 
 /**
  * Карточка документа: 64 / r-10 / поля 14.
@@ -652,12 +729,15 @@ function DocumentRow({
  * поэтому раздел стоит внутри денег, а не в настройках, и снизу прямо написано,
  * когда документы приходят и на какое юрлицо выставляются.
  *
- * Тут же видно и вторую линию выручки: счёт на подписку (3 000 ₽ за доступ) стоит
- * рядом с актом за раскрытия (35 422 ₽ за июнь) — абонентская плата и поштучная
- * оплата в одном списке.
+ * Вторую линию выручки — счёт за доступ агентства и акт за раскрытия — здесь
+ * пока не видно: подписка ещё не списывается, и рисовать её документы значило бы
+ * обещать бухгалтеру бумаги, которых не существует.
  */
 export function MobileBalanceDocumentsPage() {
   const balance = useBalance()
+  const workspace = useWorkspace()
+  const legalEntity = useLegalEntity()
+  const documents = documentRows(workspace)
 
   return (
     <MobileScreen
@@ -673,13 +753,20 @@ export function MobileBalanceDocumentsPage() {
         <TopUpButton />
         <DocumentTabs active="Документы" />
         <div className="flex w-full flex-col gap-2">
-          {DOCUMENTS.map((doc) => (
-            <DocumentRow key={doc.title} {...doc} />
-          ))}
+          {documents.length === 0 ? (
+            <MobileEmptyState
+              icon={FileText}
+              title="Документов пока нет"
+              text="Счёт появляется здесь сразу после пополнения баланса. Любой из них можно скачать повторно, номер не меняется."
+            />
+          ) : (
+            documents.map((doc) => (
+              <DocumentRow key={doc.id} title={doc.title} meta={doc.meta} amount={doc.amount} />
+            ))
+          )}
         </div>
         <Typography variant="metaText" tone="dense">
-          Счёт и акт приходят первого числа. Документы выставляются на ООО «Невский
-          проспект», ИНН 7806154392.
+          {`Счёт и акт приходят первого числа. Документы выставляются на ${legalEntity}.`}
         </Typography>
       </MoneyBody>
     </MobileScreen>
@@ -801,6 +888,7 @@ function MethodChip({
  */
 export function MobileTopUpPage() {
   const balance = useBalance()
+  const legalEntity = useLegalEntity()
   const [amount, setAmount] = useState(20000)
   const [method, setMethod] = useState("Счёт юрлицу")
 
@@ -843,16 +931,15 @@ export function MobileTopUpPage() {
           </div>
         </div>
 
-        {/* Сводка пересчитывается вместе с выбранной суммой: строка, которая
-            обещает остаток, обязана обещать настоящий. Числа те же, что были
-            нарисованы, — при сумме 20 000 ₽ они совпадают дословно. */}
+        {/* Сводка пересчитывается вместе с выбранной суммой и настоящим
+            остатком: строка, которая обещает остаток, обязана обещать
+            настоящий. */}
         <div className="flex w-full shrink-0 flex-col gap-2 rounded-lg bg-warm p-3.5">
           <Typography variant="strongText" tone="default">
             {`Спишется ${groupDigits(amount)} ₽. Остаток станет ${groupDigits(balance + amount)} ₽, это ${disclosures(balance + amount)}.`}
           </Typography>
           <Typography variant="metaText" tone="dense">
-            Деньги не сгорают. Возврат за брак приходит на баланс, а не на карту.
-            Счёт и акт выставляются на ООО «Невский проспект» первого числа.
+            {`Деньги не сгорают. Возврат за брак приходит на баланс, а не на карту. Счёт и акт выставляются на ${legalEntity} первого числа.`}
           </Typography>
         </div>
 
@@ -959,16 +1046,45 @@ function SheetQuietPill({ to, children }: { to: string; children: ReactNode }) {
  * субъективная причина сделала бы это невозможным.
  *
  * Заголовок листа называет сумму — «Вернуть 199 ₽», — а не действие: человек
- * подтверждает не форму, а деньги.
+ * подтверждает не форму, а деньги. Сумма и объект берутся из журнала раскрытий:
+ * адрес «Ленская ул., 10» и время «сегодня в 14:12», стоявшие здесь раньше,
+ * были образцом текста из макета и не менялись никогда.
  */
 export function MobileRefundRequestPage() {
+  const workspace = useWorkspace()
+  const now = useNow()
+
+  /**
+   * Возврат оформляется за конкретное раскрытие, а не «вообще».
+   *
+   * Ссылки с адресом объекта у листа пока нет — в продукте на него ничто не
+   * ведёт, — поэтому берётся последнее оплаченное раскрытие без возврата:
+   * ровно то, за что человек только что заплатил. Пробные раскрытия не в счёт:
+   * они ничего не стоили, и возвращать за них нечего.
+   */
+  const target = workspace.disclosures.find((item) => !item.trial && !item.refunded)
+
   /** Выбранная причина. Одна из трёх, по умолчанию первая — так в файле. */
   const [reason, setReason] = useState(REASONS[0])
 
+  // Возвращать нечего — значит лист говорит об этом и предлагает единственный
+  // осмысленный выход. Показывать три причины возврата над несуществующим
+  // раскрытием было бы формой ради формы.
+  if (target === undefined) {
+    return (
+      <MobileSheet
+        title="Возвращать пока нечего"
+        text={`Возврат оформляется за оплаченное раскрытие: если по номеру ответил не собственник, ${DISCLOSURE_PRICE} ₽ вернутся на счёт агентства.`}
+      >
+        <SheetQuietPill to="/m/balance">К балансу</SheetQuietPill>
+      </MobileSheet>
+    )
+  }
+
   return (
     <MobileSheet
-      title="Вернуть 199 ₽"
-      text="Ленская ул., 10 · раскрыто сегодня в 14:12. Объективная причина закрывается сразу."
+      title={`Вернуть ${groupDigits(target.amount)} ₽`}
+      text={`${target.address} · раскрыто ${formatDay(target.at, now)}. Объективная причина закрывается сразу.`}
     >
       {/*
         Обе группы отданы одним ребёнком: контейнер листа держит зазор 8, а между

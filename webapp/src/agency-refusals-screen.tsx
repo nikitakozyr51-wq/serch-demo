@@ -2,12 +2,12 @@ import { Lock } from "lucide-react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { useOwnAgency } from "@/features/auth"
 import {
   csv,
   download,
   fileName,
   formatMoment,
+  lastCall,
   useNow,
   useWorkspace,
 } from "@/features/workspace"
@@ -16,8 +16,10 @@ import { AgencyChip, AgencyEmpty, AgencyShell, DataTable } from "@/features/agen
 /**
  * КАБИНЕТ · Агентство → Отказы (стоп-лист).
  *
- * Снято с `Y2Up0t`. Таблица на двенадцать номеров: кто отметил, когда,
- * когда номер будет удалён и в каком он состоянии.
+ * Снято с `Y2Up0t`. Таблица отметок «просил не звонить»: какой объект, кто
+ * отметил и когда. Строки берутся из работы агентства. Двенадцати номеров,
+ * которые стояли здесь константой, больше нет: это был образец текста из
+ * Pencil, чтобы кадр не был пустым, а показывали его живым людям как реестр.
  *
  * **Снять отказ из интерфейса нельзя ни агенту, ни руководителю.** Это главная
  * строка экрана, и она стоит плашкой над таблицей, а не в справке: иначе
@@ -25,10 +27,12 @@ import { AgencyChip, AgencyEmpty, AgencyShell, DataTable } from "@/features/agen
  * наказывается штрафом юрлицу от 300 тысяч до миллиона рублей, и отвечает
  * агентство, а не площадка.
  *
- * **Номера показаны частично скрытыми** — «+7 (9••) •••-••-67». Стоп-лист
- * существует, чтобы по этим номерам не звонили, поэтому он и не показывает,
- * куда звонить. Последние две цифры оставлены, чтобы человек мог сверить
- * свой случай, не получив самого номера.
+ * **Номера в таблице нет вовсе.** В макете он стоял частично скрытым —
+ * «+7 (9••) •••-••-67», — но продукт не хранит номер в стоп-листе: отметка
+ * ставится по объекту, и запрет живёт на объекте. Показать даже две последние
+ * цифры значило бы их придумать. Колонка осталась и отвечает «скрыт»: в
+ * реестре, который существует ради того, чтобы по этим номерам не звонили,
+ * это и есть правильный ответ.
  *
  * Внизу — то, что легко принять за отговорку, но это правда, которую честнее
  * назвать: государственный самозапрет на рекламные звонки частному сервису
@@ -36,74 +40,58 @@ import { AgencyChip, AgencyEmpty, AgencyShell, DataTable } from "@/features/agen
  * единственное, что мы можем сделать, и мы навсегда запрещаем себе эти номера.
  */
 
+/** Одна отметка «просил не звонить», собранная для показа. */
 type Refusal = {
-  id: string
-  phone: string
-  object: string
+  address: string
+  /** Имя сотрудника из журнала звонков. Прочерк — звонка в журнале нет. */
   who: string
-  date: string
-  removal: string
-  status: "hidden" | "removing" | "removed"
+  /** «24.07, 14:12» или прочерк. */
+  when: string
 }
-
-const REFUSALS: Refusal[] = [
-  { id: "67", phone: "+7 (9••) •••-••-67", object: "Салова ул., 68", who: "Собственник, serch.ru/stop", date: "24.07", removal: "3 рабочих дня, до 29.07", status: "hidden" },
-  { id: "12", phone: "+7 (9••) •••-••-12", object: "Тельмана ул., 41", who: "Титова Анна, по звонку", date: "23.07", removal: "30 дней, до 22.08", status: "hidden" },
-  { id: "45", phone: "+7 (9••) •••-••-45", object: "Софийская ул., 47", who: "Собственник, serch.ru/stop", date: "22.07", removal: "идёт удаление", status: "removing" },
-  { id: "03", phone: "+7 (9••) •••-••-03", object: "Тельмана ул., 41", who: "Лебедев Максим, по звонку", date: "21.07", removal: "30 дней, до 20.08", status: "hidden" },
-  { id: "88", phone: "+7 (9••) •••-••-88", object: "Костюшко ул., 9", who: "Собственник, serch.ru/stop", date: "19.07", removal: "исполнено 22.07", status: "removed" },
-  { id: "51", phone: "+7 (9••) •••-••-51", object: "Витебский пр., 99", who: "Собственник, serch.ru/stop", date: "18.07", removal: "исполнено 22.07", status: "removed" },
-  { id: "29", phone: "+7 (9••) •••-••-29", object: "Передовиков ул., 21", who: "Собственник, serch.ru/stop", date: "16.07", removal: "исполнено 21.07", status: "removed" },
-  { id: "74", phone: "+7 (9••) •••-••-74", object: "Димитрова ул., 16", who: "Гусев Пётр, по звонку", date: "15.07", removal: "30 дней, до 14.08", status: "hidden" },
-  { id: "16", phone: "+7 (9••) •••-••-16", object: "Бухарестская ул., 8", who: "Собственник, serch.ru/stop", date: "14.07", removal: "исполнено 17.07", status: "removed" },
-  { id: "92", phone: "+7 (9••) •••-••-92", object: "Кузнецовская ул., 12", who: "Титова Анна, по звонку", date: "12.07", removal: "30 дней, до 11.08", status: "hidden" },
-  { id: "38", phone: "+7 (9••) •••-••-38", object: "Пионерская ул., 4", who: "Собственник, serch.ru/stop", date: "11.07", removal: "исполнено 15.07", status: "removed" },
-  { id: "05", phone: "+7 (9••) •••-••-05", object: "Гражданский пр., 92", who: "Лебедев Максим, по звонку", date: "09.07", removal: "30 дней, до 08.08", status: "hidden" },
-]
 
 /**
- * Три состояния номера в реестре.
+ * Срок и состояние у всех строк одинаковые, и это не упрощение.
  *
- * «Скрыт» — номер уже не показывается, но лежит у нас; «На удалении» — идёт
- * процесс, поэтому он на тинте внимания; «Удалён» — всё закончилось, действий
- * больше нет, и чип белеет с рамкой.
+ * В макете состояний было три — «Скрыт», «На удалении», «Удалён», — но удалять
+ * номер из реестра продукт не умеет и не будет: снять отказ нельзя ни агенту,
+ * ни руководителю, об этом плашка над таблицей. Показывать состояния процесса,
+ * которого нет, значит обещать его.
  */
-const STATUS: Record<Refusal["status"], { label: string; tone: "calm" | "attention" | "done" }> = {
-  hidden: { label: "Скрыт", tone: "calm" },
-  removing: { label: "На удалении", tone: "attention" },
-  removed: { label: "Удалён", tone: "done" },
-}
+const NEVER_REMOVED = "не удаляется"
+const HIDDEN = "Скрыт"
 
 export function AgencyRefusalsPage() {
-  // Стоп-лист ведёт агентство: сюда попадают собственники, которые просили
-  // не звонить именно ему. Своё агентство ещё никому не звонило.
-  const own = useOwnAgency()
   const workspace = useWorkspace()
   const now = useNow()
 
   /**
    * Стоп-лист своего агентства: отметки «просил не звонить», поставленные
    * в панели звонка. Снять их нельзя, поэтому список только растёт.
+   *
+   * Кто отметил и когда — из журнала звонков по тому же объекту. Своих полей
+   * у стоп-листа нет, но отметка ставится в панели звонка и записывается
+   * вместе с исходом, а после неё объект уходит из очереди прозвона: значит
+   * последний звонок по этому адресу и есть тот самый разговор. Если записи
+   * нет, стоит прочерк — выдумать сотрудника и дату в реестре, который
+   * показывают проверяющему, нельзя.
    */
-  const refusals: Refusal[] = own
-    ? workspace.stopList.map((address, index) => ({
-        id: `stop-${index}`,
-        phone: "скрыт",
-        object: address,
-        who: "",
-        date: formatMoment(now),
-        removal: "навсегда",
-        status: "hidden" as Refusal["status"],
-      }))
-    : REFUSALS
+  const refusals: Refusal[] = workspace.stopList.map((address) => {
+    const call = lastCall(workspace, address)
+    const by = call?.by.trim() ?? ""
+    return {
+      address,
+      who: by === "" ? "—" : by,
+      when: call === undefined ? "—" : formatMoment(call.at),
+    }
+  })
 
   /** Выгрузка для проверяющего. Телефонов в файле нет: они и есть предмет отказа. */
   const exportStopList = () => {
     download(
       fileName("стоп-лист", now),
       csv(
-        ["Объект", "Кто отметил", "Дата", "Срок удаления", "Статус"],
-        refusals.map((row) => [row.object, row.who, row.date, row.removal, row.status]),
+        ["Объект", "Кто отметил", "Дата и время", "Срок удаления", "Статус"],
+        refusals.map((row) => [row.address, row.who, row.when, NEVER_REMOVED, HIDDEN]),
       ),
     )
   }
@@ -112,7 +100,13 @@ export function AgencyRefusalsPage() {
     <AgencyShell
       activeTab="refusals"
       title="Отказы"
-      note={own ? "стоп-лист агентства · пока пуст" : "стоп-лист агентства · 12 из 23 номеров"}
+      // Число в подписи считается по списку, а не вписано: «12 из 23 номеров»
+      // из макета не менялось никогда и первым выдавало, что экран нарисован.
+      note={
+        refusals.length === 0
+          ? "стоп-лист агентства · пока пуст"
+          : `стоп-лист агентства · записей: ${refusals.length}`
+      }
       action={
         // Выгрузка стоп-листа для проверяющего: файла в макете нет, и рисовать
         // его подтверждение было бы обещанием того, чего продукт пока не делает.
@@ -147,33 +141,31 @@ export function AgencyRefusalsPage() {
           { head: "НОМЕР", width: "w-col-168" },
           { head: "ОБЪЕКТ" },
           { head: "КТО ОТМЕТИЛ", width: "w-col-216" },
-          { head: "ДАТА", width: "w-col-96" },
+          // Дата со временем во всех таблицах кабинета — 144: отметка несёт
+          // настоящий момент звонка, а не день, вписанный в макете.
+          { head: "ДАТА И ВРЕМЯ", width: "w-col-144" },
           { head: "СРОК УДАЛЕНИЯ", width: "w-col-216" },
           { head: "СТАТУС", width: "w-col-120", numeric: true },
         ]}
         rows={refusals.map((row) => ({
-          id: row.id,
+          id: row.address,
           cells: [
-            <Typography key="phone" variant="numericDense" tone="default">
-              {row.phone}
+            <Typography key="phone" variant="denseText" tone="dense">
+              скрыт
             </Typography>,
             <Typography key="object" variant="denseText" tone="default">
-              {row.object}
+              {row.address}
             </Typography>,
             <Typography key="who" variant="denseText" tone="dense">
               {row.who}
             </Typography>,
-            <Typography key="date" variant="denseText" tone="secondary">
-              {row.date}
+            <Typography key="when" variant="denseText" tone="secondary">
+              {row.when}
             </Typography>,
             <Typography key="removal" variant="denseText" tone="default">
-              {row.removal}
+              {NEVER_REMOVED}
             </Typography>,
-            <AgencyChip
-              key="status"
-              label={STATUS[row.status].label}
-              tone={STATUS[row.status].tone}
-            />,
+            <AgencyChip key="status" label={HIDDEN} tone="calm" />,
           ],
         }))}
       />

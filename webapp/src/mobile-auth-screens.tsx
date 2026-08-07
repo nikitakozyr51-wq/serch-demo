@@ -1,10 +1,10 @@
 import { Link, useNavigate } from "@tanstack/react-router"
-import { useId } from "react"
+import { useId, useState } from "react"
 import type { ComponentPropsWithoutRef, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { signIn, signUp } from "@/features/auth"
+import { hasAccounts, signIn, signUp } from "@/features/auth"
 import { MobileAuthLogo, PhoneFrame } from "@/features/cabinet"
 import { cn } from "@/lib/utils"
 
@@ -23,9 +23,18 @@ import { cn } from "@/lib/utils"
  * данных и про стоп-лист, и оно относится ко всему экрану сразу.
  */
 
-/** Значение поля показано столько раз, сколько точек нарисовано в файле. */
-const MASK_10 = "•".repeat(10)
-const MASK_12 = "•".repeat(12)
+/**
+ * Подсказка в пустом поле почты.
+ *
+ * В файле здесь стоял конкретный адрес сотрудника выдуманного агентства, и
+ * в коде он превратился в предзаполненное значение: человек открывал вход и
+ * видел чужую почту как свою. Образец из макета — не данные; подсказка
+ * называет РОД адреса, а не адрес.
+ */
+const EMAIL_HINT = "почта, на которую заводили агентство"
+
+/** Какое поле подсвечено ошибкой и что в ней написано. */
+type FieldError = { field: "email" | "password"; text: string }
 
 /**
  * Каркас экрана входа: кадр телефона на десктопном стенде, логотип, тело.
@@ -196,32 +205,49 @@ function AuthLegal({ children }: { children: ReactNode }) {
 }
 
 /**
- * МОБАЙЛ · Вход (`XNGWj`).
+ * Форма входа: почта, пароль, кнопка.
  *
- * Вход в кабинет агентства, а не регистрация: сюда приходят по приглашению,
- * и подзаголовок сразу отвечает на единственный вопрос человека — какой
- * из своих адресов вводить.
+ * Одна на два адреса — `/m/login` и `/m/login/error`. В файле это два кадра,
+ * но состояние продукта у них одно: вторая дверь открывается сразу с ошибкой,
+ * чтобы её было с чем сверять. Держать вторую копию формы значило бы держать
+ * два входа, расходящихся с первой же правки.
  *
- * «Восстановить пароль» стоит под полем пароля, а не в подвале: искать
- * его начинают ровно в тот момент, когда пароль не вспомнился.
+ * **Пароль не проверяется, а почта проверяется по-настоящему.** Сервера
+ * за кабинетом нет, и проверять пароль в браузере значило бы выдумывать
+ * безопасность, которой нет. Зато агентство ищется по почте среди заведённых
+ * на этом телефоне — не нашлось, вход честно говорит об этом и показывает
+ * дорогу к регистрации, вместо того чтобы пустить в чужой кабинет.
+ *
+ * Поля пустые. Раньше в них стояли почта и пароль из макета: человек видел
+ * чужой адрес как свой, а нажатие «Войти» пускало кого угодно куда угодно.
  */
-export function MobileLoginPage() {
+function MobileLoginForm({ initialError }: { initialError?: FieldError }) {
   const navigate = useNavigate()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState<FieldError | null>(initialError ?? null)
 
-  /**
-   * Вход не проверяет пароль: за кабинетом нет сервера, и проверять его
-   * в браузере значило бы выдумывать безопасность, которой нет.
-   */
   const enter = () => {
-    signIn()
-    void navigate({ to: "/m/today" })
+    if (signIn(email)) {
+      void navigate({ to: "/m/today" })
+      return
+    }
+
+    // Формулировка отвечает на вопрос «что мне теперь делать», а не сообщает
+    // об отказе: человек на этом экране не отлаживает продукт, он хочет войти.
+    setError({
+      field: "email",
+      text: hasAccounts()
+        ? "Агентства с такой почтой нет. Проверьте адрес или создайте агентство."
+        : "На этом телефоне ещё не заводили агентство. Создайте — это займёт минуту.",
+    })
   }
 
   return (
-    <MobileAuthFrame>
+    <>
       <AuthHeading
         title="Вход в кабинет"
-        text="Тот же адрес, на который пришло приглашение от агентства."
+        text="Рабочая почта агентства и пароль, который вы придумали при регистрации."
       />
 
       <div className="flex w-full flex-col gap-4">
@@ -229,14 +255,27 @@ export function MobileLoginPage() {
           label="ПОЧТА"
           type="email"
           autoComplete="email"
-          defaultValue="i.smirnova@nevsky.ru"
+          placeholder={EMAIL_HINT}
+          value={email}
+          onChange={(event) => {
+            setEmail(event.target.value)
+            setError(null)
+          }}
+          error={error?.field === "email" ? error.text : undefined}
         />
+        {/* Порядок узлов взят из файла: ссылка стоит между полем и ошибкой,
+            а не после неё. */}
         <AuthField
           label="ПАРОЛЬ"
           type="password"
           autoComplete="current-password"
-          defaultValue={MASK_10}
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value)
+            setError(null)
+          }}
           link={<AuthLink to="/m/forgot">Восстановить пароль</AuthLink>}
+          error={error?.field === "password" ? error.text : undefined}
         />
       </div>
 
@@ -244,12 +283,41 @@ export function MobileLoginPage() {
         Войти
       </Button>
 
+      {/* Дорога к регистрации появляется ровно там, где человек в неё упёрся.
+          В файле её на этом кадре нет, но там ошибка и не звала создавать
+          агентство: сказать «создайте» и не дать перехода — тупик. */}
+      {error?.field === "email" ? (
+        <div className="flex w-full items-center gap-1.5">
+          <Typography variant="denseText" tone="secondary">
+            Ещё нет агентства?
+          </Typography>
+          <AuthLink to="/m/register">Создать</AuthLink>
+        </div>
+      ) : null}
+
       <AuthSpacer />
 
       <AuthLegal>
         Оператор персональных данных. Стоп-лист исполняется у всех сотрудников
         сразу.
       </AuthLegal>
+    </>
+  )
+}
+
+/**
+ * МОБАЙЛ · Вход (`XNGWj`).
+ *
+ * Вход в кабинет агентства, а не регистрация. Подзаголовок отвечает на
+ * единственный вопрос человека — какой из своих адресов вводить.
+ *
+ * «Восстановить пароль» стоит под полем пароля, а не в подвале: искать
+ * его начинают ровно в тот момент, когда пароль не вспомнился.
+ */
+export function MobileLoginPage() {
+  return (
+    <MobileAuthFrame>
+      <MobileLoginForm />
     </MobileAuthFrame>
   )
 }
@@ -257,7 +325,8 @@ export function MobileLoginPage() {
 /**
  * МОБАЙЛ · Вход, ошибка (`Qra5j`).
  *
- * Отдельный кадр, а не состояние первого: в файле он нарисован целиком.
+ * Тот же вход, открытый сразу в состоянии ошибки: в файле он нарисован
+ * отдельным кадром, и по этому адресу его сверяют с макетом.
  *
  * **Ошибка считает попытки вслух.** «Осталось три попытки, потом вход
  * закроется на пятнадцать минут» — это не вежливость, а предупреждение:
@@ -269,49 +338,14 @@ export function MobileLoginPage() {
  * не выдаёт, какое из двух значений неверно.
  */
 export function MobileLoginErrorPage() {
-  const navigate = useNavigate()
-
-  const enter = () => {
-    signIn()
-    void navigate({ to: "/m/today" })
-  }
-
   return (
     <MobileAuthFrame>
-      <AuthHeading
-        title="Вход в кабинет"
-        text="Тот же адрес, на который пришло приглашение от агентства."
+      <MobileLoginForm
+        initialError={{
+          field: "password",
+          text: "Почта или пароль не подошли. Осталось три попытки, потом вход закроется на пятнадцать минут.",
+        }}
       />
-
-      <div className="flex w-full flex-col gap-4">
-        <AuthField
-          label="ПОЧТА"
-          type="email"
-          autoComplete="email"
-          defaultValue="i.smirnova@nevsky.ru"
-        />
-        {/* Порядок узлов взят из файла: ссылка стоит между полем и ошибкой,
-            а не после неё. */}
-        <AuthField
-          label="ПАРОЛЬ"
-          type="password"
-          autoComplete="current-password"
-          defaultValue={MASK_10}
-          link={<AuthLink to="/m/forgot">Восстановить пароль</AuthLink>}
-          error="Почта или пароль не подошли. Осталось три попытки, потом вход закроется на пятнадцать минут."
-        />
-      </div>
-
-      <Button variant="primary" size="lg" block onClick={enter}>
-        Войти
-      </Button>
-
-      <AuthSpacer />
-
-      <AuthLegal>
-        Оператор персональных данных. Стоп-лист исполняется у всех сотрудников
-        сразу.
-      </AuthLegal>
     </MobileAuthFrame>
   )
 }
@@ -333,14 +367,32 @@ export function MobileLoginErrorPage() {
  */
 export function MobileRegisterPage() {
   const navigate = useNavigate()
+  const [agency, setAgency] = useState("")
+  const [inn, setInn] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+
+  /**
+   * Кнопка ждёт название, почту и пароль.
+   *
+   * Без этого агентство завелось бы под подставленным именем и почтой,
+   * а войти по своей человек потом уже не смог бы: вход ищет агентство
+   * ровно по тому адресу, под которым его создали.
+   */
+  const ready = agency.trim() !== "" && email.trim() !== "" && password !== ""
 
   /**
    * Создание агентства ведёт на первый вход, а не в рабочий кабинет:
    * у нового агентства пустые списки и пять пробных раскрытий, и показывать
    * ему чужую заполненную выдачу — врать в первую же минуту.
+   *
+   * Имя человека здесь не спрашивают — в кадре четыре поля, и все про
+   * агентство. Руководитель назовёт себя в кабинете, а до тех пор в шапке
+   * стоит должность, а не выдуманное имя.
    */
   const create = () => {
-    signUp({ name: "", email: "", agency: "" })
+    if (!ready) return
+    signUp({ name: "", email, agency })
     void navigate({ to: "/m/first-run/agency" })
   }
 
@@ -351,37 +403,43 @@ export function MobileRegisterPage() {
         text="Пять минут, и вы увидите выдачу по своему району. Без звонка менеджера."
       />
 
+      {/* Все поля пустые. Раньше три из четырёх были заполнены названием,
+          ИНН и почтой агентства из макета — человек нажимал «Создать» и
+          заводил не своё агентство, а чужое. */}
       <div className="flex w-full flex-col gap-4">
         <AuthField
           label="НАЗВАНИЕ АГЕНТСТВА"
           type="text"
           autoComplete="organization"
-          defaultValue="Агентство «Невский проспект»"
+          value={agency}
+          onChange={(event) => setAgency(event.target.value)}
         />
         <AuthField
           label="ИНН"
           type="text"
           inputMode="numeric"
-          defaultValue="7806154392"
+          value={inn}
+          onChange={(event) => setInn(event.target.value)}
           hint="проверим в ЕГРЮЛ автоматически"
         />
         <AuthField
           label="РАБОЧАЯ ПОЧТА"
           type="email"
           autoComplete="email"
-          defaultValue="i.smirnova@nevsky.ru"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
         />
-        {/* Единственное пустое поле экрана: пароль придумывают здесь,
-            остальное уже известно из приглашения. */}
         <AuthField
           label="ПАРОЛЬ"
           type="password"
           autoComplete="new-password"
           placeholder="Придумайте пароль"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
         />
       </div>
 
-      <Button variant="primary" size="lg" block onClick={create}>
+      <Button variant="primary" size="lg" block onClick={create} disabled={!ready}>
         Создать агентство
       </Button>
 
@@ -407,9 +465,19 @@ export function MobileRegisterPage() {
  */
 export function MobileForgotPage() {
   const navigate = useNavigate()
+  const [email, setEmail] = useState("")
 
-  /** Ссылка ушла — человек попадает на экран «проверьте почту». */
-  const send = () => void navigate({ to: "/m/check-mail" })
+  /**
+   * Ссылка ушла — человек попадает на экран «проверьте почту».
+   *
+   * Пустой адрес кнопку не пускает: экран дальше говорит «мы отправили письмо
+   * на почту, которую вы указали», и открывать его, когда не указали ничего,
+   * значит соврать в одном предложении дважды.
+   */
+  const send = () => {
+    if (email.trim() === "") return
+    void navigate({ to: "/m/check-mail" })
+  }
 
   return (
     <MobileAuthFrame>
@@ -423,11 +491,19 @@ export function MobileForgotPage() {
           label="ПОЧТА"
           type="email"
           autoComplete="email"
-          defaultValue="i.smirnova@nevsky.ru"
+          placeholder={EMAIL_HINT}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
         />
       </div>
 
-      <Button variant="primary" size="lg" block onClick={send}>
+      <Button
+        variant="primary"
+        size="lg"
+        block
+        onClick={send}
+        disabled={email.trim() === ""}
+      >
         Прислать ссылку
       </Button>
 
@@ -457,11 +533,24 @@ export function MobileForgotPage() {
  */
 export function MobileNewPasswordPage() {
   const navigate = useNavigate()
+  const [password, setPassword] = useState("")
+  const [repeat, setRepeat] = useState("")
 
-  /** Новый пароль сохранён — человек сразу внутри, повторный вход не нужен. */
+  /** Ровно то, что обещают подсказки под полями: десять знаков и совпадение. */
+  const ready = password.length >= 10 && password === repeat
+
+  /**
+   * После смены пароля человек попадает на вход, а не сразу в кабинет.
+   *
+   * Раньше отсюда вызывался вход без единого аргумента, и это работать
+   * перестало: вход ищет агентство ПО ПОЧТЕ, а экрана нового пароля почта
+   * не знает — сюда приходят по ссылке из письма. Открыть кабинет было
+   * нечем, и охрана всё равно возвращала человека на вход, просто через
+   * мигание пустым экраном.
+   */
   const save = () => {
-    signIn()
-    void navigate({ to: "/m/today" })
+    if (!ready) return
+    void navigate({ to: "/m/login" })
   }
 
   return (
@@ -472,23 +561,28 @@ export function MobileNewPasswordPage() {
       />
 
       <div className="flex w-full flex-col gap-4">
+        {/* Поля пустые: точки, нарисованные в файле, показывали «пароль уже
+            введён» — но вводит его здесь человек, и предзаполнять поле
+            десятью точками значит подсовывать ему чужой набор знаков. */}
         <AuthField
           label="НОВЫЙ ПАРОЛЬ"
           type="password"
           autoComplete="new-password"
-          defaultValue={MASK_12}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
           hint="не короче десяти знаков"
         />
         <AuthField
           label="ПОВТОРИТЕ ПАРОЛЬ"
           type="password"
           autoComplete="new-password"
-          defaultValue={MASK_12}
+          value={repeat}
+          onChange={(event) => setRepeat(event.target.value)}
           hint="должен совпадать с новым"
         />
       </div>
 
-      <Button variant="primary" size="lg" block onClick={save}>
+      <Button variant="primary" size="lg" block onClick={save} disabled={!ready}>
         Сохранить и войти
       </Button>
 

@@ -3,8 +3,15 @@ import { useState } from "react"
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
-import { useOwnAgency, useSession } from "@/features/auth"
-import { accountingDocument, download, fileName, useNow } from "@/features/workspace"
+import { useSession } from "@/features/auth"
+import {
+  accountingDocument,
+  download,
+  fileName,
+  formatDay,
+  useNow,
+  useWorkspace,
+} from "@/features/workspace"
 import { AgencyShell, FormField, SettingRow } from "@/features/agency"
 
 /**
@@ -21,6 +28,15 @@ import { AgencyShell, FormField, SettingRow } from "@/features/agency"
  * **Удаление агентства сказано полностью, включая неудобное:** данные удаляются
  * за три рабочих дня, а журнал доступа хранится год по закону. Не написать
  * вторую половину было бы обманом — и всплыла бы она в худший момент.
+ *
+ * **Ни одного чужого реквизита на экране больше нет.** Название, ответственный
+ * и дата подписи согласия берутся из сеанса и из списка сотрудников. Раньше
+ * здесь стояли образцы из макета — «Невский проспект», ИНН 7806154392, адрес
+ * на Свердловской набережной, Смирнова Ирина Владимировна, — и живой человек
+ * читал их как реквизиты своего агентства. Незаполненное поле с подсказкой
+ * «что сюда вписать» честнее правдоподобной подстановки: по чужому ИНН
+ * выставят счёт, а по чужой фамилии отправят запрос субъекта персональных
+ * данных.
  */
 
 /**
@@ -49,12 +65,32 @@ function RuleChips({ options, initial }: { options: string[]; initial: string })
 
 export function AgencySettingsPage() {
   const session = useSession()
-  // Через `useOwnAgency`, а не по полю сеанса: только эта функция знает про
-  // стенд сверки, который обязан показывать замеренные данные независимо от
-  // того, кто вошёл. Прямая проверка поля оставляла стенд пустым.
-  const own = useOwnAgency()
+  const workspace = useWorkspace()
   const now = useNow()
-  const agencyName = own ? (session?.agency ?? "") : "Невский проспект"
+  // Экран за охраной, без сеанса сюда не попасть. Пустая строка — не «на всякий
+  // случай», а единственный запасной вариант: подставить сюда чужое название
+  // значило бы вернуть ту самую подмену, из-за которой этот экран и правили.
+  const agencyName = session?.agency ?? ""
+
+  // Пустые кавычки «» в подписи читаются как поломка вёрстки, а не как
+  // отсутствие названия. Тогда подпись остаётся без имени агентства.
+  const shellNote =
+    agencyName === ""
+      ? "доступ 3 000 ₽ в месяц · до двадцати сотрудников"
+      : `«${agencyName}» · доступ 3 000 ₽ в месяц · до двадцати сотрудников`
+
+  /**
+   * Согласие подписывают в момент создания агентства, а создаёт его тот, кто
+   * зарегистрировался. Его запись в списке сотрудников — единственная честная
+   * дата подписи. Раньше здесь стояло «12.06.2026» из макета: дата-ответ
+   * проверяющему, которую никто не проверял и которая совпадала с реальностью
+   * только у того, кто зарегистрировался в этот день.
+   */
+  const signedAt = workspace.people.find((person) => person.role === "owner")?.addedAt
+  const consentNote =
+    signedAt === undefined
+      ? "подписано при создании агентства"
+      : `подписано ${formatDay(signedAt, now)} при создании агентства`
 
   /**
    * Договор и согласие отдаются текстом.
@@ -104,11 +140,7 @@ export function AgencySettingsPage() {
     <AgencyShell
       activeTab="none"
       title="Настройки агентства"
-      note={
-        own
-          ? `«${session?.agency ?? ""}» · доступ 3 000 ₽ в месяц · до двадцати сотрудников`
-          : "«Невский проспект» · доступ 3 000 ₽ в месяц · до двадцати сотрудников"
-      }
+      note={shellNote}
       action={
         // Договор с агентством отдаётся файлом, а экрана документа в макете нет.
         <Button variant="quiet" size="sm" onClick={downloadContract}>
@@ -121,29 +153,19 @@ export function AgencySettingsPage() {
           <Typography variant="columnHeader" tone="dense">
             РЕКВИЗИТЫ
           </Typography>
-          {/* Реквизиты своего агентства ещё никто не вводил: при регистрации
+          {/* Реквизиты агентства ещё никто не вводил: при регистрации
               спрашивают только название. Пустое поле с подсказкой «заполните»
               честнее чужого ИНН, подставленного за человека. */}
-          <FormField
-            label="НАЗВАНИЕ АГЕНТСТВА"
-            value={own ? session?.agency ?? "" : "Невский проспект"}
-          />
-          <FormField
-            label="ИНН"
-            value={own ? "" : "7806154392"}
-            hint={own ? "нужен для договора и счетов" : "проверен в ЕГРЮЛ 12.06.2026"}
-          />
+          <FormField label="НАЗВАНИЕ АГЕНТСТВА" value={agencyName} />
+          <FormField label="ИНН" value="" hint="нужен для договора и счетов" />
           <FormField
             label="ЮРИДИЧЕСКИЙ АДРЕС"
-            value={
-              own ? "" : "Санкт-Петербург, Свердловская наб., 44, литера А, помещение 3-Н"
-            }
-            hint={own ? "подставится из ЕГРЮЛ после проверки ИНН" : "совпадает с данными ЕГРЮЛ"}
-            locked={!own}
+            value=""
+            hint="подставится из ЕГРЮЛ после проверки ИНН"
           />
           <div className="flex">
-            {/* Реквизиты сверены с ЕГРЮЛ, и правка их — отдельная форма
-                с повторной проверкой ИНН. В макете её нет. */}
+            {/* Правка реквизитов — отдельная форма с проверкой ИНН по ЕГРЮЛ.
+                В макете её нет, поэтому действие только названо. */}
             <Button variant="quiet" size="md" data-action="правка реквизитов агентства">
               Изменить реквизиты
             </Button>
@@ -155,8 +177,13 @@ export function AgencySettingsPage() {
             ОТВЕТСТВЕННЫЙ ЗА ДАННЫЕ
           </Typography>
           <div className="flex w-full flex-col gap-0.5">
+            {/* Ответственный — тот, кто завёл агентство: другого источника нет,
+                пока роль никому не передавали. Прочерк вместо имени, если
+                сеанса нет: «роль некому нести» обязано быть видно, а чужая
+                фамилия под словами «отвечает на запросы субъектов» — это
+                подстава конкретного человека, а не заполнение кадра. */}
             <Typography variant="numericDense" tone="default">
-              {own ? session?.name ?? "" : "Смирнова Ирина Владимировна"}
+              {session?.name ?? "—"}
             </Typography>
             <Typography variant="metaText" tone="dense">
               руководитель · подписывает согласия и отвечает на запросы субъектов
@@ -233,7 +260,7 @@ export function AgencySettingsPage() {
           />
           <SettingRow
             title="Согласие на обработку персональных данных"
-            note="подписано 12.06.2026 при создании агентства"
+            note={consentNote}
             control={
               <Button variant="quiet" size="sm" onClick={downloadConsent}>
                 Скачать копию

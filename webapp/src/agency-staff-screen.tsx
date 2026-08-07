@@ -5,129 +5,108 @@ import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { useSession } from "@/features/auth"
-import { AgencyChip, AgencyShell, DataTable, FormField } from "@/features/agency"
-import { OwnerAvatar } from "@/features/listings"
+import { AgencyChip, AgencyEmpty, AgencyShell, DataTable, FormField } from "@/features/agency"
+import { OwnerAvatar, groupDigits, plural } from "@/features/listings"
+import { formatMoment, paidDisclosures, useWorkspace } from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
 /**
  * КАБИНЕТ · Агентство → Сотрудники.
  *
- * Снято с `u7anli`. Пять человек, одно приглашение.
+ * Снято с `u7anli`.
+ *
+ * **В таблице только те, кто действительно работает в агентстве.** Раньше
+ * здесь стояли пятеро выдуманных сотрудников с чужими именами, почтами и
+ * суммами — образец текста из макета, попавший в продукт как данные. Витрины
+ * «Невский проспект» больше нет: агентство состоит из того, кто его завёл, и
+ * тех, кого он позвал, а раскрытия и деньги считаются по журналу работы.
  *
  * **Ролей ровно две: руководитель и агент.** «Стажёр» — не роль, а поле
  * «дневной лимит раскрытий» в карточке сотрудника. Это не мелочь: третья роль
  * потянула бы за собой отдельную матрицу прав, а лимит решает ту же задачу
  * одним числом, которое видно прямо в таблице.
  *
- * **Лимит покрашен по смыслу.** «без лимита» и «25» идут приглушённым: это
- * норма. «5» — графитом: у человека стоит ограничение, и руководитель должен
+ * **Лимит покрашен по смыслу.** «без лимита» идёт приглушённым: это норма.
+ * Число — графитом: у человека стоит ограничение, и руководитель должен
  * видеть это, не открывая карточку.
  *
  * **Отключённый сотрудник теряет доступ, но не уносит работу.** Раскрытые им
  * контакты, статусы и история касаний остаются агентству — за них заплачено.
  */
 
+/** Строка таблицы: то, что агентство действительно знает о человеке. */
 type Staff = {
   id: string
   initials: string
   name: string
-  contacts: string
-  role: string
-  limit: string
-  /** Лимит ограничен: значение графитом, а не приглушённым. */
-  limited?: boolean
-  disclosed: string
-  spent: string
-  lastSeen: string
-  /** Давно не заходил: статус на тинте внимания. */
-  stale?: boolean
+  email: string
+  /** Руководитель или агент — третьей роли в продукте нет. */
+  owner: boolean
+  /** Дневной лимит раскрытий. `null` — без лимита. */
+  limit: number | null
+  /** Раскрыто контактов — посчитано по журналу, а не вписано. */
+  disclosed: number
+  /** Потрачено рублей — тоже посчитано. */
+  spent: number
+  /** Когда человек появился в агентстве. 0 — неизвестно. */
+  addedAt: number
+  /** Это тот, кто смотрит кабинет сейчас. */
+  self: boolean
 }
-
-const STAFF: Staff[] = [
-  {
-    id: "smirnova",
-    initials: "ИС",
-    name: "Смирнова Ирина",
-    contacts: "i.smirnova@nevsky.ru · +7 900 000-57-66",
-    role: "Руководитель",
-    limit: "без лимита",
-    disclosed: "64",
-    spent: "12 736 ₽",
-    lastSeen: "сегодня, 09:12",
-  },
-  {
-    id: "lebedev",
-    initials: "МЛ",
-    name: "Лебедев Максим",
-    contacts: "m.lebedev@nevsky.ru · +7 900 000-48-13",
-    role: "Агент",
-    limit: "25",
-    disclosed: "52",
-    spent: "10 348 ₽",
-    lastSeen: "сегодня, 08:47",
-  },
-  {
-    id: "titova",
-    initials: "АТ",
-    name: "Титова Анна",
-    contacts: "a.titova@nevsky.ru · +7 900 000-95-21",
-    role: "Агент",
-    limit: "25",
-    disclosed: "38",
-    spent: "7 562 ₽",
-    lastSeen: "вчера, 18:20",
-  },
-  {
-    id: "gusev",
-    initials: "ПГ",
-    name: "Гусев Пётр",
-    contacts: "p.gusev@nevsky.ru · +7 900 000-71-40",
-    role: "Агент",
-    limit: "5",
-    limited: true,
-    disclosed: "18",
-    spent: "3 582 ₽",
-    lastSeen: "сегодня, 10:04",
-  },
-  {
-    id: "korolev",
-    initials: "ДК",
-    name: "Королёв Дмитрий",
-    contacts: "d.korolev@nevsky.ru · +7 900 000-23-30",
-    role: "Агент",
-    limit: "5",
-    limited: true,
-    disclosed: "6",
-    spent: "1 194 ₽",
-    lastSeen: "23.07, 12:40",
-    stale: true,
-  },
-]
 
 /**
  * Кто в агентстве на самом деле.
  *
- * В своём агентстве — один человек: тот, кто его завёл. Ни раскрытий, ни
- * потраченных денег, ни «последнего входа вчера»: агентству пять минут от
- * роду. Чужие пятеро остаются во входе в «Невский проспект» — там они и
- * нужны, чтобы показать заполненную таблицу.
+ * Люди лежат в журнале работы. Раскрытия и потраченное в карточке человека
+ * НЕ хранятся, а считаются по его раскрытиям: вписанное число разъехалось бы
+ * с журналом на первом же возврате.
+ *
+ * Запасной источник — сеанс. Он нужен агентствам, заведённым до появления
+ * журнала: людей в нём нет, а человек за экраном есть, и таблица без него
+ * соврала бы, что в агентстве ноль сотрудников. Чего сеанс не знает — даты
+ * появления, — того и не показывает; лимита у заведшего агентство нет по
+ * правилу продукта, а не по умолчанию.
  */
 function useStaff(): Staff[] {
   const session = useSession()
+  const workspace = useWorkspace()
 
-  if (session?.kind !== "own") return STAFF
+  const tally = (name: string) => ({
+    disclosed: workspace.disclosures.filter((item) => item.by === name).length,
+    // «Потрачено» считается тем же правилом, что и везде в кабинете: пробные
+    // и возвращённые раскрытия деньгами не были.
+    spent: paidDisclosures(workspace)
+      .filter((item) => item.by === name)
+      .reduce((sum, item) => sum + item.amount, 0),
+  })
+
+  if (workspace.people.length > 0) {
+    return workspace.people.map((person) => ({
+      id: person.id,
+      initials: person.initials,
+      name: person.name,
+      email: person.email,
+      owner: person.role === "owner",
+      limit: person.limit,
+      addedAt: person.addedAt,
+      self: person.email === session?.email,
+      ...tally(person.name),
+    }))
+  }
+
+  if (session === null) return []
 
   return [
     {
       id: "owner",
       initials: session.initials,
       name: session.name,
-      contacts: session.email,
-      role: "Руководитель",
-      limit: "без лимита",
-      disclosed: "0",
-      spent: "0 ₽",
-      lastSeen: "сейчас",
+      email: session.email,
+      owner: session.role === "owner",
+      limit: null,
+      addedAt: 0,
+      self: true,
+      ...tally(session.name),
     },
   ]
 }
@@ -139,11 +118,11 @@ export function AgencyStaffPage() {
     <AgencyShell
       activeTab="staff"
       title="Сотрудники"
-      note={
-        staff.length === 1
-          ? "один человек · приглашений нет"
-          : "пять человек · одно приглашение"
-      }
+      // Число считается по таблице, а не пишется рядом с ней: подпись «пять
+      // человек» над одной строкой — это ложь на экране, где руководитель
+      // проверяет, кто у него работает. Приглашений нет ни одного, потому что
+      // приглашать пока нечем.
+      note={`${staff.length} ${plural(staff.length, "человек", "человека", "человек")} · приглашений нет`}
       action={
         // Формы приглашения на большом экране в макете нет — она нарисована
         // только для телефона. Рисовать её здесь по памяти значило бы
@@ -153,60 +132,74 @@ export function AgencyStaffPage() {
         </Button>
       }
     >
-      <DataTable
-        columns={[
-          { head: "СОТРУДНИК" },
-          { head: "РОЛЬ", width: "w-col-120" },
-          { head: "ЛИМИТ В ДЕНЬ", width: "w-col-120", numeric: true },
-          { head: "РАСКРЫТО", width: "w-col-96", numeric: true },
-          { head: "ПОТРАЧЕНО", width: "w-col-120", numeric: true },
-          { head: "ПОСЛЕДНИЙ ВХОД", width: "w-col-144", numeric: true },
-          { head: "СТАТУС", width: "w-col-120", numeric: true },
-        ]}
-        rows={staff.map((person) => ({
-          id: person.id,
-          cells: [
-            // Карточка сотрудника открывается отсюда — так сказано в её
-            // описании. Ссылка, а не кнопка: руководитель держит несколько
-            // человек открытыми в соседних вкладках, сравнивая лимиты.
-            <Link
-              key="who"
-              to="/agency/staff/person"
-              className="flex min-w-0 cursor-pointer items-center gap-2.5 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-            >
-              <OwnerAvatar initials={person.initials} />
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <Typography variant="numericDense" tone="default">
-                  {person.name}
-                </Typography>
-                <Typography variant="metaText" tone="dense">
-                  {person.contacts}
-                </Typography>
-              </div>
-            </Link>,
-            <Typography key="role" variant="denseText" tone="default">
-              {person.role}
-            </Typography>,
-            <Typography
-              key="limit"
-              variant="denseText"
-              tone={person.limited ? "default" : "dense"}
-            >
-              {person.limit}
-            </Typography>,
-            <Typography key="disclosed" variant="denseText" tone="default">
-              {person.disclosed}
-            </Typography>,
-            <Typography key="spent" variant="numericDense" tone="default">
-              {person.spent}
-            </Typography>,
-            <Typography key="seen" variant="denseText" tone="secondary">
-              {person.lastSeen}
-            </Typography>,
-            <AgencyChip key="status" label="Активен" tone={person.stale ? "attention" : "calm"} />,
-          ],
-        }))}
-      />
+      {staff.length === 0 ? (
+        <AgencyEmpty
+          title="В агентстве пока никого"
+          text="Здесь появятся люди агентства: тот, кто его завёл, и агенты, которых он позвал. Рядом с каждым — дневной лимит раскрытий, сколько контактов он открыл и на какую сумму."
+          note="Раскрытия и деньги считаются по журналу работы: вписать их руками нельзя ни руководителю, ни нам."
+        />
+      ) : (
+        <DataTable
+          columns={[
+            { head: "СОТРУДНИК" },
+            { head: "РОЛЬ", width: "w-col-120" },
+            { head: "ЛИМИТ В ДЕНЬ", width: "w-col-120", numeric: true },
+            { head: "РАСКРЫТО", width: "w-col-96", numeric: true },
+            { head: "ПОТРАЧЕНО", width: "w-col-120", numeric: true },
+            { head: "ПОСЛЕДНИЙ ВХОД", width: "w-col-144", numeric: true },
+            { head: "СТАТУС", width: "w-col-120", numeric: true },
+          ]}
+          rows={staff.map((person) => ({
+            id: person.id,
+            cells: [
+              // Карточка сотрудника открывается отсюда — так сказано в её
+              // описании. Ссылка, а не кнопка: руководитель держит несколько
+              // человек открытыми в соседних вкладках, сравнивая лимиты.
+              <Link
+                key="who"
+                to="/agency/staff/person"
+                className="flex min-w-0 cursor-pointer items-center gap-2.5 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+              >
+                <OwnerAvatar initials={person.initials} />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <Typography variant="numericDense" tone="default">
+                    {person.name}
+                  </Typography>
+                  {/* Почта — единственный контакт, который кабинет о сотруднике
+                      знает. Телефона в записи о человеке нет, и дорисовывать
+                      его рядом с настоящей почтой нельзя. */}
+                  <Typography variant="metaText" tone="dense">
+                    {person.email}
+                  </Typography>
+                </div>
+              </Link>,
+              <Typography key="role" variant="denseText" tone="default">
+                {person.owner ? "Руководитель" : "Агент"}
+              </Typography>,
+              <Typography
+                key="limit"
+                variant="denseText"
+                tone={person.limit === null ? "dense" : "default"}
+              >
+                {person.limit === null ? "без лимита" : String(person.limit)}
+              </Typography>,
+              <Typography key="disclosed" variant="denseText" tone="default">
+                {String(person.disclosed)}
+              </Typography>,
+              <Typography key="spent" variant="numericDense" tone="default">
+                {`${groupDigits(person.spent)} ₽`}
+              </Typography>,
+              // Входы кабинет не записывает: сервера за ним нет. Про того, кто
+              // смотрит экран, известно, что он здесь сейчас; про остальных —
+              // прочерк, а не правдоподобное «вчера, 18:20».
+              <Typography key="seen" variant="denseText" tone="secondary">
+                {person.self ? "сейчас" : "—"}
+              </Typography>,
+              <AgencyChip key="status" label="Активен" tone="calm" />,
+            ],
+          }))}
+        />
+      )}
 
       <div className="w-150 shrink-0">
         <Typography variant="metaText" tone="dense">
@@ -237,8 +230,9 @@ export function AgencyStaffPage() {
  * завершает сеансы сразу, а раскрытые контакты остаются агентству.
  *
  * **Почта заблокирована, телефон — нет.** Почта — это вход в кабинет, и её
- * подмена означала бы смену человека. Телефон видят коллеги в журнале
- * и клиенты в подборке, его сотрудник меняет сам.
+ * подмена означала бы смену человека. Телефон сотрудник меняет сам — но
+ * запись о человеке его пока не хранит, поэтому вместо номера стоит прочерк,
+ * а не образец из макета.
  */
 
 /**
@@ -306,12 +300,50 @@ function RightRow({
 
 export function AgencyPersonPage() {
   const navigate = useNavigate()
+  const staff = useStaff()
+
+  /**
+   * Кого открыли — из адреса не следует: у `/agency/staff/person` параметра
+   * нет. Пока агентство состоит из одного человека, того, кто его завёл,
+   * двусмысленности в этом нет. Появятся приглашённые агенты — адресу
+   * понадобится параметр, и это правка маршрутов, а не карточки.
+   */
+  const person = staff.find((item) => item.self) ?? staff[0]
+
+  if (person === undefined) {
+    return (
+      <AgencyShell
+        activeTab="none"
+        title="Сотрудник"
+        note="карточка открывается из таблицы сотрудников"
+      >
+        <AgencyEmpty
+          title="Карточка не открыта"
+          text="Сюда попадают права и лимиты конкретного человека: дневной лимит раскрытий, роль, доступ к подборкам агентства. Открывается строкой в таблице сотрудников."
+          action={
+            <Button
+              variant="quiet"
+              size="md"
+              onClick={() => void navigate({ to: "/agency/staff" })}
+            >
+              К списку сотрудников
+            </Button>
+          }
+        />
+      </AgencyShell>
+    )
+  }
+
+  // Дата появления в агентстве известна только из журнала работы. Сеанс её
+  // не знает — тогда фраза идёт без даты, а не с выдуманной.
+  const since = person.addedAt === 0 ? "" : formatMoment(person.addedAt)
+  const role = person.owner ? "руководитель" : "агент"
 
   return (
     <AgencyShell
       activeTab="none"
-      title="Гусев Пётр"
-      note="агент · в агентстве с 12 июня 2026 · последний вход сегодня в 10:04"
+      title={person.name}
+      note={since === "" ? role : `${role} · в агентстве с ${since}`}
       action={
         // Отключение необратимо и требует подтверждения, которого в макете нет.
         // Отключать человека без вопроса опаснее, чем не отключить вовсе.
@@ -326,15 +358,15 @@ export function AgencyPersonPage() {
             Данные сотрудника
           </Typography>
 
-          <FormField label="ИМЯ И ФАМИЛИЯ" value="Гусев Пётр" />
+          <FormField label="ИМЯ И ФАМИЛИЯ" value={person.name} />
           <FormField
             label="ТЕЛЕФОН"
-            value="+7 900 000-71-40"
-            hint="его видят коллеги в журнале и клиенты в подборке"
+            value="—"
+            hint="телефон сотрудника кабинет пока не хранит"
           />
           <FormField
             label="РАБОЧИЙ E-MAIL"
-            value="p.gusev@nevsky.ru"
+            value={person.email}
             hint="почту меняет только руководитель"
             locked
           />
@@ -352,7 +384,7 @@ export function AgencyPersonPage() {
               size="md"
               onClick={() => void navigate({ to: "/search" })}
             >
-              Открыть его выдачу
+              Открыть выдачу
             </Button>
           </div>
 
@@ -361,12 +393,16 @@ export function AgencyPersonPage() {
           <Typography variant="columnHeader" tone="dense">
             Последний вход
           </Typography>
+          {/* Входы никто не записывает: сервера за кабинетом нет, а город,
+              устройство и адрес входа браузер о чужом человеке знать не может.
+              Про того, кто смотрит экран, известно только то, что он здесь
+              сейчас, — остальное прочерк, а не правдоподобная строка. */}
           <div className="flex w-full flex-col gap-1">
             <Typography variant="numericDense" tone="default">
-              Сегодня в 10:04
+              {person.self ? "Сейчас" : "—"}
             </Typography>
             <Typography variant="metaText" tone="dense">
-              Санкт-Петербург · 31.184.238.14 · Chrome, Windows
+              Город, устройство и адрес входа кабинет пока не записывает
             </Typography>
           </div>
 
@@ -391,15 +427,22 @@ export function AgencyPersonPage() {
           <div className="flex w-full flex-col">
             <RightRow
               title="Дневной лимит раскрытий"
-              note="за 30 дней раскрыл 18 контактов на 3 582 ₽"
+              // Руководитель ставит лимит, глядя на то, что человек уже
+              // потратил. Число берётся из журнала: пока раскрытий нет,
+              // честнее сказать это словами, чем показать «0 контактов на 0 ₽».
+              note={
+                person.disclosed === 0
+                  ? "раскрытий за ним пока не числится"
+                  : `раскрыл ${person.disclosed} ${plural(person.disclosed, "контакт", "контакта", "контактов")} на ${groupDigits(person.spent)} ₽`
+              }
               options={["5 в сутки", "25 в сутки", "Без лимита"]}
-              initial="5 в сутки"
+              initial={person.limit === null ? "Без лимита" : `${person.limit} в сутки`}
             />
             <RightRow
               title="Роль"
               note="ролей ровно две, безлимит только у руководителя"
               options={["Агент", "Руководитель"]}
-              initial="Агент"
+              initial={person.owner ? "Руководитель" : "Агент"}
             />
             <RightRow
               title="Доступ к подборкам агентства"
@@ -429,7 +472,14 @@ export function AgencyPersonPage() {
             />
             <RightRow
               title="Согласие на обработку данных сотрудника"
-              note="подписано 12.06.2026 при принятии приглашения"
+              // Согласие даётся один раз и в разный момент: тот, кто завёл
+              // агентство, подписал его при регистрации, приглашённый агент —
+              // приняв приглашение. Дата берётся из журнала, а не из макета.
+              note={
+                since === ""
+                  ? `подписано ${person.owner ? "при создании агентства" : "при принятии приглашения"}`
+                  : `подписано ${since} ${person.owner ? "при создании агентства" : "при принятии приглашения"}`
+              }
               action={
                 <Button
                   variant="quiet"

@@ -2,7 +2,7 @@ import { mkdir, rm, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
-import { seedSession, seedWork } from '../lib/session'
+import { seedAgency, seedSession, seedWork } from '../lib/session'
 
 /**
  * Снимки состояний выдачи.
@@ -471,7 +471,23 @@ test('мобильный прозвон: одна колонка и подвал
 })
 
 test('агентство · отказы: таблица и запрет на снятие', async ({ page }) => {
-  await seedSession(page)
+  /**
+   * Двенадцать отметок сажаются в журнал, а не берутся из экрана.
+   *
+   * Раньше двенадцать строк стояли константой внутри самого экрана, и эта
+   * проверка сравнивала константу сама с собой — то есть не проверяла ничего.
+   * Теперь стоп-лист приходит из работы агентства, и число строк на экране
+   * доказывает, что экран действительно читает журнал.
+   */
+  await seedAgency(page, {
+    stopList: Array.from({ length: 12 }, (_, index) => `Ленская ул., ${index + 1}`),
+    calls: Array.from({ length: 12 }, (_, index) => ({
+      address: `Ленская ул., ${index + 1}`,
+      by: 'Смирнова Ирина',
+      outcome: 'отказ',
+      agoMinutes: 60 + index * 17,
+    })),
+  })
   await page.setViewportSize({ width: 1440, height: 1024 })
   await page.goto('/screen/agency-refusals')
   await page.waitForSelector('[data-slot="data-table"]')
@@ -506,13 +522,57 @@ test('агентство · отказы: таблица и запрет на с
     // Вкладок пять: к четырём журналам добавились «Согласия».
     tabs: 5,
     activeTabs: 1,
-    tones: ['attention', 'calm', 'done'],
+    /**
+     * Оттенок один, и это осознанное расхождение с макетом.
+     *
+     * В `Y2Up0t` состояний три — «Скрыт», «На удалении», «Удалён», — но
+     * удалять номер из реестра продукт не умеет и не будет: снять отказ
+     * нельзя ни агенту, ни руководителю, об этом плашка над таблицей.
+     * Три оттенка обещали бы процесс, которого нет. Расхождение записано
+     * в самом экране, здесь оно закреплено числом.
+     */
+    tones: ['calm'],
     removeButtons: 0,
   })
 })
 
 test('агентство · сотрудники и эффективность', async ({ page }) => {
-  await seedSession(page)
+  /**
+   * Воронка считается по журналу, а не рисуется по макету.
+   *
+   * Числа взяты те же, что стояли в файле, — 178 раскрытий, 96 дозвонов,
+   * 17 отказов, 3 посредника, — но теперь они получаются из записей, а
+   * ширина полосы вычисляется из значения. Ожидание ниже поэтому проверяет
+   * арифметику продукта: 520 у верхней ступени и доля от неё у остальных.
+   *
+   * Всё внутри окна в 30 дней: воронка считает за период, и запись старше
+   * окна в неё просто не попала бы.
+   */
+  const staff = [
+    { name: 'Смирнова Ирина', initials: 'ИС', email: 'i.smirnova@nevsky.ru', role: 'owner' as const, limit: null },
+    { name: 'Агент второй', initials: 'А2', email: 'a2@nevsky.ru', role: 'agent' as const, limit: 5 },
+    { name: 'Агент третий', initials: 'А3', email: 'a3@nevsky.ru', role: 'agent' as const, limit: 5 },
+    { name: 'Агент четвёртый', initials: 'А4', email: 'a4@nevsky.ru', role: 'agent' as const, limit: null },
+  ]
+
+  const call = (outcome: string, count: number, from: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      address: `Ленская ул., ${from + index}`,
+      by: staff[index % staff.length]!.name,
+      outcome,
+      agoMinutes: 120 + index * 3,
+    }))
+
+  await seedAgency(page, {
+    people: staff,
+    disclosures: Array.from({ length: 178 }, (_, index) => ({
+      address: `Ленская ул., ${index + 1}`,
+      by: staff[index % staff.length]!.name,
+      amount: 199,
+      agoMinutes: 60 + index * 5,
+    })),
+    calls: [...call('дозвонился', 96, 1), ...call('отказ', 17, 200), ...call('посредник', 3, 300)],
+  })
   await page.setViewportSize({ width: 1440, height: 1024 })
   await mkdir(shotsDir, { recursive: true })
 
@@ -541,7 +601,8 @@ test('агентство · сотрудники и эффективность',
     }
   })
 
-  expect(measured.funnelWidths).toEqual([520, 281, 50, 9])
+  // 520 · 96/178 = 280,4 · 17/178 = 49,7 · 3/178 = 8,8 — округление к ближайшему.
+  expect(measured.funnelWidths).toEqual([520, 280, 50, 9])
   expect(
     measured.funnelWidths.every(
       (width, index) => index === 0 || width < measured.funnelWidths[index - 1]!,

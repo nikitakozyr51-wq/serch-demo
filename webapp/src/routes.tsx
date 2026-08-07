@@ -6,7 +6,8 @@ import {
   redirect,
 } from '@tanstack/react-router'
 
-import { platformTwin } from '@/features/cabinet'
+import { hasSession } from '@/features/auth'
+import { loginPath, platformTwin } from '@/features/cabinet'
 import { RootLayout } from './root-layout'
 
 const rootRoute = createRootRoute({
@@ -345,6 +346,40 @@ const collectionRoutes = (
 // `const TPath` сохраняет литерал адреса: без него помощник стирает путь
 // до `string`, маршрутизатор перестаёт знать список адресов, и переход
 // по `/search` из кода перестаёт проверяться типами.
+/**
+ * Адреса, открытые всем.
+ *
+ * Всё остальное в продукте — кабинет, и туда без сеанса нельзя. Список
+ * ведётся здесь, а не флагом у каждого маршрута: забытый флаг открывает
+ * экран с деньгами агентства, а забытая строка в этом списке всего лишь
+ * просит войти — ошибка в безопасную сторону.
+ *
+ * `/m/collections/client` открыт намеренно: это страница, которую агент
+ * отправляет клиенту, и клиент в кабинет не входит.
+ */
+const PUBLIC = new Set<string>([
+  '/register',
+  '/register/error',
+  '/forgot',
+  '/new-password',
+  '/confirm-code',
+  '/check-mail',
+  '/invite',
+  '/access-closed',
+  '/m/login',
+  '/m/login/error',
+  '/m/register',
+  '/m/forgot',
+  '/m/new-password',
+  '/m/confirm-code',
+  '/m/confirm-code/error',
+  '/m/check-mail',
+  '/m/invite',
+  '/m/access-closed',
+  '/m/collections/client',
+  '/dialogs',
+])
+
 function productRoute<TModule extends Record<string, unknown>, const TPath extends string>(
   path: TPath,
   load: () => Promise<TModule>,
@@ -365,6 +400,18 @@ function productRoute<TModule extends Record<string, unknown>, const TPath exten
     beforeLoad: () => {
       const twin = platformTwin(path)
       if (twin !== null) throw redirect({ to: twin, replace: true })
+
+      /**
+       * Дверь кабинета.
+       *
+       * Раньше охрана жила внутри каркаса `CabinetShell`, и разделы
+       * агентства мимо неё проходили: `AgencyShell` — другой каркас. Без
+       * сеанса там показывались чужие данные целиком. Теперь дверь стоит
+       * на маршруте: мимо неё не пройти ни одному экрану.
+       */
+      if (!PUBLIC.has(path) && !hasSession()) {
+        throw redirect({ to: loginPath(), search: { returnTo: undefined }, replace: true })
+      }
     },
     component: lazyRouteComponent(load, name),
   })

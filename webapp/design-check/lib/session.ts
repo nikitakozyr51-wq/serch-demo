@@ -77,6 +77,112 @@ export async function seedAccountOnly(page: Page) {
  * собственную заглушку. Теперь очередь настоящая, и посадить её можно только
  * через журнал.
  */
+/** Запись журнала, у которой время задано «сколько минут назад». */
+type Timed = { agoMinutes: number }
+
+type AgencySpec = {
+  people?: {
+    name: string
+    initials: string
+    email: string
+    role: 'owner' | 'agent'
+    limit: number | null
+  }[]
+  disclosures?: (Timed & { address: string; by: string; amount: number; trial?: boolean })[]
+  calls?: (Timed & {
+    address: string
+    by: string
+    outcome: string
+    answered?: string
+  })[]
+  refunds?: (Timed & {
+    address: string
+    amount: number
+    reason: string
+    objective: boolean
+    by: string
+  })[]
+  stopList?: string[]
+}
+
+/**
+ * Посадить работу агентства целиком: людей, раскрытия, звонки, отказы.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **Время задаётся отступом от «сейчас», а не датой.** Экраны агентства
+ * считают всё за окно — 30 дней, 7 дней, сегодня, — и запись с постоянной
+ * датой через месяц выпадает из окна сама собой. Проверка начинает падать
+ * не потому, что продукт сломался, а потому, что настал следующий месяц.
+ * Такая проверка хуже отсутствующей: она приучает не верить красному.
+ *
+ * Отступ считается уже в браузере, поэтому машинное время проверки и время
+ * страницы — одно и то же.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Помощник появился, когда из экранов агентства убрали витрину. До этого
+ * таблицы отказов, сотрудников и эффективности рисовались из констант, и
+ * проверки замеряли не продукт, а те же константы: двенадцать строк стояли
+ * в коде экрана и в ожидании проверки одновременно. Теперь и то и другое
+ * приходит из журнала, а значит проверка наконец что-то доказывает.
+ */
+export async function seedAgency(page: Page, spec: AgencySpec) {
+  await page.addInitScript(
+    ({ email, owner, plan }) => {
+      const now = Date.now()
+      const at = (agoMinutes: number) => now - agoMinutes * 60_000
+
+      window.localStorage.setItem(
+        `serch.workspace.${email}`,
+        JSON.stringify({
+          version: 1,
+          people: (plan.people ?? []).map((person, index) => ({
+            ...person,
+            id: `p${index}`,
+            addedAt: at(60 * 24 * 30),
+          })),
+          disclosures: (plan.disclosures ?? []).map((item, index) => ({
+            id: `d${index}`,
+            address: item.address,
+            at: at(item.agoMinutes),
+            amount: item.amount,
+            by: item.by,
+            trial: item.trial ?? false,
+          })),
+          calls: (plan.calls ?? []).map((item, index) => ({
+            id: `c${index}`,
+            address: item.address,
+            at: at(item.agoMinutes),
+            outcome: item.outcome,
+            answered: item.answered,
+            by: item.by,
+          })),
+          collections: [],
+          savedSearches: [],
+          topUps: [],
+          refunds: (plan.refunds ?? []).map((item, index) => ({
+            id: `r${index}`,
+            at: at(item.agoMinutes),
+            address: item.address,
+            amount: item.amount,
+            reason: item.reason,
+            objective: item.objective,
+            by: item.by,
+          })),
+          stopList: plan.stopList ?? [],
+        }),
+      )
+
+      // Без сеанса кабинет закрыт охраной, а без агентства в списке вход
+      // не находит человека по почте.
+      window.localStorage.setItem('serch.accounts', JSON.stringify({ [email]: owner }))
+      window.localStorage.setItem('serch.demo.session', JSON.stringify(owner))
+    },
+    { email: ACCOUNT.email, owner: ACCOUNT, plan: spec },
+  )
+}
+
 export async function seedWork(
   page: Page,
   addresses: string[],

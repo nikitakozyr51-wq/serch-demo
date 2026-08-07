@@ -4,8 +4,10 @@ import type { ReactNode } from "react"
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
+import { AgencyEmpty } from "@/features/agency"
 import { useSession, useSessionActions } from "@/features/auth"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
+import { useWorkspace, type Person } from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
 /**
@@ -35,14 +37,21 @@ import { cn } from "@/lib/utils"
  * решения продукта, одинаковые для всех агентств. Человеку нужно знать
  * правила, а не менять их, и притворяться, что он ими управляет, нечестно.
  *
- * Настоящих действий здесь три, и все три необратимы: сменить пароль,
- * завершить чужой сеанс, завершить все чужие сеансы. Поэтому они стоят
- * отдельно от строк-фактов, а не рядом с ними.
+ * Настоящее действие здесь одно — сменить пароль, — и оно необратимо.
+ * Поэтому стоит отдельно от строк-фактов, а не рядом с ними.
  *
- * **Свой сеанс завершить нельзя, и место кнопки всё равно занято.** В файле
- * это пустой блок 104 × 32 (`xe1CM`): строки обязаны стоять колонкой, а
- * кнопка «Завершить» на своём же устройстве означала бы «выйти», для чего
- * есть отдельное действие в заголовке.
+ * **СПИСКА УСТРОЙСТВ БОЛЬШЕ НЕТ.** Здесь стояли три сеанса из макета:
+ * «Chrome, Windows», «Санкт-Петербург · 92.53.114.20», «24.07, 09:12».
+ * Это образцы текста, которыми дизайнер заполнял кадр, — а живому человеку
+ * они называли чужой город и чужой адрес его собственными. Кто ещё вошёл
+ * в агентство, знает сервер; сервера пока нет, и браузер о других входах
+ * не знает и знать не может. Вместо выдумки стоит пустое состояние, которое
+ * говорит, что здесь появится и откуда.
+ *
+ * Вместе со списком ушли обе кнопки «Завершить»: завершать нечего. Правило
+ * про свой сеанс при этом осталось верным — кнопка «Завершить» на своём же
+ * устройстве означала бы «выйти», для чего есть отдельное действие
+ * в заголовке; в макете под неё оставлено пустое место 104 × 32 (`xe1CM`).
  */
 
 /** Строка-факт: что и какое значение. Высота 48, волосяная линия снизу. */
@@ -72,62 +81,17 @@ function Block({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-type Session = {
-  device: string
-  place: string
-  when: string
-  /** Текущее устройство: помечено зелёным и не закрывается. */
-  current?: boolean
-}
-
-const SESSIONS: Session[] = [
-  {
-    device: "Chrome, Windows",
-    place: "Санкт-Петербург · 92.53.114.20",
-    when: "сейчас",
-    current: true,
-  },
-  { device: "Safari, iPhone", place: "Санкт-Петербург · 92.53.114.20", when: "24.07, 09:12" },
-  { device: "Chrome, Windows", place: "Санкт-Петербург · 178.140.9.71", when: "22.07, 18:40" },
-]
-
-/** Сеанс: устройство, место, когда и кнопка закрытия — либо её пустое место. */
-function SessionRow({ session }: { session: Session }) {
-  return (
-    <div className="flex h-16 w-full items-center gap-3 border-b border-line-1">
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex items-center gap-2">
-          <Typography variant="strongText" tone="default">
-            {session.device}
-          </Typography>
-          {session.current ? (
-            <span className="flex h-5 items-center rounded-sm bg-ok-tint px-2">
-              <Typography variant="signalLabel" tone="ok">
-                это устройство
-              </Typography>
-            </span>
-          ) : null}
-        </div>
-        <Typography variant="metaText" tone="dense">
-          {session.place}
-        </Typography>
-      </div>
-      <Typography variant="denseText" tone="dense">
-        {session.when}
-      </Typography>
-      {session.current ? (
-        <span aria-hidden className="h-8 w-26 shrink-0" />
-      ) : (
-        <Button
-          variant="secondary"
-          size="sm"
-          data-action={`завершить сеанс: ${session.device}`}
-        >
-          Завершить
-        </Button>
-      )}
-    </div>
-  )
+/**
+ * Дневной лимит словами.
+ *
+ * `null` в карточке сотрудника означает «без лимита» — так его читают
+ * и остальные экраны агентства. Человека в списке может не оказаться
+ * (пространство агентства ещё не открыто), и тогда честнее прочерк, чем
+ * «без лимита»: это разные вещи.
+ */
+function limitLabel(person: Person | undefined): string {
+  if (person === undefined) return "—"
+  return person.limit === null ? "без лимита" : String(person.limit)
 }
 
 /**
@@ -166,8 +130,16 @@ function ProfileShell({ tab, children }: { tab: "personal" | "security"; childre
           <Typography variant="panelTitle" tone="default" as="h1">
             Профиль
           </Typography>
+          {/* Кто вошёл — только из сеанса. Здесь стояли «Смирнова Ирина»
+              и «Невский проспект»: образцы из макета, из-за которых человек
+              со своим агентством читал в шапке чужое имя. Роль тоже берётся
+              из сеанса, а не проставляется «руководитель» всем подряд.
+              Без сеанса кабинет закрыт охраной маршрута, поэтому запасной
+              вариант — пустая строка, а не правдоподобное имя. */}
           <Typography variant="denseText" tone="dense">
-            {`${session?.name ?? "Смирнова Ирина"} · руководитель агентства «${session?.agency ?? "Невский проспект"}»`}
+            {session === null
+              ? ""
+              : `${session.name} · ${session.role === "agent" ? "агент" : "руководитель"} агентства «${session.agency}»`}
           </Typography>
           <span className="h-px flex-1" />
           <Button variant="quiet" size="sm" onClick={leave}>
@@ -235,7 +207,11 @@ export function LoginPolicyPage() {
         <div className="flex w-full items-start gap-6">
           <div className="flex w-141 shrink-0 flex-col gap-6">
             <Block label="Пароль">
-              <FactRow title="Последняя смена" value="14.06.2026" />
+              {/* Дату последней смены помнит сервер, которого нет. В макете
+                  на её месте стоял образец «14.06.2026» — один и тот же день
+                  для каждого, кто откроет экран. Прочерк честнее выдуманной
+                  даты, а строка остаётся: с сервером ей будет чем заполниться. */}
+              <FactRow title="Последняя смена" value="—" />
               <FactRow title="Длина пароля" value="не короче 10 знаков" />
               <FactRow title="Попыток входа подряд" value="5, потом пауза 15 минут" />
             </Block>
@@ -290,30 +266,22 @@ export function LoginPolicyPage() {
             <Typography variant="columnHeader" tone="dense">
               Активные сеансы
             </Typography>
-            <div className="flex w-full flex-col">
-              {SESSIONS.map((session) => (
-                <SessionRow key={`${session.device} ${session.place} ${session.when}`} session={session} />
-              ))}
-            </div>
             {/*
-              Пояснение стоит между списком и кнопкой, а не под кнопкой:
-              «раскрытые контакты и история касаний остаются агентству» —
-              это ответ на страх, из-за которого человек не жмёт «Завершить».
-              Ответ обязан стоять до кнопки, иначе он опоздал.
+              Вместо списка — пустое состояние: чужие входы видит сервер,
+              которого пока нет, а браузер о них не знает.
+
+              Фраза про раскрытые контакты пережила список и стоит сноской.
+              Раньше она объяснялась так: «ответ на страх, из-за которого
+              человек не жмёт „Завершить“, обязан стоять до кнопки, иначе он
+              опоздал». Кнопки нет, страх остался — человек читает про
+              завершение сеансов и думает, не потеряет ли он вместе с ними
+              работу. Ответ обязан стоять там же, где вопрос.
             */}
-            <Typography variant="metaText" tone="dense">
-              Завершение сеанса выкидывает устройство сразу. Раскрытые контакты и история
-              касаний остаются агентству: они не привязаны к устройству.
-            </Typography>
-            <div className="flex">
-              <Button
-                variant="secondary"
-                size="md"
-                data-action="завершить все сеансы, кроме текущего"
-              >
-                Завершить все сеансы, кроме этого
-              </Button>
-            </div>
+            <AgencyEmpty
+              title="Устройства покажет сервер"
+              text="Здесь встанет каждый вход в агентство: устройство, город и время — и «Завершить» рядом с чужим. Пока сервера нет, кабинет живёт в этом браузере и о других входах не знает. Свой сеанс закрывается кнопкой «Выйти из аккаунта» наверху."
+              note="Завершение сеанса выкидывает устройство сразу. Раскрытые контакты и история касаний остаются агентству: они не привязаны к устройству."
+            />
           </div>
         </div>
     </ProfileShell>
@@ -326,9 +294,12 @@ export function LoginPolicyPage() {
  * Вкладка, которой в коде не существовало вовсе: экран `XqdvJ` был нарисован,
  * но не собран, и аватар вёл мимо него сразу в «Политику входа».
  *
- * **Что здесь настоящее, а что нет.** Имя, почта и агентство приходят из
- * сеанса — того самого, который человек завёл при регистрации. Роль и дата
- * входа в агентство приходят оттуда же. Телефон и уведомления пока не
+ * **Что здесь настоящее, а что нет.** Имя, почта, агентство, роль и остаток
+ * пробных раскрытий приходят из сеанса — того самого, который человек завёл
+ * при регистрации. Дневной лимит приходит из его же карточки сотрудника.
+ * Ни одного значения из макета здесь не осталось: раньше на месте пустого
+ * сеанса стояли «Смирнова Ирина» и «Невский проспект», а лимит агента был
+ * написан числом 25, взятым из кадра. Телефон и уведомления пока не
  * хранятся: за ними нужен сервер, и вместо пустого обещания стоит честная
  * подпись.
  *
@@ -339,14 +310,30 @@ export function LoginPolicyPage() {
  */
 export function ProfilePage() {
   const session = useSession()
+  const workspace = useWorkspace()
+
+  /**
+   * Своя карточка сотрудника — по почте: она же ключ агентства.
+   *
+   * Нужна ради дневного лимита. Раньше он выводился из роли — «агент → 25»,
+   * — и это число ничем не подтверждалось: лимит ставит руководитель,
+   * и у каждого сотрудника он свой.
+   */
+  const me = workspace.people.find(
+    (person) => person.email.trim().toLowerCase() === (session?.email ?? "").trim().toLowerCase(),
+  )
 
   return (
     <ProfileShell tab="personal">
       <div className="flex w-full items-start gap-6">
         <div className="flex w-141 shrink-0 flex-col gap-6">
+          {/* Имя, почта и агентство — из сеанса. На их местах стояли образцы
+              из макета: «Смирнова Ирина» и «i.smirnova@nevsky.ru». Прочерк
+              вместо чужого имени: кабинет закрыт охраной, и до прочерка
+              дело дойти не должно. */}
           <Block label="Кто вы">
-            <FactRow title="Имя" value={session?.name ?? "Смирнова Ирина"} />
-            <FactRow title="Почта" value={session?.email ?? "i.smirnova@nevsky.ru"} />
+            <FactRow title="Имя" value={session?.name ?? "—"} />
+            <FactRow title="Почта" value={session?.email ?? "—"} />
             <FactRow
               title="Роль"
               value={session?.role === "agent" ? "Агент" : "Руководитель агентства"}
@@ -363,14 +350,11 @@ export function ProfilePage() {
           </div>
 
           <Block label="Агентство">
-            <FactRow title="Название" value={session?.agency ?? "Невский проспект"} />
-            <FactRow
-              title="Дневной лимит раскрытий"
-              value={session?.role === "agent" ? "25" : "без лимита"}
-            />
+            <FactRow title="Название" value={session?.agency ?? "—"} />
+            <FactRow title="Дневной лимит раскрытий" value={limitLabel(me)} />
             <FactRow
               title="Осталось пробных раскрытий"
-              value={session ? String(session.trial) : "0"}
+              value={session === null ? "—" : String(session.trial)}
             />
           </Block>
         </div>

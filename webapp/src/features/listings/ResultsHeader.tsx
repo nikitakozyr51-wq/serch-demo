@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
+import { useAnimatedNumber } from "@/platform/motion"
 import { groupDigits, plural } from "./plural"
 
 /**
@@ -87,10 +88,23 @@ function ResultsHeader({
 }: ResultsHeaderProps) {
   const found = listings - duplicates - intermediaries
 
+  /**
+   * Число доезжает, склонение — нет.
+   *
+   * Считается только цифра, за 200 мс: смена фильтра меняет «247» на «31»,
+   * и без движения подмена проходит мимо глаза — человек продолжает думать,
+   * что смотрит прежнюю выдачу.
+   *
+   * Слово «объектов» при этом берётся от КОНЕЧНОГО числа, а не от бегущего.
+   * Иначе по дороге от 247 к 31 подпись успевала бы дважды переключиться на
+   * «объекта» и обратно — заголовок дёргался бы шириной.
+   */
+  const shownFound = useAnimatedNumber(found, 200)
+
   return (
     <ResultsHeaderShell
       dense={dense}
-      title={`Найдено ${groupDigits(found)} ${plural(found, "объект", "объекта", "объектов")}`}
+      title={`Найдено ${groupDigits(shownFound)} ${plural(found, "объект", "объекта", "объектов")}`}
       note={
         dense
           ? `из ${groupDigits(listings)} ${plural(listings, "объявления", "объявлений", "объявлений")} · ` +

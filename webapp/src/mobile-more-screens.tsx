@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
-  Monitor,
   Pencil,
   Phone,
   RotateCcw,
@@ -18,17 +17,17 @@ import {
   User,
   Users,
   Wallet,
-  X,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { useState } from "react"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { useSessionActions } from "@/features/auth"
-import { MobileScreen, MobileSectionHeader } from "@/features/cabinet"
+import { useSession, useSessionActions } from "@/features/auth"
+import type { DemoSession } from "@/features/auth"
+import { MobileEmptyState, MobileScreen, MobileSectionHeader } from "@/features/cabinet"
+import { useWorkspace } from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
 /**
@@ -179,48 +178,6 @@ function MobileSettingRow({
 }
 
 /**
- * Строка центра уведомлений: событие и время, поля [14, 0], зазор 12.
- *
- * **Время выровнено по верху, а не по центру.** Сообщение переносится на две
- * строки, время — никогда; выравнивание по центру уводило бы его вниз,
- * и колонка времени перестала бы читаться столбиком.
- */
-function MobileNoticeRow({
-  text,
-  time,
-  first = false,
-}: {
-  text: string
-  time: string
-  /** Первая строка группы: линии сверху у неё нет. */
-  first?: boolean
-}) {
-  return (
-    <div
-      data-slot="mobile-notice-row"
-      className={cn(
-        "flex w-full items-start gap-3 py-3.5",
-        // Линия между строками нарисована внутрь тенью, а не рамкой: в файле
-        // обводка идёт внутрь и высоту не меняет, рамка добавила бы каждой
-        // строке лишний пиксель. Это линия, а не глубина.
-        !first && "shadow-[inset_0_1px_0_var(--line-2)]",
-      )}
-    >
-      <div className="min-w-0 flex-1">
-        <Typography variant="uiText" tone="default">
-          {text}
-        </Typography>
-      </div>
-      <span className="shrink-0">
-        <Typography variant="metaText" tone="dense">
-          {time}
-        </Typography>
-      </span>
-    </div>
-  )
-}
-
-/**
  * Поле пароля на телефоне: метка капслоком, поле 48 с радиусом 12 и подсказка.
  *
  * **Это не `TextField`.** Общее поле формы идёт 40 с радиусом 10, границей
@@ -282,52 +239,86 @@ type SettingRowSpec = MobileSettingRowProps & { id: string }
  * и по ним можно уйти в новую вкладку и вернуться назад. «Выйти» заканчивает
  * сеанс, а такое ссылкой не делают: адрес, который выкидывает из кабинета
  * при переходе по нему из истории браузера, — ловушка.
+ *
+ * **Подписи, которые были числами, стали описаниями — кроме одной.** Раньше
+ * здесь стояли «два активных устройства», «пять человек, одно приглашение»,
+ * «12 событий за 30 дней»: образцы текста из макета, выданные живому человеку
+ * за его собственные цифры. Посчитать из работы агентства можно только
+ * сотрудников — их и считаем; остальные строки честно говорят, что внутри,
+ * а не сколько там.
  */
-const MORE_ROWS: SettingRowSpec[] = [
-  { id: "profile", icon: User, title: "Профиль", note: "имя, телефон, почта", trailingIcon: ChevronRight, to: "/m/profile" },
-  {
-    id: "notifications",
-    icon: Bell,
-    title: "Уведомления",
-    note: "сразу · раз в день утром · выключено",
-    trailingIcon: ChevronRight,
-    to: "/m/notifications",
-  },
-  {
-    id: "security",
-    icon: Shield,
-    title: "Безопасность и сеансы",
-    note: "два активных устройства",
-    trailingIcon: ChevronRight,
-    to: "/m/security",
-  },
-  {
-    id: "staff",
-    icon: Users,
-    title: "Сотрудники",
-    note: "пять человек, одно приглашение",
-    trailingIcon: ChevronRight,
-    to: "/m/agency/staff",
-  },
-  {
-    id: "consents",
-    icon: FileText,
-    title: "Согласия собственников",
-    note: "12 событий за 30 дней",
-    trailingIcon: ChevronRight,
-    to: "/m/agency/consents",
-  },
-  {
-    id: "access",
-    icon: ScrollText,
-    title: "Журнал доступа",
-    note: "кто и когда открывал контакты",
-    trailingIcon: ChevronRight,
-    to: "/m/agency/access",
-  },
-]
+function moreRows(staff: number): SettingRowSpec[] {
+  return [
+    { id: "profile", icon: User, title: "Профиль", note: "имя, телефон, почта", trailingIcon: ChevronRight, to: "/m/profile" },
+    {
+      id: "notifications",
+      icon: Bell,
+      title: "Уведомления",
+      note: "сразу · раз в день утром · выключено",
+      trailingIcon: ChevronRight,
+      to: "/m/notifications",
+    },
+    {
+      id: "security",
+      icon: Shield,
+      title: "Безопасность и сеансы",
+      note: "пароль, устройства, вход по коду",
+      trailingIcon: ChevronRight,
+      to: "/m/security",
+    },
+    {
+      id: "staff",
+      icon: Users,
+      title: "Сотрудники",
+      note: staffNote(staff),
+      trailingIcon: ChevronRight,
+      to: "/m/agency/staff",
+    },
+    {
+      id: "consents",
+      icon: FileText,
+      title: "Согласия собственников",
+      note: "запросы подтверждения и отказы от звонков",
+      trailingIcon: ChevronRight,
+      to: "/m/agency/consents",
+    },
+    {
+      id: "access",
+      icon: ScrollText,
+      title: "Журнал доступа",
+      note: "кто и когда открывал контакты",
+      trailingIcon: ChevronRight,
+      to: "/m/agency/access",
+    },
+  ]
+}
+
+/**
+ * «1 человек», «2 человека», «5 человек».
+ *
+ * Счёт русского языка пишется здесь руками, потому что число берётся из работы
+ * агентства и меняется: «пять человек» строкой снова стало бы образцом текста
+ * на следующий же день после первого приглашения.
+ */
+function staffNote(count: number): string {
+  const hundreds = count % 100
+  const units = count % 10
+
+  if (hundreds < 11 || hundreds > 14) {
+    if (units === 1) return `${count} человек`
+    if (units >= 2 && units <= 4) return `${count} человека`
+  }
+
+  return `${count} человек`
+}
 
 export function MobileMorePage() {
+  // Кто вошёл — из сеанса, сколько людей в агентстве — из его же работы.
+  // Ни одно из этих значений нельзя знать заранее: вписанные сюда имя, роль
+  // и агентство были образцом текста из макета и показывались каждому, кто
+  // открывал раздел, — как будто это он сам.
+  const session = useSession()
+  const { people } = useWorkspace()
   const { signOut } = useSessionActions()
   const navigate = useNavigate()
 
@@ -344,24 +335,30 @@ export function MobileMorePage() {
       <MobileSettingsBody>
         <div className="flex w-full shrink-0 items-center gap-3">
           {/* Аватар 48 графитом. Инициалы наследуют цвет подложки —
-              тон берётся от родителя, как в шапке кабинета. */}
+              тон берётся от родителя, как в шапке кабинета.
+
+              Без сеанса кружок остаётся пустым: кабинет закрыт охраной, и
+              сюда без входа не попасть, а чужие инициалы в этом месте были бы
+              не заглушкой, а прямым враньём про то, под кем работает человек. */}
           <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-fg text-surface">
             <Typography variant="rowPrice" tone="current">
-              ИС
+              {session?.initials ?? ""}
             </Typography>
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <Typography variant="rowPrice" tone="default">
-              Смирнова Ирина
+              {session?.name ?? ""}
             </Typography>
             <Typography variant="denseText" tone="dense">
-              руководитель · агентство «Невский проспект»
+              {session === null
+                ? ""
+                : `${session.role === "agent" ? "агент" : "руководитель"} · агентство «${session.agency}»`}
             </Typography>
           </div>
         </div>
 
         <div className="flex w-full flex-col">
-          {MORE_ROWS.map(({ id, ...row }) => (
+          {moreRows(people.length).map(({ id, ...row }) => (
             <MobileSettingRow key={id} {...row} />
           ))}
           <MobileSettingRow icon={LogOut} title="Выйти" quiet onPress={leave} />
@@ -393,51 +390,60 @@ export function MobileMorePage() {
  * ничего: выдуманное поле ввода на месте карандаша обещало бы правку,
  * которой в продукте пока не существует, и владелец узнал бы об этом
  * не из отчёта, а от первого же агентства.
+ *
+ * **Имя и почта — из сеанса, телефон — прочерк.** Имя и почту человек ввёл
+ * сам при создании агентства, и они настоящие. Телефона в сеансе нет вовсе:
+ * его негде взять, пока форма правки не работает, — и на его месте стоит
+ * прочерк, а не правдоподобный номер.
  */
-const PROFILE_ROWS: SettingRowSpec[] = [
-  {
-    id: "name",
-    icon: User,
-    title: "Смирнова Ирина",
-    note: "руководитель агентства",
-    trailingIcon: Pencil,
-    action: "Изменить имя",
-  },
-  {
-    id: "phone",
-    icon: Phone,
-    title: "+7 900 000-57-66",
-    note: "рабочий телефон",
-    trailingIcon: Pencil,
-    action: "Изменить рабочий телефон",
-  },
-  {
-    id: "mail",
-    icon: Mail,
-    title: "i.smirnova@nevsky.ru",
-    note: "почта, на неё приходят уведомления",
-    trailingIcon: Pencil,
-    action: "Изменить почту",
-  },
-  {
-    id: "density",
-    icon: Rows3,
-    title: "Просторно",
-    note: "плотность интерфейса, строка 88",
-    trailingIcon: ChevronRight,
-    action: "Выбрать плотность интерфейса",
-  },
-  {
-    id: "start",
-    icon: LayoutDashboard,
-    title: "Сегодня",
-    note: "стартовый экран при входе",
-    trailingIcon: ChevronRight,
-    action: "Выбрать стартовый экран",
-  },
-]
+function profileRows(session: DemoSession | null): SettingRowSpec[] {
+  return [
+    {
+      id: "name",
+      icon: User,
+      title: session?.name ?? "",
+      note: session === null ? "" : session.role === "agent" ? "агент агентства" : "руководитель агентства",
+      trailingIcon: Pencil,
+      action: "Изменить имя",
+    },
+    {
+      id: "phone",
+      icon: Phone,
+      title: "—",
+      note: "рабочий телефон",
+      trailingIcon: Pencil,
+      action: "Изменить рабочий телефон",
+    },
+    {
+      id: "mail",
+      icon: Mail,
+      title: session?.email ?? "",
+      note: "почта, на неё приходят уведомления",
+      trailingIcon: Pencil,
+      action: "Изменить почту",
+    },
+    {
+      id: "density",
+      icon: Rows3,
+      title: "Просторно",
+      note: "плотность интерфейса, строка 88",
+      trailingIcon: ChevronRight,
+      action: "Выбрать плотность интерфейса",
+    },
+    {
+      id: "start",
+      icon: LayoutDashboard,
+      title: "Сегодня",
+      note: "стартовый экран при входе",
+      trailingIcon: ChevronRight,
+      action: "Выбрать стартовый экран",
+    },
+  ]
+}
 
 export function MobileProfilePage() {
+  const session = useSession()
+
   return (
     <MobileScreen
       header={<MobileSectionHeader title="Профиль" back />}
@@ -446,7 +452,7 @@ export function MobileProfilePage() {
     >
       <MobileSettingsBody>
         <div className="flex w-full flex-col">
-          {PROFILE_ROWS.map(({ id, ...row }) => (
+          {profileRows(session).map(({ id, ...row }) => (
             <MobileSettingRow key={id} {...row} />
           ))}
         </div>
@@ -541,44 +547,22 @@ export function MobileNotificationSettingsPage() {
  * стороны: подсвечена вкладка «Сегодня», а не «Ещё». Настройка живёт в «Ещё»,
  * потому что её открывают раз в месяц; лента — рядом с рабочим днём.
  *
- * **Группы «Сегодня» и «Ранее», а не даты у каждой строки.** Уведомление живёт
- * часы: сегодняшнее требует действия, вчерашнее уже нет. Время внутри группы
- * идёт часами, в «Ранее» — числом: там час уже ничего не значит.
+ * **ЛЕНТА ПУСТА, И ЭТО ЕДИНСТВЕННОЕ ЧЕСТНОЕ СОСТОЯНИЕ.** Здесь стояли четыре
+ * строки с чужими именами, чужими адресами и чужими суммами — образцы текста
+ * из макета, показанные живому человеку как его собственные уведомления.
+ * Журнала уведомлений в продукте нет: события никуда не записываются и никому
+ * не рассылаются, — а значит показывать в ленте нечего.
  *
- * «Прочитать все» стоит у группы «Сегодня» и только у неё: разбирают то,
- * что пришло сегодня, старое разбирать поздно.
+ * Вместе со строками ушли группы «Сегодня» и «Ранее» и действие «Прочитать
+ * все»: группировать и отмечать прочитанным нечего. Их форма снята замером
+ * с файла и вернётся вместе с настоящими событиями, а не раньше.
  *
- * **Прочитанное в файле ничем не помечено — ни точкой, ни цветом.** Значит
- * единственное честное следствие «Прочитать все» — исчезновение самого
- * действия: разбирать больше нечего. Пометка непрочитанного, которой в макете
- * нет, здесь не заводится: её место — решение владельца, а не догадка кода.
+ * Пустое состояние называет поводы, ради которых продукт вообще пишет
+ * человеку, — те же, что перечислены на экране настройки уведомлений,
+ * и отсылает туда же. Человек видит не «здесь ничего нет», а «вот чего
+ * отсюда ждать и где это включается».
  */
-type NoticeGroup = {
-  label: string
-  /** Действие у метки группы. Есть только у «Сегодня». */
-  action?: string
-  rows: { text: string; time: string }[]
-}
-
-const NOTICE_GROUPS: NoticeGroup[] = [
-  {
-    label: "СЕГОДНЯ",
-    action: "Прочитать все",
-    rows: [
-      { text: "Красногвардейский 2-к до 15: двенадцать новых объектов", time: "14:02" },
-      { text: "Титова Анна оформила возврат 199 ₽, Индустриальный пр., 26", time: "15:40" },
-      { text: "Гусев Пётр просит увеличить дневной лимит", time: "09:15" },
-    ],
-  },
-  {
-    label: "РАНЕЕ",
-    rows: [{ text: "Подписка 3 000 ₽ спишется 1 августа", time: "27.07" }],
-  },
-]
-
 export function MobileNotificationCenterPage() {
-  const [readGroups, setReadGroups] = useState<string[]>([])
-
   return (
     <MobileScreen
       header={<MobileSectionHeader title="Уведомления" back />}
@@ -586,36 +570,11 @@ export function MobileNotificationCenterPage() {
       padded={false}
     >
       <MobileSettingsBody>
-        {NOTICE_GROUPS.map((group) => (
-          <section key={group.label} className="flex w-full flex-col gap-2">
-            <div className="flex w-full items-center">
-              <Typography variant="columnHeader" tone="dense">
-                {group.label}
-              </Typography>
-              {group.action === undefined || readGroups.includes(group.label) ? null : (
-                <>
-                  <div className="h-px flex-1" />
-                  <button
-                    type="button"
-                    data-slot="mobile-notice-action"
-                    onClick={() => setReadGroups((read) => [...read, group.label])}
-                    className="cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-                  >
-                    <Typography variant="tabActive" tone="default">
-                      {group.action}
-                    </Typography>
-                  </button>
-                </>
-              )}
-            </div>
-            <div className="flex w-full flex-col">
-              {group.rows.map((row, index) => (
-                <MobileNoticeRow key={row.time} {...row} first={index === 0} />
-              ))}
-            </div>
-          </section>
-        ))}
-        <div className="flex-1" />
+        <MobileEmptyState
+          icon={Bell}
+          title="Уведомлений нет"
+          text="Сюда придут новые объекты по сохранённым поискам, ответы по заявкам на возврат и предупреждение о конце баланса. Что именно приходит, настраивается в «Ещё → Уведомления»."
+        />
       </MobileSettingsBody>
     </MobileScreen>
   )
@@ -626,35 +585,24 @@ export function MobileNotificationCenterPage() {
  *
  * **Экран показывает безопасность, а не настраивает её.** Длина пароля, число
  * попыток и срок кода — решения продукта, одинаковые для всех агентств;
- * притворяться, что человек ими управляет, нечестно. Настоящих действий три,
- * и все три необратимы: сменить пароль, закрыть чужой сеанс, закрыть все чужие.
+ * притворяться, что человек ими управляет, нечестно.
  *
- * Своё устройство стоит без крестика: закрыть свой же сеанс — это «выйти»,
- * а «Выйти» живёт в «Ещё» и означает другое. Строка остаётся строкой-фактом.
+ * **ЧУЖОГО СЕАНСА В СПИСКЕ БОЛЬШЕ НЕТ.** Здесь стояло второе устройство
+ * с городом и временем входа — образец текста из макета, который каждый
+ * человек читал как «в мой кабинет заходили с чужого компьютера, вчера
+ * вечером». Вместе с ним ушли крестик и «Завершить остальные сеансы»:
+ * закрывать нечего, а кнопка, которая после нажатия ничего не меняет, — это
+ * тот же обман, только тише.
+ *
+ * Настоящее действие осталось одно и оно необратимо: сменить пароль. Своё
+ * устройство стоит строкой-фактом: закрыть свой же сеанс — это «выйти»,
+ * а «Выйти» живёт в «Ещё» и означает другое.
  *
  * Разделы идут с зазором 12, а не вплотную, как на остальных экранах: здесь
  * между ними стоит метка «АКТИВНЫЕ СЕАНСЫ», и сплошной список слипся бы с ней.
  */
-
-/**
- * Чужие сеансы — те, что можно закрыть.
- *
- * Список отдельно от разметки, потому что он живой: крестик убирает одну
- * строку, «Завершить остальные сеансы» — все сразу. Исчезнувшая строка и есть
- * весь ответ продукта: подтверждения в макете нет, и придумывать его нельзя,
- * а сеанс, который после нажатия остался бы на экране, врал бы прямо в глаза.
- */
-const OTHER_SESSIONS: { id: string; icon: LucideIcon; title: string; note: string }[] = [
-  {
-    id: "chrome-windows",
-    icon: Monitor,
-    title: "Chrome на Windows",
-    note: "Санкт-Петербург, вчера в 18:40",
-  },
-]
-
 export function MobileSecurityPage() {
-  const [otherSessions, setOtherSessions] = useState(OTHER_SESSIONS)
+  const session = useSession()
 
   return (
     <MobileScreen
@@ -664,10 +612,16 @@ export function MobileSecurityPage() {
     >
       <MobileSettingsBody>
         <div className="flex w-full flex-col gap-3">
+          {/*
+            Подпись — последствие, а не дата: когда пароль меняли в последний
+            раз, продукт нигде не хранит, а «изменён 12 июня» стояло здесь
+            числом из макета. Последствие человеку нужнее даты: он читает его
+            до нажатия, а не узнаёт после.
+          */}
           <MobileSettingRow
             icon={KeyRound}
             title="Пароль"
-            note="изменён 12 июня"
+            note="смена завершит остальные сеансы"
             trailingIcon={ChevronRight}
             to="/m/change-password"
           />
@@ -676,53 +630,23 @@ export function MobileSecurityPage() {
             АКТИВНЫЕ СЕАНСЫ
           </Typography>
 
+          {/*
+            Про это устройство честно известно ровно одно — под какой почтой
+            с него вошли. Ни модели, ни города, ни времени начала сеанса продукт
+            не знает: стоявшие здесь раньше три значения были выдумкой, которую
+            человек читал как показание системы.
+          */}
           <MobileSettingRow
             icon={Smartphone}
-            title="iPhone, Санкт-Петербург"
-            note="это устройство, сеанс с 09:12"
+            title="Это устройство"
+            note={session?.email}
             passive
           />
 
-          {/*
-            Крестик — отдельное действие внутри строки-факта, а не переход:
-            строка не открывается, она закрывается. Поэтому сама строка
-            не кнопка, а кнопка только крестик, и у него есть имя.
-          */}
-          {otherSessions.map((session) => (
-            <MobileSettingRow
-              key={session.id}
-              icon={session.icon}
-              title={session.title}
-              note={session.note}
-              passive
-              trailing={
-                <button
-                  type="button"
-                  aria-label={`Завершить сеанс ${session.title}`}
-                  onClick={() =>
-                    setOtherSessions((rest) =>
-                      rest.filter((item) => item.id !== session.id),
-                    )
-                  }
-                  className="flex size-5 shrink-0 cursor-pointer items-center justify-center bg-transparent text-text-dense outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-                >
-                  <X aria-hidden className="size-5" strokeWidth={2} />
-                </button>
-              }
-            />
-          ))}
-
-          {/*
-            Подпись отвечает на страх, из-за которого человек не жмёт:
-            «на этом устройстве вход сохранится». Ответ обязан стоять
-            в самой строке, а не после неё, иначе он опоздал.
-          */}
-          <MobileSettingRow
-            icon={LogOut}
-            title="Завершить остальные сеансы"
-            note="на этом устройстве вход сохранится"
-            onPress={() => setOtherSessions([])}
-          />
+          <Typography variant="metaText" tone="dense">
+            Пока в списке только это устройство: вход с другого телефона или
+            компьютера сюда ещё не приходит.
+          </Typography>
 
           {/*
             Подтверждение входа по коду — правило продукта, экрана настройки

@@ -1,7 +1,8 @@
 import { useRouter } from "@tanstack/react-router"
 import { ArrowLeft } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import type { ReactNode } from "react"
+import { useRef, useState } from "react"
+import type { PointerEvent, ReactNode } from "react"
 
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
@@ -163,17 +164,80 @@ function MobileSheet({
   text: string
   children: ReactNode
 }) {
+  const router = useRouter()
+
+  /**
+   * Лист идёт за пальцем.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Хват 36 × 5 нарисован в файле, и он обещает, что лист тянется. Обещание
+   * без движения — это ложь интерфейса: человек тянет, ничего не происходит,
+   * и он делает вывод, что экран сломан.
+   *
+   * **Прерываемость — требование спеки движения.** Лист, который потянули
+   * обратно, обязан пойти за пальцем, а не доигрывать анимацию. Поэтому
+   * смещение хранится состоянием и переписывается на каждое движение пальца,
+   * а не задаётся анимацией с фиксированной длиной.
+   *
+   * Порог 96 — примерно четверть типичной высоты листа. Ниже него лист
+   * возвращается на место за 200 мс; выше — экран закрывается возвратом
+   * в историю. Возврат, а не назначенный адрес: лист здесь — целый экран,
+   * и в него приходят с разных сторон.
+   *
+   * Тянуть можно только вниз: `Math.max(0, …)` отсекает попытку утащить
+   * лист вверх. Растянутый на пол-экрана лист в файле не нарисован, и
+   * выдумывать его нельзя.
+   */
+  const [drag, setDrag] = useState<number | null>(null)
+  const [arrived, setArrived] = useState(false)
+  const startRef = useRef(0)
+
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    startRef.current = event.clientY
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDrag(0)
+  }
+
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (drag === null) return
+    setDrag(Math.max(0, event.clientY - startRef.current))
+  }
+
+  const onPointerUp = () => {
+    if (drag === null) return
+    if (drag > 96) router.history.back()
+    setDrag(null)
+  }
+
   return (
     <div
       data-slot="mobile-sheet-scrim"
-      className="flex h-svh w-full flex-col justify-end bg-[#1e1e1e59]"
+      className="motion-in flex h-svh w-full flex-col justify-end bg-[#1e1e1e59]"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         data-slot="mobile-sheet"
-        className="flex w-full flex-col gap-5 rounded-t-3xl bg-surface px-5 pt-3 pb-8"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        // Приезд снимается сразу по окончании: анимация с `fill-mode: both`
+        // держит `transform` навсегда и по правилам каскада бьёт даже
+        // встроенный стиль — то есть лист перестал бы слушаться пальца.
+        onAnimationEnd={(event) => {
+          if (event.currentTarget === event.target) setArrived(true)
+        }}
+        // Пока палец на экране — ни перехода: лист стоит ровно там, где палец.
+        // Отпустили — возвращается за 200 мс.
+        style={drag === null ? undefined : { transform: `translateY(${drag}px)`, transition: "none" }}
+        // Жест листа не должен превращаться в прокрутку страницы под ним.
+        className={cn(
+          "flex w-full touch-none flex-col gap-5 rounded-t-3xl bg-surface px-5 pt-3 pb-8",
+          arrived ? "transition-transform duration-200" : "sheet-in",
+        )}
       >
         <div className="flex w-full justify-center">
           <span aria-hidden className="h-[5px] w-9 rounded-full bg-line-2" />

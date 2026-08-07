@@ -100,6 +100,27 @@ function Fields({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Подсказки полей регистрации.
+ *
+ * **В полях стояли образцы текста из макета** — название чужого агентства,
+ * чужие ИНН, ФИО и почта. Дизайнер написал их, чтобы кадр не был пустым,
+ * а человек читал их как чью-то настоящую запись и отправлял форму, не глядя.
+ * Подсказка говорит, ЧТО вписать, и не притворяется данными.
+ *
+ * Строки одни на живую форму и на её же экран с ошибкой: там поля нарисованные,
+ * и подсказка служит им значением. Две копии этих слов разъехались бы молча.
+ */
+const HINTS = {
+  agency: "как называется ваше агентство",
+  city: "город, в котором работаете",
+  inn: "десять цифр",
+  name: "фамилия, имя и отчество",
+  email: "почта, на которую заводим агентство",
+  phone: "номер для связи",
+  password: "Придумайте пароль",
+} as const
+
+/**
  * Вход в кабинет.
  *
  * **Форма живая, но пароль не проверяется, и это осознанно.** За кабинетом
@@ -193,20 +214,30 @@ export function LoginPage() {
  * После создания человек попадает не в общую выдачу, а на экран первого входа:
  * пустое агентство и пять пробных раскрытий — другое состояние продукта,
  * а не та же выдача с другим числом в шапке.
+ *
+ * **ФОРМА ПУСТАЯ.** Раньше в ней лежало заполненное чужое агентство из макета,
+ * и человек создавал себе агентство с чужим названием, ИНН и почтой, ни разу
+ * не коснувшись полей. То, что он вводит здесь, потом стоит в шапке кабинета
+ * и в журнале раскрытий — вписать это может только он сам.
  */
 export function RegisterPage() {
   const navigate = useNavigate()
-  const [agency, setAgency] = useState("Агентство «Невский проспект»")
-  const [city, setCity] = useState("Санкт-Петербург")
-  const [inn, setInn] = useState("7806154392")
-  const [name, setName] = useState("Смирнова Ирина Владимировна")
-  const [email, setEmail] = useState("i.smirnova@nevsky.ru")
-  const [phone, setPhone] = useState("+7 900 000-57-66")
+  const [agency, setAgency] = useState("")
+  const [city, setCity] = useState("")
+  const [inn, setInn] = useState("")
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
   const [password, setPassword] = useState("")
   const [offer, setOffer] = useState(false)
   const [consent, setConsent] = useState(false)
 
-  const ready = offer && consent && agency.trim() !== "" && email.trim() !== ""
+  // Имя теперь тоже обязательно. Пока поле было заполнено макетом, пустым оно
+  // не бывало; теперь бывает — а без имени кабинет подписал бы человека словом
+  // «Руководитель» и поставил бы это же слово в журнал раскрытий рядом
+  // с каждым списанием.
+  const ready =
+    offer && consent && agency.trim() !== "" && email.trim() !== "" && name.trim() !== ""
 
   const create = () => {
     if (!ready) return
@@ -223,8 +254,20 @@ export function RegisterPage() {
     >
       <Fields>
         <div className="flex w-194 gap-5">
-          <AuthField label="НАЗВАНИЕ АГЕНТСТВА" value={agency} onChange={setAgency} name="agency" />
-          <AuthField label="ГОРОД" value={city} onChange={setCity} name="city" />
+          <AuthField
+            label="НАЗВАНИЕ АГЕНТСТВА"
+            value={agency}
+            onChange={setAgency}
+            name="agency"
+            placeholderText={HINTS.agency}
+          />
+          <AuthField
+            label="ГОРОД"
+            value={city}
+            onChange={setCity}
+            name="city"
+            placeholderText={HINTS.city}
+          />
         </div>
         <div className="flex w-194 gap-5">
           <AuthField
@@ -232,9 +275,16 @@ export function RegisterPage() {
             value={inn}
             onChange={setInn}
             name="inn"
+            placeholderText={HINTS.inn}
             hint="проверим в ЕГРЮЛ автоматически"
           />
-          <AuthField label="ФИО РУКОВОДИТЕЛЯ" value={name} onChange={setName} name="name" />
+          <AuthField
+            label="ФИО РУКОВОДИТЕЛЯ"
+            value={name}
+            onChange={setName}
+            name="name"
+            placeholderText={HINTS.name}
+          />
         </div>
         <div className="flex w-194 gap-5">
           <AuthField
@@ -244,6 +294,7 @@ export function RegisterPage() {
             name="email"
             type="email"
             autoComplete="email"
+            placeholderText={HINTS.email}
             hint="на него придёт подтверждение"
           />
           <AuthField
@@ -253,6 +304,7 @@ export function RegisterPage() {
             name="phone"
             type="tel"
             autoComplete="tel"
+            placeholderText={HINTS.phone}
           />
         </div>
         <div className="w-194">
@@ -263,7 +315,7 @@ export function RegisterPage() {
             name="password"
             type="password"
             autoComplete="new-password"
-            placeholderText="Придумайте пароль"
+            placeholderText={HINTS.password}
             hint="не короче десяти знаков"
           />
         </div>
@@ -303,9 +355,14 @@ export function RegisterPage() {
  * Регистрация с ошибками проверки.
  *
  * **Ошибка говорит, что именно не так и что делать**, а не «проверьте данные»:
- * «ИНН 7801234567 не нашёлся в ЕГРЮЛ. Проверьте цифры или напишите
- * на hello@serch.ru». Второй адрес в тексте — не вежливость, а выход
- * из тупика: если ИНН верный, а ЕГРЮЛ молчит, человеку больше некуда идти.
+ * «Такого ИНН нет в ЕГРЮЛ. Проверьте цифры или напишите на hello@serch.ru».
+ * Второй адрес в тексте — не вежливость, а выход из тупика: если ИНН верный,
+ * а ЕГРЮЛ молчит, человеку больше некуда идти.
+ *
+ * **Номер из текста ошибки убран, и поля стоят с подсказками.** Раньше экран
+ * показывал заполненное чужое агентство и называл вслух чужой ИНН — цифры были
+ * образцом из макета, а читались как настоящая запись. Экран существует, чтобы
+ * показать ВИД ошибки, и для этого чужие данные не нужны.
  */
 export function RegisterErrorPage() {
   return (
@@ -317,27 +374,29 @@ export function RegisterErrorPage() {
     >
       <Fields>
         <div className="flex w-194 gap-5">
-          <AuthField label="НАЗВАНИЕ АГЕНТСТВА" value="Агентство «Невский проспект»" />
-          <AuthField label="ГОРОД" value="Санкт-Петербург" />
+          <AuthField label="НАЗВАНИЕ АГЕНТСТВА" value={HINTS.agency} placeholder />
+          <AuthField label="ГОРОД" value={HINTS.city} placeholder />
         </div>
         <div className="flex w-194 gap-5">
           <AuthField
             label="ИНН"
-            value="7801234567"
-            error="ИНН 7801234567 не нашёлся в ЕГРЮЛ. Проверьте цифры или напишите на hello@serch.ru."
+            value={HINTS.inn}
+            placeholder
+            error="Такого ИНН нет в ЕГРЮЛ. Проверьте цифры или напишите на hello@serch.ru."
           />
-          <AuthField label="ФИО РУКОВОДИТЕЛЯ" value="Смирнова Ирина Владимировна" />
+          <AuthField label="ФИО РУКОВОДИТЕЛЯ" value={HINTS.name} placeholder />
         </div>
         <div className="flex w-194 gap-5">
           <AuthField
             label="РАБОЧИЙ E-MAIL"
-            value="i.smirnova@nevsky.ru"
+            value={HINTS.email}
+            placeholder
             error="На эту почту уже создано агентство. Войдите или восстановите пароль."
           />
-          <AuthField label="ТЕЛЕФОН" value="+7 900 000-57-66" />
+          <AuthField label="ТЕЛЕФОН" value={HINTS.phone} placeholder />
         </div>
         <div className="w-194">
-          <AuthField label="ПАРОЛЬ" value="Придумайте пароль" placeholder hint="не короче десяти знаков" />
+          <AuthField label="ПАРОЛЬ" value={HINTS.password} placeholder hint="не короче десяти знаков" />
         </div>
       </Fields>
 
@@ -357,6 +416,13 @@ export function RegisterErrorPage() {
   )
 }
 
+/**
+ * Восстановление пароля.
+ *
+ * В поле стоит подсказка, а не чужой адрес. Подставленная почта из макета
+ * читалась как «мы уже знаем, кто вы»: человек нажимал «Прислать ссылку»,
+ * и письмо ушло бы не ему.
+ */
 export function ForgotPage() {
   return (
     <AuthShell
@@ -365,7 +431,7 @@ export function ForgotPage() {
     >
       <Fields>
         <div className="w-194">
-          <AuthField label="РАБОЧИЙ E-MAIL" value="i.smirnova@nevsky.ru" />
+          <AuthField label="РАБОЧИЙ E-MAIL" value="почта, на которую заводили агентство" placeholder />
         </div>
       </Fields>
       <div className="h-7" />

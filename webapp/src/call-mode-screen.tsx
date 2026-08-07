@@ -9,6 +9,7 @@ import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { demoPhone, useSession } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
+import { notifyDone, notifyError } from "@/platform/notify"
 import {
   addToStopList,
   callbacksDue,
@@ -492,19 +493,27 @@ export function CallModeScreenPage() {
               с «Позвонить» и отличается только тем, что тёплая.
               Ширина не назначается, а вырастает из кегля и полей: 113 → 152.
 
-              Кнопка кладёт номер в буфер обмена, и на экране от этого не
-              меняется ничего: плашки «скопировано» в макете нет, и выдумывать
-              её здесь не будем. Отказ буфера (браузер без разрешения) гасится
-              молча — ронять режим прозвона из-за копирования нельзя.
+              Кнопка кладёт номер в буфер обмена. Раньше на экране от этого не
+              менялось ничего, и человек нажимал второй и третий раз, не понимая,
+              сработало ли. Спека движения назвала это прямо: клавиша `C`
+              вносится «вместе с тостом подтверждения». Сообщение и есть
+              подтверждение — единственное место в прозвоне, где оно уместно.
+
+              Отказ буфера (браузер без разрешения) больше не гасится молча:
+              человек должен узнать, что номера у него нет, до того как начнёт
+              его набирать по памяти. Режим прозвона при этом не падает.
             */}
             <Button
               variant="quiet"
               size="lg"
               data-key="c"
               data-action="номер скопирован"
-              onPointerDown={() =>
-                void navigator.clipboard?.writeText(phone).catch(() => undefined)
-              }
+              onPointerDown={() => {
+                void navigator.clipboard
+                  ?.writeText(phone)
+                  .then(() => notifyDone("Номер скопирован"))
+                  .catch(() => notifyError("Браузер не дал скопировать номер"))
+              }}
               iconLeft={<Copy aria-hidden className="size-4" strokeWidth={2} />}
             >
               Скопировать

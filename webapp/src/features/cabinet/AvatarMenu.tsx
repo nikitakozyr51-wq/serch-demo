@@ -126,13 +126,22 @@ function AvatarMenu({ initials }: { initials: string }) {
           aria-label="Профиль"
           className="absolute top-full right-0 z-50 mt-2 flex w-65 flex-col rounded-2xl border border-line-2 bg-surface p-2"
         >
-          {/* Подпись, а не пункт: не нажимается и не подсвечивается. */}
+          {/* Подпись, а не пункт: не нажимается и не подсвечивается.
+
+              Имя и почта — только из сеанса. Здесь стояли запасные значения
+              из макета, и это было худшее место для них: меню профиля человек
+              открывает, чтобы убедиться, под кем он вошёл. Чужое имя ровно
+              в этом месте отвечает на вопрос неправильно.
+
+              Запасного значения не осталось вовсе: меню живёт в шапке
+              кабинета, а кабинет закрыт охраной — без сеанса сюда не попасть,
+              и подставлять нечего. */}
           <div className="flex flex-col gap-0.5 px-3 py-2">
             <Typography variant="controlLabel" tone="default">
-              {session?.name ?? "Смирнова Ирина"}
+              <>{session?.name ?? ""}</>
             </Typography>
             <Typography variant="metaText" tone="dense">
-              {session?.email ?? "i.smirnova@nevsky.ru"}
+              <>{session?.email ?? ""}</>
             </Typography>
           </div>
 

@@ -1,19 +1,14 @@
 import { useNavigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
-import { NAV } from "@/cabinet-demo-nav"
 import { useSession } from "@/features/auth"
-import {
-  callbacksDue,
-  takenNotCalled,
-  useNow,
-  useWorkspace,
-} from "@/features/workspace"
+
 import { cn } from "@/lib/utils"
 import { CabinetHeader } from "./CabinetHeader"
 import { CabinetGuard } from "./CabinetGuard"
 import { CabinetOverlays } from "./CabinetOverlays"
 import { requestPalette } from "./overlay-state"
+import { useCabinetNav } from "./useCabinetNav"
 import { CabinetSidebar, type NavEntry } from "./CabinetSidebar"
 
 /**
@@ -65,36 +60,8 @@ function CabinetShell({
    */
   const session = useSession()
   const navigate = useNavigate()
-  const workspace = useWorkspace()
-  const now = useNow()
 
-  /**
-   * Меню считает то, что есть на самом деле.
-   *
-   * Раньше «Сегодня 7» и «Подборки 4» стояли числами в файле навигации, и
-   * человек, создавший агентство минуту назад, видел семёрку — а открывал
-   * пустой экран. Счётчик, который нельзя посчитать, не рисуется вовсе:
-   * ноль рядом с пунктом читается как поломка, а не как «пока пусто».
-   */
-  const dueToday = callbacksDue(workspace, now).length + takenNotCalled(workspace).length
-  const nav = NAV.map((item) => {
-    if (item.id === "today") return { ...item, count: dueToday || undefined }
-    if (item.id === "collections") {
-      return { ...item, count: workspace.collections.length || undefined }
-    }
-    return item
-  })
-
-  /**
-   * Сохранённые поиски — свои. Ни одного выдуманного: раньше в списке стояли
-   * шесть чужих поисков, и ни один из них не нажимался, потому что адреса
-   * у них не было вовсе.
-   */
-  const savedFromWork: NavEntry[] = workspace.savedSearches.map((item) => ({
-    id: item.id,
-    label: item.name,
-    to: "/search",
-  }))
+  const { items, savedSearches: ownSearches, agencySearches: ownAgency } = useCabinetNav()
 
   return (
     <CabinetGuard>
@@ -113,9 +80,9 @@ function CabinetShell({
 
       <div className="flex min-h-0 flex-1">
         <CabinetSidebar
-          items={nav}
-          savedSearches={savedSearches ?? savedFromWork}
-          agencySearches={agencySearches ?? []}
+          items={items}
+          savedSearches={savedSearches ?? ownSearches}
+          agencySearches={agencySearches ?? ownAgency}
           activeId={activeId}
         />
         <>{children}</>

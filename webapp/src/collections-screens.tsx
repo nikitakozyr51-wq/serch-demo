@@ -1,17 +1,21 @@
-import { Link } from "@tanstack/react-router"
+import { Link, useRouterState } from "@tanstack/react-router"
 import { Copy, GripVertical, Link as LinkIcon } from "lucide-react"
 import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { TextField } from "@/components/controls/TextField"
+import { ALL_ROWS } from "@/data/search-rows"
 import { AgencyEmpty, DataTable } from "@/features/agency"
-import { useOwnAgency, useSession } from "@/features/auth"
+import { useSession } from "@/features/auth"
 import {
   createCollection,
   formatDay,
+  removeFromCollection,
   setCollectionLink,
+  useNow,
   useWorkspace,
+  type Collection,
 } from "@/features/workspace"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
 import { MarketDeviation } from "@/features/listings"
@@ -29,6 +33,14 @@ import { MarketDeviation } from "@/features/listings"
  *
  * Отсюда же и то, что публичная страница живёт **вне кабинета**: у неё своя
  * шапка с именем агента и его телефоном. Телефон на ней ровно один — агента.
+ *
+ * **Ни одной подборки, ни одного объекта и ни одного имени здесь больше не
+ * вписано.** Из макета сюда приехали образцы текста — чужие агенты, чужое
+ * агентство, шесть чужих комнат — и показывались живым людям как их работа.
+ * Теперь список приходит из `features/workspace`, объекты внутри — из той же
+ * базы, что и выдача, а имя человека и агентства — из сеанса. Где взять
+ * значение неоткуда, стоит прочерк: он говорит правду, а правдоподобная
+ * подстановка — нет.
  */
 
 function CollectionsShell({
@@ -61,33 +73,6 @@ function CollectionsShell({
   )
 }
 
-type Collection = {
-  id: string
-  name: string
-  about: string
-  /** Хвост публичного адреса: `serch.ru/p/<slug>`. Именно он уходит в буфер. */
-  slug: string
-  objects: string
-  author: string
-  updated: string
-  views: string
-  /**
-   * Ссылки ещё нет: вместо «Скопировать» стоит «Создать ссылку», а в просмотрах
-   * прочерк. Это начальное состояние строки — нажатие переводит её во второе.
-   */
-  noLink?: boolean
-}
-
-/** Подборка, которая собрана изнутри. Все строки списка ведут в неё: других нет. */
-const COLLECTION_SLUG = "rassel-ligovka-8f3a"
-
-const COLLECTIONS: Collection[] = [
-  { id: "1", name: "Расселение, Лиговка", about: "коммуналки под расселение у Лиговского проспекта", slug: COLLECTION_SLUG, objects: "6", author: "Смирнова Ирина", updated: "сегодня, 11:05", views: "124" },
-  { id: "2", name: "Красногвардейский до 10", about: "Красногвардейский район, бюджет до 10 млн", slug: "krasnogvard-do-10-2c17", objects: "4", author: "Титова Анна", updated: "вчера, 16:40", views: "0" },
-  { id: "3", name: "Невский, 2-к для Ковалёвых", about: "двухкомнатные у Невского, для семьи Ковалёвых", slug: "nevsky-2k-kovalevy-5b90", objects: "3", author: "Лебедев Максим", updated: "22.07, 14:20", views: "8" },
-  { id: "4", name: "Доли и комнаты, отбор", about: "доли и комнаты по всему городу", slug: "doli-komnaty-otbor-1d44", objects: "2", author: "Смирнова Ирина", updated: "19.07, 10:30", views: "0", noLink: true },
-]
-
 /**
  * Скопировать публичную ссылку.
  *
@@ -104,6 +89,43 @@ function copyLink(slug: string) {
   void navigator.clipboard?.writeText(`https://serch.ru/p/${slug}`).catch(() => {})
 }
 
+/**
+ * Какая подборка открыта.
+ *
+ * Адрес `/collections/inside` один на все подборки, поэтому какая именно
+ * открыта, говорит параметр `id` — тем же приёмом, каким карточка объекта
+ * узнаёт свой адрес из `?at=`. До этого страница показывала одну вписанную
+ * подборку, и все строки списка вели в неё: подборка, которую агент собрал
+ * сам, открыться не могла вообще.
+ *
+ * Параметр читается свободно, а не через `validateSearch`: маршрут его пока
+ * не объявляет, и объявление живёт в `routes.tsx` — файле, который правит
+ * не этот экран. Пока объявления нет, источник правды — сам адрес; подборки
+ * без него страница честно не показывает.
+ */
+function useOpenedCollection(): Collection | null {
+  const search = useRouterState({ select: (state) => state.location.search })
+  const workspace = useWorkspace()
+  const id = (search as { id?: unknown }).id
+
+  if (typeof id !== "string") return null
+  return workspace.collections.find((item) => item.id === id) ?? null
+}
+
+/**
+ * Пояснение под названием подборки.
+ *
+ * Собирается из состава: своего описания у подборки нет и не должно быть —
+ * лишнее поле в форме создания человек всё равно пропустит, а пустая строка
+ * выглядит поломкой.
+ */
+function aboutOf(collection: Collection): string {
+  if (collection.items.length === 0) return "пока пусто — добавьте объекты из выдачи клавишей B"
+  return (
+    collection.items.slice(0, 2).join(" · ") + (collection.items.length > 2 ? " и ещё…" : "")
+  )
+}
+
 export function CollectionsPage() {
   /**
    * Подборки берутся из работы агентства, а не из констант.
@@ -111,37 +133,15 @@ export function CollectionsPage() {
    * Раньше здесь стояли четыре чужие подборки, все четыре строки вели в одну
    * и ту же, а кнопка «Новая подборка» не имела обработчика — то есть завести
    * свою было нельзя вообще никак. Владелец назвал это «подборка потерялась».
+   *
+   * Развилки «свои или чужие» больше нет: чужих нет ни на одном экране,
+   * и показывать их нечем.
    */
-  const own = useOwnAgency()
   const workspace = useWorkspace()
   const session = useSession()
+  const now = useNow()
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState("")
-
-  const collections: Collection[] = own
-    ? workspace.collections.map((item) => ({
-        id: item.id,
-        slug: item.slug,
-        name: item.name,
-        // Пояснение под названием собирается из состава: своего описания у
-        // подборки нет и не должно быть — лишнее поле в форме создания
-        // человек всё равно пропустит, а пустая строка выглядит поломкой.
-        about: item.items.length === 0
-          ? "пока пусто — добавьте объекты из выдачи клавишей B"
-          : item.items.slice(0, 2).join(" · ") + (item.items.length > 2 ? " и ещё…" : ""),
-        objects: String(item.items.length),
-        author: item.by,
-        updated: formatDay(item.updatedAt, item.updatedAt),
-        views: "—",
-        noLink: !item.linked,
-      }))
-    : COLLECTIONS
-
-  const linked = collections.filter((row) => !row.noLink).map((row) => row.id)
-
-  const setLink = (id: string, on: boolean) => {
-    if (own) setCollectionLink(id, on)
-  }
 
   const create = () => {
     const clean = name.trim()
@@ -197,7 +197,7 @@ export function CollectionsPage() {
         </div>
       </div>
 
-      {collections.length === 0 ? (
+      {workspace.collections.length === 0 ? (
         <AgencyEmpty
           title="Подборок пока нет"
           text="Подборка — это ссылка клиенту на отобранные объекты: он смотрит квартиры, а телефон собственника в ней скрыт всегда. Объекты добавляются из выдачи клавишей B или кнопкой в строке."
@@ -213,75 +213,67 @@ export function CollectionsPage() {
           { head: "ПРОСМОТРОВ", width: "w-32.5", numeric: true },
           { head: "ССЫЛКА", width: "w-45", numeric: true },
         ]}
-        rows={collections.map((row) => {
-          const hasLink = linked.includes(row.id)
-
-          return {
-            id: row.id,
-            cells: [
-              // Имя подборки — ссылка внутрь, а не подпись. Список, из которого
-              // нельзя открыть подборку, агенту не нужен вовсе. Ссылкой, а не
-              // кнопкой: её открывают в новой вкладке и возвращаются назад.
-              <Link
-                key="name"
-                to="/collections/inside"
-                className="flex min-w-0 cursor-pointer flex-col gap-0.5 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-              >
-                <Typography variant="numericDense" tone="default">
-                  {row.name}
-                </Typography>
-                <Typography variant="metaText" tone="dense">
-                  {row.about}
-                </Typography>
-              </Link>,
-              <Typography key="objects" variant="denseText" tone="default">{row.objects}</Typography>,
-              <Typography key="author" variant="denseText" tone="secondary">{row.author}</Typography>,
-              <Typography key="updated" variant="denseText" tone="secondary">{row.updated}</Typography>,
-              // Прочерк в просмотрах значит «ссылки нет», а не «ноль заходов»:
-              // у подборки без ссылки считать нечего. Как только ссылку создали,
-              // на её месте встаёт ноль — то же состояние, что у второй строки.
-              <Typography key="views" variant="denseText" tone="default">
-                {hasLink ? row.views : "—"}
-              </Typography>,
-              <Button
-                key="link"
-                variant="quiet"
-                size="sm"
-                onClick={() => {
-                  if (hasLink) copyLink(row.slug)
-                  else setLink(row.id, true)
-                }}
-                iconLeft={
-                  hasLink ? <Copy aria-hidden className="size-3.5" strokeWidth={2} /> : undefined
-                }
-              >
-                {hasLink ? "Скопировать" : "Создать ссылку"}
-              </Button>,
-            ],
-          }
-        })}
+        rows={workspace.collections.map((item) => ({
+          id: item.id,
+          cells: [
+            // Имя подборки — ссылка внутрь, а не подпись. Список, из которого
+            // нельзя открыть подборку, агенту не нужен вовсе. Ссылкой, а не
+            // кнопкой: её открывают в новой вкладке и возвращаются назад.
+            // Какую именно открывать, говорит `id` в адресе: страница внутри
+            // одна на все подборки.
+            <Link
+              key="name"
+              to="/collections/inside"
+              search={{ id: item.id }}
+              className="flex min-w-0 cursor-pointer flex-col gap-0.5 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+            >
+              <Typography variant="numericDense" tone="default">
+                {item.name}
+              </Typography>
+              <Typography variant="metaText" tone="dense">
+                {aboutOf(item)}
+              </Typography>
+            </Link>,
+            <Typography key="objects" variant="denseText" tone="default">
+              {String(item.items.length)}
+            </Typography>,
+            // Автор — тот, кто завёл подборку, из сеанса на момент создания.
+            // Пустое имя даёт прочерк: подставить сюда кого-нибудь значило бы
+            // приписать работу человеку, который её не делал.
+            <Typography key="author" variant="denseText" tone="secondary">
+              {item.by === "" ? "—" : item.by}
+            </Typography>,
+            <Typography key="updated" variant="denseText" tone="secondary">
+              {formatDay(item.updatedAt, now)}
+            </Typography>,
+            // Просмотров всегда прочерк, и это не заглушка, а отсутствие
+            // счётчика: заходы клиента считает только сервер, а его пока нет.
+            // Ноль на этом месте был бы утверждением «никто не заходил» —
+            // проверить его нечем.
+            <Typography key="views" variant="denseText" tone="default">
+              {"—"}
+            </Typography>,
+            <Button
+              key="link"
+              variant="quiet"
+              size="sm"
+              onClick={() => {
+                if (item.linked) copyLink(item.slug)
+                else setCollectionLink(item.id, true)
+              }}
+              iconLeft={
+                item.linked ? <Copy aria-hidden className="size-3.5" strokeWidth={2} /> : undefined
+              }
+            >
+              {item.linked ? "Скопировать" : "Создать ссылку"}
+            </Button>,
+          ],
+        }))}
       />
       )}
     </CollectionsShell>
   )
 }
-
-type CollectionObject = {
-  id: string
-  address: string
-  price: string
-  deviation: number
-  meta: string
-}
-
-const OBJECTS: CollectionObject[] = [
-  { id: "1", address: "Лиговский пр., 44", price: "6,4 млн ₽", deviation: -14, meta: "комната 18 м² в 4-к · 3/5 эт · Лиговский проспект 4 мин · 62 дня в выдаче" },
-  { id: "2", address: "ул. Марата, 12", price: "5,8 млн ₽", deviation: -9, meta: "комната 16 м² в 5-к · 2/6 эт · Владимирская 7 мин · 34 дня в выдаче" },
-  { id: "3", address: "Разъезжая ул., 26", price: "7,1 млн ₽", deviation: 0, meta: "комната 21 м² в 4-к · 4/5 эт · Достоевская 6 мин · 12 дней в выдаче" },
-  { id: "4", address: "Свечной пер., 9", price: "4,9 млн ₽", deviation: -11, meta: "комната 14 м² в 6-к · 1/5 эт · Лиговский проспект 9 мин · 88 дней в выдаче" },
-  { id: "5", address: "Боровая ул., 31", price: "6,9 млн ₽", deviation: 7, meta: "комната 19 м² в 3-к · 5/5 эт · Обводный канал 11 мин · 5 дней в выдаче" },
-  { id: "6", address: "Тамбовская ул., 8", price: "5,2 млн ₽", deviation: -16, meta: "комната 15 м² в 5-к · 2/5 эт · Обводный канал 8 мин · 121 день в выдаче" },
-]
 
 /**
  * Подпись подборки числом объектов.
@@ -312,134 +304,209 @@ function objectsNote(count: number): string {
  * выделяться мышью адрес. Ручка при этом умеет клавиатуру — стрелки вверх
  * и вниз двигают объект: перетаскивание мышью для человека, который работает
  * с клавиатуры, никакого порядка не задаёт.
+ *
+ * **Оговорка про сохранение порядка.** Перестановка живёт в экране и до
+ * перезагрузки: в журнале подборок есть «добавить» и «убрать», но нет
+ * «переставить», а заводить действие хранилища — правка `features/workspace`,
+ * а не этого файла. Состав при этом настоящий: «Убрать» убирает объект
+ * насовсем, и список это переживёт.
  */
 export function CollectionInsidePage() {
-  // Состав и порядок подборки — состояние экрана: клиент увидит её ровно такой,
-  // какой её оставил агент.
-  const [objects, setObjects] = useState<CollectionObject[]>(OBJECTS)
+  const collection = useOpenedCollection()
+  // Порядок, заданный перетаскиванием: только адреса, без копии объектов.
+  // Состав живёт в подборке, порядок — здесь, и они не спорят друг с другом.
+  const [order, setOrder] = useState<string[]>([])
+
+  const items = collection?.items ?? []
+  // Сначала то, что агент переставил, следом всё, чего он не трогал: объект,
+  // добавленный из выдачи только что, не должен прыгать в середину списка.
+  const shown = [
+    ...order.filter((address) => items.includes(address)),
+    ...items.filter((address) => !order.includes(address)),
+  ]
   // Строка, взятая за ручку. Перетаскиваемой становится только она.
   const [dragging, setDragging] = useState<number | null>(null)
 
   function move(from: number, to: number) {
-    setObjects((previous) => {
-      if (from === to || to < 0 || to >= previous.length) return previous
+    if (from === to || to < 0 || to >= shown.length) return
 
-      const next = [...previous]
-      const [moved] = next.splice(from, 1)
-      if (moved === undefined) return previous
+    const next = [...shown]
+    const [moved] = next.splice(from, 1)
+    if (moved === undefined) return
 
-      next.splice(to, 0, moved)
-      return next
-    })
+    next.splice(to, 0, moved)
+    setOrder(next)
+  }
+
+  /**
+   * Подборка не выбрана.
+   *
+   * Так выглядит прямой заход на адрес без `id` — например по старой закладке.
+   * Показать при этом чью-то чужую подборку было бы хуже пустого экрана:
+   * человек решил бы, что это его работа.
+   */
+  if (collection === null) {
+    return (
+      <CollectionsShell title="Подборка" note="">
+        <AgencyEmpty
+          title="Подборка не выбрана"
+          text="Подборки открываются из списка: там видно, сколько в каждой объектов, кто её собрал и создана ли ссылка для клиента."
+          note="Этот адрес открывает одну подборку — ту, на которую нажали в списке."
+        />
+      </CollectionsShell>
+    )
   }
 
   return (
     <CollectionsShell
-      title="Расселение, Лиговка"
-      note={objectsNote(objects.length)}
+      title={collection.name}
+      note={objectsNote(shown.length)}
       action={
         <div className="flex items-center gap-2">
-          {/* Отправки в Telegram в макете нет ни экраном, ни окном выбора чата:
-              действие названо и не рисует ничего. Уводить агента на сторонний
-              сайт вместо нарисованного шага — не то же самое, что сделать шаг. */}
-          <Button
-            variant="secondary"
-            size="sm"
-            data-action="публичная ссылка отправлена в Telegram"
-          >
-            Отправить в Telegram
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => copyLink(COLLECTION_SLUG)}>
-            Скопировать публичную ссылку
-          </Button>
+          {/* Пока ссылки нет, отправлять и копировать нечего: обе кнопки
+              обещали бы клиенту страницу, которая не откроется. Поэтому до
+              создания ссылки здесь стоит одно действие — создать её. */}
+          {collection.linked ? (
+            <>
+              {/* Отправки в Telegram в макете нет ни экраном, ни окном выбора
+                  чата: действие названо и не рисует ничего. Уводить агента
+                  на сторонний сайт вместо нарисованного шага — не то же самое,
+                  что сделать шаг. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                data-action="публичная ссылка отправлена в Telegram"
+              >
+                Отправить в Telegram
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => copyLink(collection.slug)}>
+                Скопировать публичную ссылку
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setCollectionLink(collection.id, true)}
+            >
+              Создать ссылку
+            </Button>
+          )}
         </div>
       }
     >
+      {/* Числа просмотров в строке нет по той же причине, что и в списке:
+          заходы клиента считает сервер, а его пока нет. Остальное здесь
+          проверяемо: адрес ссылки, её состояние и обещание про телефоны. */}
       <Typography variant="metaText" tone="dense">
-        {`serch.ru/p/${COLLECTION_SLUG} · открыта · 124 просмотра · телефоны скрыты`}
+        {collection.linked
+          ? `serch.ru/p/${collection.slug} · открыта · телефоны скрыты`
+          : "ссылка не создана · подборка видна только в кабинете"}
       </Typography>
 
-      {/* Убрать можно все шесть объектов. Пустой подборки в макете не нарисовано,
-          поэтому панель тогда просто исчезает: выдуманная заглушка была бы
-          рассказом о состоянии, которого владелец не утверждал. */}
-      <div className="flex w-full shrink-0 flex-col overflow-hidden rounded-2xl bg-surface">
-        {objects.map((object, index) => (
-          <div
-            key={object.id}
-            data-slot="collection-row"
-            draggable={dragging === index}
-            onDragStart={() => setDragging(index)}
-            onDragOver={(event) => {
-              // Строки меняются местами прямо под курсором: это и есть ответ
-              // на перетаскивание. Ни подсветки, ни просвета под строкой
-              // в макете нет, и придумывать их не нужно — порядок виден сам.
-              event.preventDefault()
-              if (dragging === null || dragging === index) return
-              move(dragging, index)
-              setDragging(index)
-            }}
-            onDragEnd={() => setDragging(null)}
-            className={`flex h-row-obj w-full items-center gap-4 px-4 ${
-              index < objects.length - 1 ? "border-b border-line-2" : ""
-            }`}
-          >
-            <button
-              type="button"
-              aria-label={`Переместить «${object.address}»: стрелки вверх и вниз`}
-              onPointerDown={() => setDragging(index)}
-              onPointerUp={() => setDragging(null)}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowUp") {
-                  event.preventDefault()
-                  move(index, index - 1)
-                }
-                if (event.key === "ArrowDown") {
-                  event.preventDefault()
-                  move(index, index + 1)
-                }
-              }}
-              className="flex size-4 shrink-0 cursor-grab items-center justify-center bg-transparent text-line-3 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-            >
-              <GripVertical aria-hidden className="size-4" strokeWidth={2} />
-            </button>
-            <div aria-hidden className="size-12 shrink-0 rounded-md bg-warm" />
+      {/* Пустая подборка — обычное состояние, а не сбой: её и заводят пустой,
+          а объекты складывают потом. Раньше панель в этом случае просто
+          исчезала, и экран молчал о том, что делать дальше. Форма пустого
+          состояния общая с разделами агентства — новую здесь не выдумывали. */}
+      {shown.length === 0 ? (
+        <AgencyEmpty
+          title="В подборке пока нет объектов"
+          text="Объекты добавляются из выдачи клавишей B или кнопкой в строке — карточку для этого открывать не нужно. Клиент увидит их в том порядке, в каком вы их расставите."
+        />
+      ) : (
+        <div className="flex w-full shrink-0 flex-col overflow-hidden rounded-2xl bg-surface">
+          {shown.map((address, index) => {
+            // Цена, отклонение и характеристики берутся из той же базы, что
+            // показывает выдача: подборка хранит адрес, а не копию объекта.
+            // Иначе цена внутри подборки разошлась бы с ценой в выдаче.
+            const listing = ALL_ROWS.find((row) => row.address === address)
 
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <div className="flex w-full items-center gap-2.5">
-                <div className="w-57.5 shrink-0">
-                  <Typography variant="rowPrice" tone="default">
-                    {object.address}
-                  </Typography>
-                </div>
-                <div className="flex w-25 shrink-0 justify-end">
-                  <Typography variant="rowPrice" tone="default">
-                    {object.price}
-                  </Typography>
-                </div>
-                <MarketDeviation percent={object.deviation} />
-              </div>
-              <Typography variant="denseText" tone="dense">
-                {object.meta}
-              </Typography>
-            </div>
-
-            <div className="w-37.5 shrink-0">
-              {/* «Убрать» действительно убирает: строка уходит, число объектов
-                  в шапке пересчитывается. Клиент по ссылке увидит то же самое. */}
-              <Button
-                variant="quiet"
-                size="sm"
-                block
-                onClick={() =>
-                  setObjects((previous) => previous.filter((item) => item.id !== object.id))
-                }
+            return (
+              <div
+                key={address}
+                data-slot="collection-row"
+                draggable={dragging === index}
+                onDragStart={() => setDragging(index)}
+                onDragOver={(event) => {
+                  // Строки меняются местами прямо под курсором: это и есть ответ
+                  // на перетаскивание. Ни подсветки, ни просвета под строкой
+                  // в макете нет, и придумывать их не нужно — порядок виден сам.
+                  event.preventDefault()
+                  if (dragging === null || dragging === index) return
+                  move(dragging, index)
+                  setDragging(index)
+                }}
+                onDragEnd={() => setDragging(null)}
+                className={`flex h-row-obj w-full items-center gap-4 px-4 ${
+                  index < shown.length - 1 ? "border-b border-line-2" : ""
+                }`}
               >
-                Убрать
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
+                <button
+                  type="button"
+                  aria-label={`Переместить «${address}»: стрелки вверх и вниз`}
+                  onPointerDown={() => setDragging(index)}
+                  onPointerUp={() => setDragging(null)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault()
+                      move(index, index - 1)
+                    }
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault()
+                      move(index, index + 1)
+                    }
+                  }}
+                  className="flex size-4 shrink-0 cursor-grab items-center justify-center bg-transparent text-line-3 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+                >
+                  <GripVertical aria-hidden className="size-4" strokeWidth={2} />
+                </button>
+                <div aria-hidden className="size-12 shrink-0 rounded-md bg-warm" />
+
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <div className="flex w-full items-center gap-2.5">
+                    <div className="w-57.5 shrink-0">
+                      <Typography variant="rowPrice" tone="default">
+                        {address}
+                      </Typography>
+                    </div>
+                    <div className="flex w-25 shrink-0 justify-end">
+                      <Typography variant="rowPrice" tone="default">
+                        {listing?.price ?? "—"}
+                      </Typography>
+                    </div>
+                    {/* Объекта может не оказаться в базе — например его сняли
+                        с публикации. Тогда отклонения и характеристик нет:
+                        считать их не от чего, и строка молчит вместо того,
+                        чтобы показать посчитанное неизвестно от чего. */}
+                    {listing === undefined ? null : (
+                      <MarketDeviation percent={listing.deviation} />
+                    )}
+                  </div>
+                  {listing === undefined ? null : (
+                    <Typography variant="denseText" tone="dense">
+                      {listing.meta.replace(/^·\s*/, "")}
+                    </Typography>
+                  )}
+                </div>
+
+                <div className="w-37.5 shrink-0">
+                  {/* «Убрать» действительно убирает: строка уходит из подборки
+                      насовсем, число объектов в шапке пересчитывается. Клиент
+                      по ссылке увидит то же самое. */}
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    block
+                    onClick={() => removeFromCollection(collection.id, address)}
+                  >
+                    Убрать
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="w-225 shrink-0">
         <Typography variant="metaText" tone="dense">
@@ -456,8 +523,23 @@ export function CollectionInsidePage() {
  *
  * Живёт вне кабинета: своя шапка 72 с именем агента и его телефоном.
  * **Телефон на этой странице ровно один — агента**, и это вся её экономика.
+ *
+ * **Чего у страницы пока нет.** Имя агента и агентства она берёт из сеанса —
+ * то есть показывает их только тому, кто вошёл на этом же компьютере. Клиент
+ * открывает ссылку в своём браузере, где нет ни сеанса, ни подборок: чужое
+ * хранилище оттуда не видно (`docs/DATA.md`). Пока за продуктом не появится
+ * сервер, страница честно живёт стендом.
+ *
+ * Телефона агента в продукте нет ни в сеансе, ни в настройках агентства.
+ * Пока поля нет, на его месте прочерк: выдуманный номер на странице, которую
+ * агент отдаёт клиенту, — худшее, что здесь можно напечатать.
  */
 export function PublicCollectionPage() {
+  const session = useSession()
+  const collection = useOpenedCollection()
+  const agency = session?.agency ?? ""
+  const agent = session?.name ?? ""
+
   return (
     <div className="flex min-h-svh w-full flex-col bg-bg">
       <div className="flex h-18 w-full shrink-0 items-center gap-4 border-b border-line-2 bg-surface px-12">
@@ -467,17 +549,24 @@ export function PublicCollectionPage() {
           </Typography>
           <span aria-hidden className="size-1.5 rounded-full bg-accent-bright" />
         </div>
-        <span aria-hidden className="h-5 w-px bg-line-2" />
-        <Typography variant="denseText" tone="dense">
-          подборка от агентства «Невский проспект»
-        </Typography>
+        {/* Имени агентства без сеанса взять неоткуда, и строка тогда исчезает
+            вместе с разделителем: «подборка от агентства » с пустотой на конце
+            хуже, чем её отсутствие. */}
+        {agency === "" ? null : (
+          <>
+            <span aria-hidden className="h-5 w-px bg-line-2" />
+            <Typography variant="denseText" tone="dense">
+              {`подборка от агентства «${agency}»`}
+            </Typography>
+          </>
+        )}
         <div className="h-px flex-1" />
         <div className="flex flex-col gap-0.5">
           <Typography variant="numericDense" tone="default">
-            Смирнова Ирина
+            {agent === "" ? "—" : agent}
           </Typography>
           <Typography variant="metaText" tone="dense">
-            +7 900 000-57-66
+            {"—"}
           </Typography>
         </div>
         {/* Переписки с агентом в продукте нет: ни экрана, ни окна, ни адреса
@@ -489,42 +578,71 @@ export function PublicCollectionPage() {
       </div>
 
       <div className="flex w-full flex-col gap-6 p-12">
-        <div className="flex w-full flex-col gap-2">
-          <Typography variant="cardPrice" tone="default" as="h1">
-            Расселение, Лиговка
-          </Typography>
-          <Typography variant="uiText" tone="secondary">
-            Шесть комнат под расселение у Лиговского проспекта. Телефоны собственников
-            скрыты: по любому объекту пишите агенту.
-          </Typography>
-        </div>
-
-        {/* Карточка не открывается. Публичной страницы объекта в продукте нет,
-            а выдумать ей адрес значило бы пообещать клиенту экран, которого
-            никто не рисовал. Карточка здесь — рассказ, а не вход. */}
-        <div className="grid w-full grid-cols-3 gap-6">
-          {OBJECTS.map((object) => (
-            <div
-              key={object.id}
-              data-slot="public-card"
-              className="flex flex-col gap-3 overflow-hidden rounded-2xl bg-surface p-4"
-            >
-              <div aria-hidden className="h-53.5 w-full rounded-xl bg-warm" />
-              <div className="flex w-full items-center gap-2">
-                <Typography variant="panelTitle" tone="default">
-                  {object.price}
-                </Typography>
-                <MarketDeviation percent={object.deviation} />
-              </div>
-              <Typography variant="rowPrice" tone="default">
-                {object.address}
+        {collection === null ? (
+          <AgencyEmpty
+            title="Подборка не открывается"
+            text="Ссылка ведёт на подборку, которой здесь нет: её могли отключить или прислать новую. Напишите агенту — он откроет доступ заново."
+          />
+        ) : (
+          <>
+            <div className="flex w-full flex-col gap-2">
+              <Typography variant="cardPrice" tone="default" as="h1">
+                {collection.name}
               </Typography>
-              <Typography variant="denseText" tone="dense">
-                {object.meta}
+              {/* Второй строкой — правило страницы, а не пересказ состава:
+                  сколько здесь объектов, клиент видит сам, а вот почему нигде
+                  нет телефона собственника — нет. */}
+              <Typography variant="uiText" tone="secondary">
+                Телефоны собственников скрыты: по любому объекту пишите агенту.
               </Typography>
             </div>
-          ))}
-        </div>
+
+            {/* Ссылку могли создать до того, как в подборку положили первый
+                объект. Клиент в этом случае не должен смотреть на пустое
+                место: страница говорит, что смотреть пока нечего. */}
+            {collection.items.length === 0 ? (
+              <Typography variant="uiText" tone="secondary">
+                В подборке пока нет объектов. Агент добавит их и пришлёт ссылку
+                ещё раз — она останется той же.
+              </Typography>
+            ) : null}
+
+            {/* Карточка не открывается. Публичной страницы объекта в продукте
+                нет, а выдумать ей адрес значило бы пообещать клиенту экран,
+                которого никто не рисовал. Карточка здесь — рассказ, а не вход. */}
+            <div className="grid w-full grid-cols-3 gap-6">
+              {collection.items.map((address) => {
+                const listing = ALL_ROWS.find((row) => row.address === address)
+
+                return (
+                  <div
+                    key={address}
+                    data-slot="public-card"
+                    className="flex flex-col gap-3 overflow-hidden rounded-2xl bg-surface p-4"
+                  >
+                    <div aria-hidden className="h-53.5 w-full rounded-xl bg-warm" />
+                    <div className="flex w-full items-center gap-2">
+                      <Typography variant="panelTitle" tone="default">
+                        {listing?.price ?? "—"}
+                      </Typography>
+                      {listing === undefined ? null : (
+                        <MarketDeviation percent={listing.deviation} />
+                      )}
+                    </div>
+                    <Typography variant="rowPrice" tone="default">
+                      {address}
+                    </Typography>
+                    {listing === undefined ? null : (
+                      <Typography variant="denseText" tone="dense">
+                        {listing.meta.replace(/^·\s*/, "")}
+                      </Typography>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -537,8 +655,14 @@ export function PublicCollectionPage() {
  * а объяснение с именем агентства: подборка больше не публикуется, свяжитесь
  * с агентом. Ссылка живёт своей жизнью после пересылки, и человек на том конце
  * не виноват, что она устарела.
+ *
+ * Имя агентства приходит из сеанса. Без сеанса его нет, и предложение теряет
+ * имя, а не получает чужое: «Агентство закрыло доступ» — правда в любом
+ * случае, а названное наугад агентство — нет.
  */
 export function CollectionOffPage() {
+  const agency = useSession()?.agency ?? ""
+
   return (
     <div className="flex min-h-svh w-full flex-col items-center justify-center gap-4 bg-bg px-12">
       <Typography variant="cardPrice" tone="default" as="h1">
@@ -546,8 +670,9 @@ export function CollectionOffPage() {
       </Typography>
       <div className="w-130 text-center">
         <Typography variant="uiText" tone="secondary" align="center">
-          Агентство «Невский проспект» закрыло доступ по этой ссылке. Если подборка
-          нужна, напишите агенту — он откроет её заново или пришлёт новую.
+          {agency === ""
+            ? "Агентство закрыло доступ по этой ссылке. Если подборка нужна, напишите агенту — он откроет её заново или пришлёт новую."
+            : `Агентство «${agency}» закрыло доступ по этой ссылке. Если подборка нужна, напишите агенту — он откроет её заново или пришлёт новую.`}
         </Typography>
       </div>
       {/* То же, что на публичной странице: переписки нет ни экраном, ни окном.

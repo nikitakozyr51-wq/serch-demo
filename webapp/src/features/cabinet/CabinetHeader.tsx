@@ -3,8 +3,8 @@ import { Search } from "lucide-react"
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { groupDigits, plural } from "@/features/listings"
+import { useAnimatedNumber } from "@/platform/motion"
 import { AvatarMenu } from "./AvatarMenu"
-import { useAnimatedNumber } from "./useAnimatedNumber"
 
 /**
  * Шапка кабинета.
