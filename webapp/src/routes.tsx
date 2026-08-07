@@ -12,7 +12,19 @@ import { RootLayout } from './root-layout'
 
 const rootRoute = createRootRoute({
   component: RootLayout,
-  notFoundComponent: lazyRouteComponent(() => import('./pages'), 'NotFoundPage'),
+  /**
+   * Неверный адрес показывает продукт, а не строительные леса.
+   *
+   * Стояла заготовка из шаблона: «Page not found» по-английски, с кнопкой
+   * «Return to workspace» и проверкой сеанса на сервере, которого у кабинета
+   * нет. Без сервера она к тому же падала в англоязычную карточку про
+   * сессию — то есть человек, ошибившийся в адресе, видел чужую вёрстку
+   * на чужом языке.
+   */
+  notFoundComponent: lazyRouteComponent(
+    () => import('./auth-more-screens'),
+    'NotFoundScreen',
+  ),
 })
 
 /**
