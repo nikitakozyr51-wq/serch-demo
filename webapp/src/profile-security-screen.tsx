@@ -127,7 +127,7 @@ function ProfileShell({ tab, children }: { tab: "personal" | "security"; childre
   return (
     <CabinetShell activeId="">
       <CabinetPage>
-        <div className="flex h-7 w-full shrink-0 items-center gap-3">
+        <div className="flex min-h-7 w-full shrink-0 items-center gap-3">
           <Typography variant="panelTitle" tone="default" as="h1">
             Профиль
           </Typography>

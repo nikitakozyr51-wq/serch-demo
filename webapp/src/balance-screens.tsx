@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { ArrowLeft } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import { Fragment, useState, type ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
@@ -107,12 +107,23 @@ function KeyNumbers({
 }) {
   return (
     <div className="flex w-full shrink-0 items-center gap-7">
+      {/*
+        Волосяной разделитель — СОСЕД колонки, а не её содержимое.
+
+        Прежде он лежал внутри колонки, и колонка платила за него своей
+        шириной: у остатка с закреплёнными 300 текст сжимался до 271,
+        а последняя из трёх метрик оставалась без разделителя и потому
+        была на 29 пикселей шире соседей. Ряд, который существует ради
+        сравнения четырёх чисел, сравнивал их в разных ширинах.
+      */}
       {items.map((item, index) => (
-        <div
-          key={item.label}
-          className={cn("flex items-center gap-7", item.big ? "w-75 shrink-0" : "min-w-0 flex-1")}
-        >
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <Fragment key={item.label}>
+          <div
+            className={cn(
+              "flex min-w-0 flex-col gap-1",
+              item.big ? "w-75 shrink-0" : "flex-1",
+            )}
+          >
             <Typography variant={item.big ? "display" : "cardPrice"} tone="default">
               {item.value}
             </Typography>
@@ -126,7 +137,7 @@ function KeyNumbers({
           {index < items.length - 1 ? (
             <span aria-hidden className="h-14 w-px shrink-0 bg-line-2" />
           ) : null}
-        </div>
+        </Fragment>
       ))}
     </div>
   )
@@ -257,7 +268,7 @@ function BalanceShell({
   return (
     <CabinetShell activeId="balance">
       <CabinetPage>
-        <div className="flex h-7 w-full shrink-0 items-center gap-3">
+        <div className="flex min-h-7 w-full shrink-0 items-center gap-3">
           <Typography variant="panelTitle" tone="default" as="h1">
             {title}
           </Typography>
@@ -1051,7 +1062,7 @@ export function BalanceTopUpPage() {
   return (
     <CabinetShell activeId="balance">
       <CabinetPage>
-        <div className="flex h-7 w-full shrink-0 items-center gap-3">
+        <div className="flex min-h-7 w-full shrink-0 items-center gap-3">
           <Typography variant="panelTitle" tone="default" as="h1">
             Пополнить баланс
           </Typography>

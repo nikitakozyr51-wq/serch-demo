@@ -90,7 +90,21 @@ function AgencyShell({ activeTab, title, note, action, children }: AgencyShellPr
         />
 
         <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
-          <div className="flex h-7 w-full shrink-0 items-center gap-3">
+          {/*
+            Строка заголовка — `min-h`, а не `h`.
+
+            Заголовок сам по себе занимает 28, и высота стояла числом 28.
+            Но справа в этой же строке живёт главное действие раздела —
+            кнопка ступени 32. Кнопка выше строки, в которой лежит, и
+            торчала из неё по 2 пикселя сверху и снизу на девяти экранах
+            подряд: агентство, сотрудники, отказы, журнал, согласия,
+            настройки, тариф, профиль, безопасность.
+
+            Нижняя граница остаётся 28 — строка без кнопки не вырастает.
+            Со кнопкой строка становится 32, и это ровно то, что рисует
+            кадр `u7anli`: там она 32, а не 28.
+          */}
+          <div className="flex min-h-7 w-full shrink-0 items-center gap-3">
             <Typography variant="panelTitle" tone="default" as="h1">
               {title}
             </Typography>
