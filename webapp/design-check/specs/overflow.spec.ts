@@ -47,9 +47,17 @@ const PAGES = ['/kitchen-sink', '/screen/search']
  * описал плотный режим словами «текст слипается», и полоса при этом
  * была зелёной.
  *
- * Плотность ставится атрибутом на корень документа — тем же, что ставит
- * продукт (`@/platform/density`). Отдельного пути для проверки нет: проверка
- * обязана видеть ровно тот механизм, который работает у человека.
+ * Плотность сажается В ХРАНИЛИЩЕ до загрузки страницы — тем же ключом,
+ * которым её хранит продукт (`@/platform/density`). Отдельного пути для
+ * проверки нет: проверка обязана видеть ровно тот механизм, который
+ * работает у человека.
+ *
+ * **Атрибутом на корне это делать нельзя, и раньше делалось именно так.**
+ * `useDensity` читает сохранённый выбор человека и переписывает атрибут
+ * на первой же отрисовке. Атрибут, поставленный после `goto`, живёт
+ * до неё — то есть проверка оба раза мерила просторный режим, считая,
+ * что второй раз мерит плотный. Плотный режим не проверялся вовсе,
+ * и полоса при этом была зелёной.
  */
 const DENSITIES = ['spacious', 'compact'] as const
 
@@ -61,12 +69,11 @@ test('переполнение: ни одна подпись не вылезае
     DENSITIES.map((density) => [path, density] as const),
   )) {
     await page.setViewportSize({ width: 1440, height: 1024 })
+    await page.addInitScript((value: string) => {
+      localStorage.setItem('serch.density', value)
+    }, density)
     await page.goto(path)
     await page.waitForSelector('[data-slot]')
-    await page.evaluate((density: string) => {
-      if (density === 'compact') document.documentElement.dataset.density = 'compact'
-      else delete document.documentElement.dataset.density
-    }, density)
     await page.evaluate(() => document.fonts.ready)
 
     const found: Problem[] = await page.evaluate((where0: string) => {

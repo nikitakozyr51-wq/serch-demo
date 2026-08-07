@@ -786,7 +786,19 @@ function SearchScreenBody({
           */}
           <div
             key={`${activeTab}|${sort}|${districts.join()}|${rooms.join()}|${priceCap}|${nearAddress}|${mode}`}
-            className="list-in flex flex-1 flex-col overflow-hidden rounded-2xl bg-surface"
+            /*
+              Список прокручивается сам, а не режет содержимое.
+
+              Стояло `overflow-hidden`: пятьдесят три строки в панели на
+              836 пикселей — пятнадцать видно, тридцать восемь недоступны
+              ничем, ни колесом, ни клавишей. Скругление панели требует
+              обрезки, но обрезка без прокрутки — это потеря данных.
+
+              `overscroll-contain` не даёт прокрутке перескочить на страницу,
+              когда список кончился: иначе колесо у нижней строки уводит
+              весь кабинет.
+            */
+            className="list-in flex flex-1 flex-col overflow-y-auto overscroll-contain rounded-2xl bg-surface"
           >
             {visible.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 px-20">
