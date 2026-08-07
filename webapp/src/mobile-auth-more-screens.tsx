@@ -217,7 +217,7 @@ export function MobileConfirmCodePage() {
 
   /** Код принят — человек внутри. Сам код не проверяется: сервера за ним нет. */
   const confirm = () => {
-    signIn()
+    void signIn()
     void navigate({ to: "/m/today" })
   }
 
@@ -263,7 +263,7 @@ export function MobileConfirmCodeErrorPage() {
   const navigate = useNavigate()
 
   const confirm = () => {
-    signIn()
+    void signIn()
     void navigate({ to: "/m/today" })
   }
 
@@ -371,7 +371,7 @@ export function MobileInvitePage() {
    * а не в общий кабинет: у него другой лимит и другие права.
    */
   const accept = () => {
-    signIn()
+    void signIn()
     void navigate({ to: "/m/first-run/employee" })
   }
 

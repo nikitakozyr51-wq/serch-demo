@@ -1,5 +1,8 @@
 import { useSyncExternalStore } from "react"
 
+import { notifyError } from "@/platform/notify"
+import { hasDatabase, loadWorkspace, remote } from "./remote"
+
 /**
  * Рабочее пространство агентства: всё, что накапливается работой.
  *
@@ -265,6 +268,34 @@ export function openWorkspace(email: string) {
   account = email
   current = read(email)
   for (const listener of listeners) listener()
+
+  /**
+   * Работа с сервера приезжает следом и ЗАМЕЩАЕТ прочитанное из браузера.
+   *
+   * Порядок именно такой, и он важен. Сначала кабинет открывается тем, что
+   * лежит рядом, — мгновенно, без пустого экрана и без крутилки. Потом
+   * приезжает правда с сервера.
+   *
+   * **Правда с сервера сильнее.** Браузер знает только то, что делал этот
+   * человек на этом устройстве; сервер знает работу всего агентства, включая
+   * то, что сделали коллеги. Обратный приоритет означал бы, что старый
+   * ноутбук затирает работу двух других сотрудников.
+   *
+   * Сбой чтения не гасит кабинет: человек остаётся с тем, что в браузере,
+   * и видит сообщение. Пустой кабинет вместо работы — худший из ответов
+   * на разорванную сеть.
+   */
+  if (!hasDatabase()) return
+  void loadWorkspace()
+    .then((remoteWorkspace) => {
+      if (remoteWorkspace === null) return
+      // Пока читали, человек мог выйти или войти под другим.
+      if (account !== email) return
+      write(remoteWorkspace)
+    })
+    .catch((error: unknown) => {
+      notifyError(`Работа агентства не загрузилась с сервера: ${String(error)}`)
+    })
 }
 
 /** Закрыть пространство: работа остаётся на диске, из памяти уходит. */
@@ -312,19 +343,65 @@ function nextId(prefix: string): string {
   return `${prefix}-${stamp().toString(36)}-${counter.toString(36)}`
 }
 
-export function recordDisclosure(input: Omit<Disclosure, "id" | "at">) {
-  write({
-    ...current,
-    disclosures: [{ ...input, id: nextId("d"), at: stamp() }, ...current.disclosures],
+
+/**
+ * Отправить запись на сервер, не заставляя человека ждать.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Действие уже случилось в памяти и уже на экране: раскрытие списало деньги,
+ * звонок отметился, объект уехал в подборку. Сервер догоняет следом.
+ *
+ * Причина не в скорости ради скорости. Агент делает тридцать-пятьдесят таких
+ * действий за смену, и ожидание сети на каждом превращает продукт в анкету:
+ * нажал — подожди — нажал — подожди. Спека движения запрещает это прямо.
+ *
+ * **Но потеря не бывает молчаливой.** Если запись до сервера не доехала,
+ * человек видит сообщение. Журнал, по которому считают деньги, не имеет
+ * права терять строки тихо: агентство узнало бы об этом на сверке через
+ * месяц, когда восстановить уже нечего.
+ *
+ * Когда база не настроена (демонстрация на GitHub Pages), функция ничего
+ * не делает: работа живёт в браузере, и это законный режим.
+ */
+/**
+ * Состав подборки уезжает целиком, а не по одному объекту.
+ *
+ * Порядок объектов и есть содержание подборки: агент перетаскивает строки,
+ * и клиент видит именно этот порядок. Дописывать по одному значило бы
+ * хранить порядок дважды — в памяти и в номерах позиций, — и однажды
+ * разойтись, причём молча.
+ */
+function pushItems(id: string, change: (items: string[]) => string[]) {
+  const found = current.collections.find((item) => item.id === id)
+  if (found === undefined) return
+  const next = change(found.items)
+  push("Состав подборки", () => remote.collectionItems(id, next))
+}
+
+function push(what: string, run: () => Promise<void>) {
+  if (!hasDatabase()) return
+  void run().catch((error: unknown) => {
+    notifyError(`${what} не сохранилось на сервере: ${String(error)}`)
   })
 }
 
+export function recordDisclosure(input: Omit<Disclosure, "id" | "at">) {
+  const item: Disclosure = { ...input, id: nextId("d"), at: stamp() }
+  write({ ...current, disclosures: [item, ...current.disclosures] })
+  push("Раскрытие контакта", () => remote.disclosure(item))
+}
+
 export function recordCall(input: Omit<CallRecord, "id" | "at">) {
-  write({ ...current, calls: [{ ...input, id: nextId("c"), at: stamp() }, ...current.calls] })
+  const item: CallRecord = { ...input, id: nextId("c"), at: stamp() }
+  write({ ...current, calls: [item, ...current.calls] })
+  push("Отметка о звонке", () => remote.call(item))
 }
 
 export function recordTopUp(input: Omit<TopUp, "id" | "at">) {
-  write({ ...current, topUps: [{ ...input, id: nextId("t"), at: stamp() }, ...current.topUps] })
+  const item: TopUp = { ...input, id: nextId("t"), at: stamp() }
+  write({ ...current, topUps: [item, ...current.topUps] })
+  push("Пополнение счёта", () => remote.topUp(item))
 }
 
 /**
@@ -333,19 +410,22 @@ export function recordTopUp(input: Omit<TopUp, "id" | "at">) {
  * к номеру обращались, даже если за это в итоге не заплатили.
  */
 export function recordRefund(input: Omit<Refund, "id" | "at">) {
+  const item: Refund = { ...input, id: nextId("r"), at: stamp() }
   write({
     ...current,
-    refunds: [{ ...input, id: nextId("r"), at: stamp() }, ...current.refunds],
-    disclosures: current.disclosures.map((item) =>
-      item.address === input.address ? { ...item, refunded: true } : item,
+    refunds: [item, ...current.refunds],
+    disclosures: current.disclosures.map((row) =>
+      row.address === input.address ? { ...row, refunded: true } : row,
     ),
   })
+  push("Заявка на возврат", () => remote.refund(item))
 }
 
 /** Отметить, что собственник просил не звонить. Снятию не подлежит. */
-export function addToStopList(address: string) {
+export function addToStopList(address: string, by = "") {
   if (current.stopList.includes(address)) return
   write({ ...current, stopList: [...current.stopList, address] })
+  push("Отметка «просил не звонить»", () => remote.stop(address, by))
 }
 
 export function createCollection(name: string, by: string): Collection {
@@ -363,10 +443,12 @@ export function createCollection(name: string, by: string): Collection {
     by,
   }
   write({ ...current, collections: [collection, ...current.collections] })
+  push("Новая подборка", () => remote.collection(collection))
   return collection
 }
 
 export function renameCollection(id: string, name: string) {
+  push("Переименование подборки", () => remote.collectionRename(id, name))
   write({
     ...current,
     collections: current.collections.map((item) =>
@@ -376,11 +458,13 @@ export function renameCollection(id: string, name: string) {
 }
 
 export function removeCollection(id: string) {
+  push("Удаление подборки", () => remote.collectionRemove(id))
   write({ ...current, collections: current.collections.filter((item) => item.id !== id) })
 }
 
 /** Положить объект в подборку. Повтор молча ничего не делает. */
 export function addToCollection(id: string, address: string) {
+  pushItems(id, (items) => (items.includes(address) ? items : [...items, address]))
   write({
     ...current,
     collections: current.collections.map((item) =>
@@ -392,6 +476,7 @@ export function addToCollection(id: string, address: string) {
 }
 
 export function removeFromCollection(id: string, address: string) {
+  pushItems(id, (items) => items.filter((item) => item !== address))
   write({
     ...current,
     collections: current.collections.map((item) =>
@@ -404,6 +489,7 @@ export function removeFromCollection(id: string, address: string) {
 
 /** Создать или отключить публичную ссылку подборки. */
 export function setCollectionLink(id: string, linked: boolean) {
+  push(linked ? "Создание ссылки" : "Отключение ссылки", () => remote.collectionLink(id, linked))
   write({
     ...current,
     collections: current.collections.map((item) =>
@@ -432,9 +518,11 @@ export function saveSearch(
       ...current.savedSearches,
     ],
   })
+  push("Сохранение поиска", () => remote.search(current.savedSearches[0]!))
 }
 
 export function removeSavedSearch(id: string) {
+  push("Удаление поиска", () => remote.searchRemove(id))
   write({ ...current, savedSearches: current.savedSearches.filter((item) => item.id !== id) })
 }
 
@@ -442,12 +530,14 @@ export function removeSavedSearch(id: string) {
 export function touchSavedSearch(id: string) {
   const found = current.savedSearches.find((item) => item.id === id)
   if (found === undefined) return
+  const at = stamp()
   write({
     ...current,
     savedSearches: current.savedSearches.map((item) =>
-      item.id === id ? { ...item, lastOpenedAt: stamp() } : item,
+      item.id === id ? { ...item, lastOpenedAt: at } : item,
     ),
   })
+  push("Отметка о просмотре поиска", () => remote.searchOpened(id, at))
 }
 
 /** Сменить частоту уведомлений по поиску. */
@@ -458,13 +548,13 @@ export function setSearchNotify(id: string, notify: SearchNotify) {
       item.id === id ? { ...item, notify } : item,
     ),
   })
+  push("Частота уведомлений", () => remote.searchNotify(id, notify))
 }
 
 export function addPerson(input: Omit<Person, "id" | "addedAt">) {
-  write({
-    ...current,
-    people: [...current.people, { ...input, id: nextId("p"), addedAt: stamp() }],
-  })
+  const person: Person = { ...input, id: nextId("p"), addedAt: stamp() }
+  write({ ...current, people: [...current.people, person] })
+  push("Новый сотрудник", () => remote.person(person))
 }
 
 /**

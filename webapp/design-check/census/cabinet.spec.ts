@@ -75,7 +75,7 @@ const DESKTOP = [
 ]
 
 const MOBILE = [
-  '/m/searches',
+  '/m/saved-searches',
   '/m/today',
   '/m/search',
   '/m/object',

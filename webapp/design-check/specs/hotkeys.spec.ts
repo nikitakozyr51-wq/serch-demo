@@ -54,7 +54,9 @@ test('вход: чужая почта не пускает, своя пускае
 
   await email.fill(ACCOUNT_EMAIL)
   await enter.click()
-  await page.waitForURL(/\/today/)
+  // Вход ведёт на сохранённые поиски, а не на «Сегодня»: у агентства,
+  // созданного минуту назад, «Сегодня» пусто, и продукт начинался с пустоты.
+  await page.waitForURL(/\/searches/)
 })
 
 /**

@@ -144,17 +144,31 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
 
   const enter = () => {
-    if (signIn(email)) {
-      void navigate({ to: "/today" })
-      return
-    }
+    void signIn(email, password).then((failed) => {
+      if (failed === null) {
+        void navigate({ to: "/searches" })
+        return
+      }
+      showRefusal(failed)
+    })
+  }
 
-    // Формулировка отвечает на вопрос «что мне делать», а не сообщает об
-    // отказе. Человек на этом экране не отлаживает продукт — он хочет войти.
+  /**
+   * Отказ во входе.
+   *
+   * Формулировка отвечает на вопрос «что мне делать», а не пересказывает
+   * ошибку сервера. Человек на этом экране не отлаживает продукт — он хочет
+   * войти. Сообщение сервера при этом не прячется: без базы оно вообще
+   * не приходит, а с базой «Invalid login credentials» ничего не объясняет
+   * тому, кто просто ошибся раскладкой.
+   */
+  const showRefusal = (reason: string) => {
     setError(
-      hasAccounts()
-        ? "Агентства с такой почтой нет. Проверьте адрес или создайте агентство."
-        : "На этом компьютере ещё не заводили агентство. Создайте — это займёт минуту.",
+      reason.toLowerCase().includes("credential") || reason.toLowerCase().includes("password")
+        ? "Почта или пароль не подошли. Проверьте раскладку и заглавные буквы."
+        : hasAccounts()
+          ? "Агентства с такой почтой нет. Проверьте адрес или создайте агентство."
+          : "На этом компьютере ещё не заводили агентство. Создайте — это займёт минуту.",
     )
   }
 
@@ -231,6 +245,8 @@ export function RegisterPage() {
   const [password, setPassword] = useState("")
   const [offer, setOffer] = useState(false)
   const [consent, setConsent] = useState(false)
+  /** Отказ сервера при создании агентства. Без базы не появляется никогда. */
+  const [error, setError] = useState<string | null>(null)
 
   // Имя теперь тоже обязательно. Пока поле было заполнено макетом, пустым оно
   // не бывало; теперь бывает — а без имени кабинет подписал бы человека словом
@@ -241,8 +257,23 @@ export function RegisterPage() {
 
   const create = () => {
     if (!ready) return
-    signUp({ name, email, agency })
-    void navigate({ to: "/first-run/agency" })
+    void signUp({ name, email, agency, password }).then((failed) => {
+      // «confirm-email» — не отказ, а другой путь: письмо ушло, человек идёт
+      // его открывать. С выключенным подтверждением почты этого не бывает.
+      if (failed === "confirm-email") {
+        void navigate({ to: "/check-mail" })
+        return
+      }
+      if (failed !== null) {
+        setError(
+          failed.toLowerCase().includes("already")
+            ? "Агентство с такой почтой уже заведено. Войдите или восстановите пароль."
+            : "Агентство не создалось. Проверьте почту и пароль — пароль не короче десяти знаков.",
+        )
+        return
+      }
+      void navigate({ to: "/first-run/agency" })
+    })
   }
 
   return (
@@ -253,6 +284,16 @@ export function RegisterPage() {
       stepsLabel="ЧТО БУДЕТ ДАЛЬШЕ"
     >
       <Fields>
+        {/* Отказ сервера стоит над полями, а не под кнопкой: человек читает
+            сверху вниз, и причина обязана попасться раньше, чем он второй раз
+            нажмёт «Создать». */}
+        {error === null ? null : (
+          <div className="w-194 text-err-text">
+            <Typography variant="uiText" tone="current">
+              <>{error}</>
+            </Typography>
+          </div>
+        )}
         <div className="flex w-194 gap-5">
           <AuthField
             label="НАЗВАНИЕ АГЕНТСТВА"

@@ -228,8 +228,19 @@ function MobileLoginForm({ initialError }: { initialError?: FieldError }) {
   const [error, setError] = useState<FieldError | null>(initialError ?? null)
 
   const enter = () => {
-    if (signIn(email)) {
-      void navigate({ to: "/m/today" })
+    void signIn(email, password).then((failed) => {
+      if (failed === null) {
+        void navigate({ to: "/m/saved-searches" })
+        return
+      }
+      showRefusal(failed)
+    })
+  }
+
+  /** Отказ во входе: что делать, а не пересказ ошибки сервера. */
+  const showRefusal = (reason: string) => {
+    if (reason.toLowerCase().includes("credential") || reason.toLowerCase().includes("password")) {
+      setError({ field: "password", text: "Пароль не подошёл. Проверьте раскладку." })
       return
     }
 
@@ -392,7 +403,7 @@ export function MobileRegisterPage() {
    */
   const create = () => {
     if (!ready) return
-    signUp({ name: "", email, agency })
+    void signUp({ name: "", email, agency, password })
     void navigate({ to: "/m/first-run/agency" })
   }
 

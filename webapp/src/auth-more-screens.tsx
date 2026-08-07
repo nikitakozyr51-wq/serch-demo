@@ -228,7 +228,7 @@ export function InvitePage() {
    */
   const accept = () => {
     if (!ready) return
-    signUp({ name, email, agency: "" })
+    void signUp({ name, email, agency: "" })
     void navigate({ to: "/first-run/employee" })
   }
 

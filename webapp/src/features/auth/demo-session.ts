@@ -9,6 +9,8 @@ import {
   recordRefund,
   recordTopUp,
 } from "@/features/workspace"
+import { hasDatabase } from "@/platform/db"
+import { loadIdentity, signInRemote, signOutRemote, signUpRemote } from "./remote"
 
 /**
  * Сеанс кабинета: кто вошёл.
@@ -194,16 +196,58 @@ function snapshot() {
  *
  * Возвращает `false`, когда агентство не найдено. Экран решает, что показать.
  */
-export function signIn(email?: string): boolean {
+/**
+ * Войти.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ДВА ПУТИ, ОДНА ДВЕРЬ
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Есть база — вход настоящий: почта и пароль проверяются сервером, и чужой
+ * пароль не подойдёт. Нет базы (демонстрация на GitHub Pages) — вход находит
+ * агентство, заведённое на этом же компьютере. Пароль там не проверяется,
+ * и проверять его нечем: сервера нет, а «проверка» в браузере — это театр,
+ * который создаёт ложное чувство защиты.
+ *
+ * Экраны входа при этом одни и те же, и человек разницы не видит. Разницу
+ * видит тот, кто попробует войти с другого устройства: с базой — войдёт,
+ * без базы — нет.
+ *
+ * Возвращает текст ошибки или `null`, если вошли.
+ */
+export async function signIn(email?: string, password = ""): Promise<string | null> {
   const key = (email ?? "").trim().toLowerCase()
-  if (!key) return false
+  if (!key) return "Введите почту"
+
+  if (hasDatabase()) {
+    const failed = await signInRemote(key, password)
+    if (failed !== null) return failed
+
+    const identity = await loadIdentity()
+    if (identity === null) return "Этот человек ещё не состоит в агентстве"
+
+    write({
+      kind: "own",
+      name: identity.name,
+      initials: identity.initials,
+      email: identity.email,
+      agency: identity.agency,
+      role: identity.role,
+      balance: identity.balance,
+      trial: identity.trial,
+      disclosed: [],
+      idleMinutes: 120,
+    })
+    openWorkspace(identity.email)
+    return null
+  }
 
   const stored = readAccounts()[key]
-  if (!stored) return false
+  if (!stored) return "Агентство с такой почтой на этом компьютере не заводили"
 
   write({ ...stored, idleMinutes: stored.idleMinutes ?? 120, kind: "own" })
   openWorkspace(key)
-  return true
+  return null
 }
 
 /**
@@ -213,7 +257,12 @@ export function signIn(email?: string): boolean {
  * лендинг. Первый вход поэтому выглядит иначе, чем вход в работающее
  * агентство, и это не украшение, а разные состояния продукта.
  */
-export function signUp(input: { name: string; email: string; agency: string }) {
+export async function signUp(input: {
+  name: string
+  email: string
+  agency: string
+  password?: string
+}): Promise<string | null> {
   const name = input.name.trim() || "Руководитель"
   const email = input.email.trim().toLowerCase() || "owner@example.com"
   const session: DemoSession = {
@@ -229,16 +278,42 @@ export function signUp(input: { name: string; email: string; agency: string }) {
     idleMinutes: 120,
   }
 
+  if (hasDatabase()) {
+    /**
+     * С базой регистрация — это два действия: завести человека и завести
+     * агентство. Второе делает сама база одной функцией: двумя запросами
+     * из браузера оно ломается посередине — агентство есть, сотрудников нет,
+     * и создатель попасть в него уже не может.
+     */
+    const failed = await signUpRemote({
+      email,
+      password: input.password ?? "",
+      name: session.name,
+      initials: session.initials,
+      agency: session.agency,
+    })
+    if (failed === "confirm-email") return "confirm-email"
+    if (failed !== null) return failed
+
+    write(session)
+    openWorkspace(email)
+    return null
+  }
+
   saveAccount(session)
   write(session)
   openWorkspace(email)
   initWorkspace({ name: session.name, initials: session.initials, email: session.email })
+  return null
 }
 
 export function signOut() {
   if (current) saveAccount(current)
   closeWorkspace()
   write(null)
+  // Сеанс сервера закрывается следом: без этого следующее открытие кабинета
+  // восстановило бы вход, который человек только что закрыл.
+  void signOutRemote()
 }
 
 /**

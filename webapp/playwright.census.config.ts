@@ -51,7 +51,18 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: `bun run dev --host 127.0.0.1 --port ${webPort}`,
-    env: { SERCH_APP_BASE: '/' },
+    /**
+     * Проверки идут БЕЗ базы, и это решение.
+     *
+     * Они меряют геометрию и поведение экрана, а не хранилище: сажать
+     * им сеанс сервера значило бы проверять заодно сеть и Docker, то есть
+     * получать красное там, где продукт цел.
+     *
+     * Пустые значения важнее отсутствия: `.env.local` разработчика Vite
+     * прочитает всё равно, и без явного затирания полоса на его машине
+     * пошла бы в базу, а на чужой — нет.
+     */
+    env: { SERCH_APP_BASE: '/', VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' },
     cwd: frontendRoot,
     url: webUrl,
     reuseExistingServer: !process.env.CI,
