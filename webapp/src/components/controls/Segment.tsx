@@ -46,7 +46,10 @@ function Segment<T extends string>({
       data-slot="segment"
       role="radiogroup"
       aria-label={label}
-      className="flex h-ctl-sm w-full shrink-0 items-center rounded-full border border-border-control p-0.5"
+      // Ширина по содержимому, а не во всю колонку: в кадре обойма 152
+      // и стоит В ОДНОЙ строке с меткой «ФИЛЬТРЫ». Растянутая на всю ширину,
+      // она читалась бы как отдельный блок, а не как заголовок колонки.
+      className="flex h-ctl-chip shrink-0 items-center rounded-full border border-border-control p-0.5"
     >
       {options.map((option) => {
         const active = option.id === value
@@ -60,7 +63,10 @@ function Segment<T extends string>({
             data-active={active || undefined}
             onClick={() => onChange(option.id)}
             className={cn(
-              "flex h-ctl-chip min-w-0 flex-1 cursor-pointer items-center justify-center rounded-full",
+              // Высота внутренней капсулы = внешняя минус поле 2 с каждой
+              // стороны. Числом её задавать нельзя: в плотном режиме внешняя
+              // становится 24, и зашитые 24 съели бы поле целиком.
+              "flex h-full min-w-0 cursor-pointer items-center justify-center rounded-full px-3",
               "transition-colors duration-120",
               "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
               active
@@ -68,7 +74,7 @@ function Segment<T extends string>({
                 : "bg-transparent hover:bg-warm active:bg-warm-hover",
             )}
           >
-            <Typography variant="controlLabel" tone={active ? "inverse" : "secondary"}>
+            <Typography variant="denseText" tone={active ? "inverse" : "secondary"}>
               <>{option.label}</>
             </Typography>
           </button>

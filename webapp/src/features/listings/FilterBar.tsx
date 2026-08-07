@@ -57,7 +57,7 @@ function FilterBar({
           className={cn("size-3.5 shrink-0", activeCount > 0 ? "text-bg" : "text-fg")}
           strokeWidth={2}
         />
-        <Typography variant="controlLabel" tone={activeCount > 0 ? "inverse" : "default"}>
+        <Typography variant="numericDense" tone={activeCount > 0 ? "inverse" : "default"}>
           <>Фильтры {activeCount === 0 ? "" : activeCount}</>
         </Typography>
       </button>
@@ -66,7 +66,7 @@ function FilterBar({
           запрещает её прямо, а условие, оборванное на середине, отвечает
           на вопрос «почему так мало» хуже, чем его отсутствие. */}
       <div className="min-w-0 flex-1">
-        <Typography variant="metaText" tone="dense">
+        <Typography variant="denseText" tone="dense">
           <>{summary}</>
         </Typography>
       </div>
@@ -78,7 +78,7 @@ function FilterBar({
           onClick={onReset}
           className="shrink-0 cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
         >
-          <Typography variant="metaStrong" tone="default">
+          <Typography variant="numericDense" tone="default">
             Сбросить
           </Typography>
         </button>
