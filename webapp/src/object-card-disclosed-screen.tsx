@@ -350,12 +350,13 @@ export function ObjectCardDisclosedPage() {
    * поэтому у каждого объекта он свой — а не один на всю базу, как было.
    */
   const { at } = useSearch({ from: "/object/disclosed", shouldThrow: false }) ?? { at: undefined }
+  const [allSimilar, setAllSimilar] = useState(false)
   const address = at ?? FALLBACK_ADDRESS
   const row = ALL_ROWS.find((item) => item.address === address)
   const phone = at ? demoPhone(address) : FALLBACK_PHONE
 
   return (
-    <CardShell position="1 из 247">
+    <CardShell position="1 из 247" address={address}>
       <div className="flex w-full gap-6">
         <CardMedia more="ещё 12 фото" />
 
@@ -414,11 +415,29 @@ export function ObjectCardDisclosedPage() {
                 физически некуда дозвониться. Кнопка названа `data-action`
                 и ничего не рисует: подставить сюда фальшивое «Идёт вызов»
                 значило бы соврать на самом важном экране продукта. */}
+            {/*
+              Нажатие делает ДВА дела сразу, и это решение владельца:
+              «Открывать звонилку и сразу панель записи».
+
+              Причина — в том, как идёт работа. Агент нажимает «Позвонить»,
+              телефон начинает набор, и в этот момент он уже говорит.
+              Искать после разговора, куда записать исход, поздно: половина
+              звонков остаётся незафиксированной, и «Сегодня» врёт.
+
+              `tel:` открывает звонилку системы; на компьютере без телефонии
+              браузер просто ничего не сделает, и это честно — обещать
+              несуществующую телефонию мы не можем. Панель записи открывается
+              в любом случае: она и есть работа.
+            */}
             <Button
               variant="primary"
               size="lg"
               block
               data-action="набрать номер собственника"
+              onClick={() => {
+                window.location.href = `tel:${phone.replace(/[^+\d]/g, "")}`
+                void navigate({ to: "/call", search: { at: address } })
+              }}
               iconLeft={<Phone aria-hidden className="size-4" strokeWidth={2} />}
             >
               Позвонить
@@ -498,19 +517,29 @@ export function ObjectCardDisclosedPage() {
               мобильный близнец. Вести с большого экрана на мобильный адрес
               нельзя, выдумывать десктопный экран — тем более, поэтому
               действие названо и ничего не рисует. */}
+          {/*
+            Список раскрывается на месте, а не уводит на отдельный экран.
+
+            В файле для этого нарисован кадр `КАБИНЕТ · Похожие на Ленскую
+            ул., 10`, и он ещё не собран. Раскрытие на месте — не замена ему
+            и не выдумка: те же строки, тот же порядок, просто без обрезки.
+            Отдельный экран нужен, чтобы на похожие можно было прислать
+            ссылку, и он появится вместе со своим адресом.
+          */}
           <button
             type="button"
             data-action="показать все 8 похожих объектов"
+            onClick={() => setAllSimilar((was) => !was)}
             className="cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <Typography variant="numericDense" tone="default">
-              Показать все 8
+              <>{allSimilar ? "Свернуть" : `Показать все ${SIMILAR.length}`}</>
             </Typography>
           </button>
         </div>
 
         <div className="flex w-full flex-col">
-          {SIMILAR.map((item) => {
+          {(allSimilar ? SIMILAR : SIMILAR.slice(0, 3)).map((item) => {
             const paid = item.kind === "open" || opened.includes(item.address)
             return (
               <SimilarRow

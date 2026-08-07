@@ -548,6 +548,29 @@ const mobileRoutes = [
   productRoute('/m/results-loading', () => import('./mobile-today-screens'), 'MobileResultsLoadingPage'),
   productRoute('/m/filters', () => import('./mobile-today-screens'), 'MobileFiltersSheetPage'),
 
+  /**
+   * Прозвон на телефоне.
+   *
+   * Экран был собран, объявлен парой десктопного в `TWINS` — и НЕ имел
+   * маршрута. То есть на телефоне прозвон физически не открывался: переход
+   * с `/call` вёл на адрес, которого нет. Дыру нашла перепись кабинета,
+   * а не глаз: она обходит все адреса подряд и спрашивает, открылся ли.
+   */
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/m/call',
+    validateSearch: (search: Record<string, unknown>): { at?: string } =>
+      typeof search.at === 'string' ? { at: search.at } : {},
+    beforeLoad: () => {
+      if (!hasSession()) {
+        throw redirect({ to: loginPath(), search: { returnTo: undefined }, replace: true })
+      }
+    },
+    component: lazyRouteComponent(
+      () => import('./mobile-call-screen'),
+      'MobileCallScreenPage',
+    ),
+  }),
   productRoute('/m/object', () => import('./mobile-object-screens'), 'MobileObjectPage'),
   productRoute('/m/object/before', () => import('./mobile-object-screens'), 'MobileObjectBeforePage'),
   productRoute('/m/object/similar', () => import('./mobile-object-screens'), 'MobileObjectSimilarPage'),

@@ -115,7 +115,7 @@ export function ObjectCardScreenPage() {
   }
 
   return (
-    <CardShell position="9 из 247">
+    <CardShell position="9 из 247" address={address}>
       <div className="flex w-full gap-6">
         <CardMedia more="ещё 12 фото" />
 

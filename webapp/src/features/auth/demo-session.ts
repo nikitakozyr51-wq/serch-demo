@@ -291,6 +291,28 @@ export function setIdleMinutes(minutes: number) {
 }
 
 /**
+ * Сменить имя человека.
+ *
+ * Имя показывается в меню профиля, в шапке инициалами и — главное —
+ * записывается в журнал вместе с каждым раскрытием и звонком: «кто раскрыл»,
+ * «кто отметил отказ». Поэтому оно правится, а не стоит намертво: человек,
+ * заведший агентство с опечаткой в фамилии, иначе носил бы её во всех
+ * записях навсегда.
+ *
+ * **Прошлые записи журнала не переписываются.** В них стоит имя на момент
+ * действия, и это правильно: журнал доступа отвечает на вопрос «кто это
+ * сделал тогда», а не «как он называется сейчас».
+ */
+export function setName(name: string) {
+  if (!current) return
+  const trimmed = name.trim()
+  if (trimmed === "") return
+  const next = { ...current, name: trimmed, initials: initialsOf(trimmed) }
+  write(next)
+  saveAccount(next)
+}
+
+/**
  * Пополнить счёт.
  *
  * Настоящий приход денег требует платёжного сервиса, которого нет. Здесь
@@ -393,7 +415,7 @@ export function useOwnAgency(): boolean {
  * заворачивать их в хук памяти незачем — он бы только делал вид, что здесь
  * есть что запоминать.
  */
-const ACTIONS = { signIn, signUp, signOut, disclose, topUp, refund, setIdleMinutes } as const
+const ACTIONS = { signIn, signUp, signOut, disclose, topUp, refund, setIdleMinutes, setName } as const
 
 export function useSessionActions() {
   return ACTIONS

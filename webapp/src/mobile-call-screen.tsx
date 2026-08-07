@@ -26,6 +26,15 @@ import { ListingPhoto } from "@/features/listings"
  * экрана — а на телефоне оно короче всегда, — номер и кнопка остаются
  * под большим пальцем, а не уезжают вверх за текстом.
  */
+/**
+ * Номер, который набирает кнопка.
+ *
+ * Диапазон `+7 900` не выдан ни одному оператору — позвонить по нему нельзя
+ * физически. Настоящий номер собственника в открытую демонстрацию попасть
+ * не может: это персональные данные живого человека.
+ */
+const PHONE = "+7 900 000-99-87"
+
 export function MobileCallScreenPage() {
   const navigate = useNavigate()
 
@@ -102,15 +111,23 @@ export function MobileCallScreenPage() {
         className="flex w-full shrink-0 flex-col gap-3 border-t border-line-2 bg-surface px-4 pt-4 pb-6"
       >
         <Typography variant="cardPrice" tone="default">
-          +7 900 000-99-87
+          {PHONE}
         </Typography>
 
         {/* Главное действие экрана: 48 / pill / 16 графитом. Пилюля тут
-            законна — она и означает «нажми меня». */}
+            законна — она и означает «нажми меня».
+
+            `tel:` отдаёт номер звонилке телефона — на мобильном это ровно
+            то, чего человек ждёт от кнопки «Позвонить», и никакого своего
+            экрана звонка тут быть не должно. */}
         <Button
           variant="primary"
           size="lg"
           block
+          data-action="звонок собственнику"
+          onClick={() => {
+            window.location.href = `tel:${PHONE.replace(/[^+\d]/g, "")}`
+          }}
           iconLeft={<Phone aria-hidden className="size-5" strokeWidth={2} />}
         >
           Позвонить
@@ -128,15 +145,13 @@ export function MobileCallScreenPage() {
               type="button"
               data-slot="mobile-call-secondary"
               // «Записать результат» открывает лист записи — он нарисован
-              // отдельным кадром `cOYqC`. «Отложить» переносит объект на
-              // потом: экрана у этого действия в файле нет, поэтому оно
-              // названо и ничего не рисует.
+              // отдельным кадром `cOYqC`. «Отложить» ведёт туда же: отложить
+              // объект значит записать исход «отложен» и назначить перезвон,
+              // а поля и того и другого уже стоят в листе записи. Своего
+              // экрана у «Отложить» в файле нет — и не нужно, второй формы
+              // для одной записи быть не должно.
               data-action={label === "Отложить" ? "отложить объект" : undefined}
-              onClick={
-                label === "Отложить"
-                  ? undefined
-                  : () => void navigate({ to: "/m/record" })
-              }
+              onClick={() => void navigate({ to: "/m/record" })}
               className="flex h-11 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-full border border-border-control bg-warm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
             >
               <Typography variant="controlLabel" tone="default">

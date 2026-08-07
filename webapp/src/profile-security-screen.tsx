@@ -1,11 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
+import { TextField } from "@/components/controls/TextField"
 import { Typography } from "@/components/typography"
 import { AgencyEmpty } from "@/features/agency"
-import { useSession, useSessionActions } from "@/features/auth"
+import { setName, useSession, useSessionActions } from "@/features/auth"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
 import { useWorkspace, type Person } from "@/features/workspace"
 import { cn } from "@/lib/utils"
@@ -217,12 +218,21 @@ export function LoginPolicyPage() {
             </Block>
 
             <div className="flex">
-              {/* Экран смены пароля нарисован только на телефоне (`q2rO9f`).
-                  Вести десктоп на мобильный адрес значило бы показать чужую
-                  раскладку, поэтому действие названо и ничего не рисует. */}
-              <Button variant="quiet" size="md" data-action="сменить пароль">
-                Сменить пароль
-              </Button>
+              {/*
+                Ведёт на экран нового пароля — тот же, которым заканчивается
+                восстановление доступа.
+
+                Раньше здесь стояло «экран смены пароля нарисован только
+                на телефоне, поэтому кнопка молчит». Это было неверно:
+                десктопный `/new-password` существует и собран, а смена
+                пароля изнутри кабинета и восстановление снаружи — это
+                один и тот же экран «задайте новый пароль».
+              */}
+              <Link to="/new-password">
+                <Button variant="quiet" size="md" data-action="сменить пароль">
+                  Сменить пароль
+                </Button>
+              </Link>
             </div>
 
             <Block label="Подтверждение входа">
@@ -311,6 +321,8 @@ export function LoginPolicyPage() {
 export function ProfilePage() {
   const session = useSession()
   const workspace = useWorkspace()
+  const [editingName, setEditingName] = useState(false)
+  const [draftName, setDraftName] = useState("")
 
   /**
    * Своя карточка сотрудника — по почте: она же ключ агентства.
@@ -340,13 +352,57 @@ export function ProfilePage() {
             />
           </Block>
 
-          <div className="flex">
-            {/* Форма правки имени в макете не нарисована, и придумывать её
-                нельзя. Действие названо и молчит — это честнее плашки
-                «сохранено», за которой ничего не сохраняется. */}
-            <Button variant="quiet" size="md" data-action="правка личных данных">
-              Изменить имя
-            </Button>
+          {/*
+            Правка имени на месте, а не отдельной формой.
+
+            Формы правки в макете нет, и придумывать её незачем: поле здесь
+            уже стоит, и превратить его в редактируемое — меньше нового,
+            чем завести окно. Имя записывается в журнал вместе с каждым
+            раскрытием, поэтому опечатка в фамилии иначе оставалась бы
+            во всех записях навсегда.
+
+            Прошлые записи журнала при этом не переписываются: в них стоит
+            имя на момент действия, и так и должно быть.
+          */}
+          <div className="flex w-full items-center gap-3">
+            {editingName ? (
+              <>
+                <div className="w-80">
+                  <TextField
+                    value={draftName}
+                    onChange={(event) => setDraftName(event.target.value)}
+                    aria-label="Имя и фамилия"
+                    placeholder="Имя и фамилия"
+                  />
+                </div>
+                <Button
+                  variant="quiet"
+                  size="md"
+                  data-action="правка личных данных"
+                  onClick={() => {
+                    setName(draftName)
+                    setEditingName(false)
+                  }}
+                >
+                  Сохранить
+                </Button>
+                <Button variant="quiet" size="md" onClick={() => setEditingName(false)}>
+                  Отмена
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="quiet"
+                size="md"
+                data-action="правка личных данных"
+                onClick={() => {
+                  setDraftName(session?.name ?? "")
+                  setEditingName(true)
+                }}
+              >
+                Изменить имя
+              </Button>
+            )}
           </div>
 
           <Block label="Агентство">

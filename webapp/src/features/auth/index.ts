@@ -8,6 +8,7 @@ export {
   signIn,
   signOut,
   setIdleMinutes,
+  setName,
   signUp,
   topUp,
   useOwnAgency,

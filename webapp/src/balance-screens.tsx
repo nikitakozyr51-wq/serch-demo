@@ -909,6 +909,8 @@ export function BalanceTopUpPage() {
    * человек не знает, за какое из них платит.
    */
   const [amount, setAmount] = useState(20000)
+  /** Сумму набирают руками, а не выбирают чипом. */
+  const [custom, setCustom] = useState(false)
   const [method, setMethod] = useState("invoice")
   const disclosures = Math.floor(amount / DISCLOSURE_PRICE)
 
@@ -977,22 +979,52 @@ export function BalanceTopUpPage() {
                   <SelectChip
                     key={value}
                     label={`${groupDigits(value)} ₽`}
-                    selected={value === amount}
-                    onClick={() => setAmount(value)}
+                    selected={!custom && value === amount}
+                    onClick={() => {
+                      setCustom(false)
+                      setAmount(value)
+                    }}
                   />
                 ))}
-                {/* Своя сумма набирается в поле ниже, а поле в макете
-                    нарисовано неизменяемым. Чип поэтому назван действием
-                    и ничего не рисует: клавиатурный ввод суммы — отдельное
-                    решение владельца, а не догадка кода. */}
+                {/*
+                  «Другая сумма» делает поле ниже редактируемым.
+
+                  В макете поле нарисовано неизменяемым, и раньше чип поэтому
+                  только назывался действием. Но выбор из четырёх ступеней —
+                  это не пополнение баланса, а меню: агентство, которому
+                  нужно внести 7 400 ₽ под остаток счёта, упиралось в четыре
+                  чужие суммы. Поле рядом уже стоит, и сделать его
+                  редактируемым — меньше нового, чем завести окно.
+                */}
                 <span className="contents" data-action="ручной ввод суммы">
-                  <SelectChip label="Другая сумма" selected={false} />
+                  <SelectChip
+                    label="Другая сумма"
+                    selected={custom}
+                    onClick={() => setCustom(true)}
+                  />
                 </span>
               </div>
               <div className="flex h-ctl-lg w-100 items-center gap-2 rounded-xl border border-border-control bg-surface px-4">
-                <Typography variant="panelTitle" tone="default">
-                  {groupDigits(amount)}
-                </Typography>
+                {custom ? (
+                  <input
+                    data-slot="top-up-amount"
+                    autoFocus
+                    inputMode="numeric"
+                    aria-label="Сумма пополнения, ₽"
+                    value={groupDigits(amount)}
+                    onChange={(event) => {
+                      // Разряды человек не набирает — их ставит продукт.
+                      // Поэтому всё, кроме цифр, отбрасывается на входе.
+                      const digits = event.target.value.replace(/\D/g, "")
+                      setAmount(digits === "" ? 0 : Number(digits))
+                    }}
+                    className="h-full min-w-0 flex-1 bg-transparent text-fg outline-none"
+                  />
+                ) : (
+                  <Typography variant="panelTitle" tone="default">
+                    {groupDigits(amount)}
+                  </Typography>
+                )}
                 <Typography variant="unitLabel" tone="dense">
                   ₽
                 </Typography>

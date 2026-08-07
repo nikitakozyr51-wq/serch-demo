@@ -132,16 +132,23 @@ function StickyActionBar({ children }: { children: ReactNode }) {
  * и файл ставит вторичное действие ровно на него, не поднимая до 48,
  * чтобы оно не спорило с главным.
  *
- * **Смена статуса на телефоне не нарисована.** На десктопе статус меняют
- * из строки выдачи клавишей и меню, здесь ни листа, ни меню в файле нет.
- * Действие названо и не рисует ничего: выдуманный список статусов обещал бы
- * работу, которой за ним нет.
+ * **Ведёт в панель фиксации звонка** — туда, где статус и ставится.
+ *
+ * Отдельного листа со списком статусов на телефоне в файле нет, и выдумывать
+ * его не понадобилось: панель фиксации нарисована, собрана и уже содержит
+ * и статус, и заметку, и перезвон. Вторая форма для того же самого означала
+ * бы два способа отметить один звонок — и два расходящихся журнала.
+ *
+ * Раньше кнопка была нарисована и молчала.
  */
-function StatusButton() {
+function StatusButton({ address }: { address: string }) {
+  const navigate = useNavigate()
+
   return (
     <button
       type="button"
       data-action="сменить статус объекта"
+      onClick={() => void navigate({ to: "/m/call", search: { at: address } })}
       data-slot="mobile-status-button"
       className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-md bg-warm px-4 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
     >
@@ -186,11 +193,22 @@ function ObjectPhoto({ address }: { address: string }) {
  * Маршрут строит телефон, а не продукт: это переход в чужое приложение,
  * и экрана под него в макете нет. Действие названо и ничего не рисует.
  */
-function ObjectMap({ label }: { label: string }) {
+function ObjectMap({ label, address }: { label: string; address: string }) {
   return (
     <button
       type="button"
       data-action="открыть маршрут в картах"
+      // Маршрут строит телефон, а не продукт: `geo:` — стандартная ссылка,
+      // которую система отдаёт установленным картам. Своего экрана карт
+      // у продукта нет и быть не должно — это чужое приложение, и делать
+      // его копию значило бы соревноваться с Яндексом в картах.
+      //
+      // Раньше кнопка была нарисована и молчала. Владелец назвал это
+      // «ничего не кликается», и был прав: карта, которая не открывается,
+      // хуже её отсутствия.
+      onClick={() => {
+        window.location.href = `geo:0,0?q=${encodeURIComponent(`Санкт-Петербург, ${address}`)}`
+      }}
       data-slot="mobile-object-map"
       className="flex h-33 w-full shrink-0 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border border-line-2 bg-warm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
     >
@@ -325,7 +343,7 @@ export function MobileObjectPage() {
             Ладожская · 6 мин пешком · Красногвардейский район
           </Typography>
 
-          <ObjectMap label="Ленская ул., 10 · открыть маршрут" />
+          <ObjectMap label="Ленская ул., 10 · открыть маршрут" address="Ленская ул., 10" />
 
           <TouchBlock
             headline="Вы звонили сегодня дважды, обе без ответа"
@@ -350,12 +368,12 @@ export function MobileObjectPage() {
             size="lg"
             block
             iconLeft={<Phone aria-hidden className="size-4.5" strokeWidth={2} />}
-            {...pressProps(() => void navigate({ to: "/screen/mobile-call" }))}
+            {...pressProps(() => void navigate({ to: "/m/call", search: {} }))}
           >
             Позвонить
           </Button>
         </div>
-        <StatusButton />
+        <StatusButton address="Ленская ул., 10" />
       </StickyActionBar>
     </PhoneFrame>
   )
@@ -402,7 +420,7 @@ export function MobileObjectBeforePage() {
             Ладожская · 5 мин пешком · Красногвардейский район
           </Typography>
 
-          <ObjectMap label="Ленская ул., 6 · открыть маршрут" />
+          <ObjectMap label="Ленская ул., 6 · открыть маршрут" address="Ленская ул., 6" />
 
           <TouchBlock
             headline="По этому объекту из агентства ещё не звонили"
@@ -479,7 +497,7 @@ export function MobileObjectBeforePage() {
             Раскрыть контакт · 199 ₽
           </Button>
         </div>
-        <StatusButton />
+        <StatusButton address="Ленская ул., 6" />
       </StickyActionBar>
     </PhoneFrame>
   )
@@ -618,12 +636,12 @@ export function MobileObjectSimilarPage() {
             size="lg"
             block
             iconLeft={<Phone aria-hidden className="size-4.5" strokeWidth={2} />}
-            {...pressProps(() => void navigate({ to: "/screen/mobile-call" }))}
+            {...pressProps(() => void navigate({ to: "/m/call", search: {} }))}
           >
             Позвонить
           </Button>
         </div>
-        <StatusButton />
+        <StatusButton address="Ленская ул., 10" />
       </StickyActionBar>
     </PhoneFrame>
   )

@@ -4,7 +4,9 @@ import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
+import { useSession } from "@/features/auth"
 import { CabinetShell, useHotkeys } from "@/features/cabinet"
+import { CollectionPicker } from "@/features/workspace"
 import {
   CountPair,
   FactChip,
@@ -36,28 +38,40 @@ import {
 /**
  * Вторичное действие панели: подпись 14/600 и буква горячей клавиши 12/500.
  *
- * **Окна для этих четырёх действий в продукте пока нет.** «В подборку»,
- * «Статус», «Напомнить» и «Заметка» открывают диалоги, которые в файле
- * нарисованы как спецификация и поверх кабинета ещё не всплывают. Придумать
- * их здесь я не имею права, поэтому действие названо атрибутом `data-action`:
- * следующий разработчик увидит, что должно случиться, а человек не увидит
- * выдуманной плашки. Пустая плашка хуже честно неработающей кнопки.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **Все четыре теперь работают.** Раньше они несли только атрибут
+ * `data-action` — «вот что должно случиться, когда появится окно», — и
+ * человек нажимал на них впустую. Владелец назвал это прямо: «ничего
+ * не кликается».
+ *
+ * Окон для «Статуса», «Напомнить» и «Заметки» действительно нет: в файле
+ * они спецификация, а не кадр. Но выдумывать их и не понадобилось — все
+ * три поля уже существуют в панели фиксации звонка (`S4mya`), которая
+ * нарисована и собрана. Кнопка ведёт туда, где это делается, а не
+ * открывает вторую копию того же самого.
+ *
+ * «В подборку» — единственное, что происходит на месте: окно выбора
+ * подборки нарисовано и собрано.
  */
 function PanelAction({
   label,
   hotkey,
   action,
+  onAction,
 }: {
   label: string
   hotkey: string
-  /** Что случится, когда для действия появится окно. */
+  /** Что случится. Остаётся атрибутом: по нему проверка узнаёт действие. */
   action: string
+  onAction: () => void
 }) {
   return (
     <Button
       variant="quiet"
       size="sm"
       data-action={action}
+      onClick={onAction}
       iconRight={
         <Typography variant="metaText" tone="dense">
           {hotkey}
@@ -76,8 +90,30 @@ function PanelAction({
  * и вернуться в неё нужно, не потеряв место. Волосяная линия снизу обязательна —
  * без неё панель сливается с телом и перестаёт читаться как панель.
  */
-function CardShell({ position, children }: { position: string; children: ReactNode }) {
+function CardShell({
+  position,
+  address,
+  children,
+}: {
+  position: string
+  /**
+   * Адрес объекта, которому принадлежит карточка.
+   *
+   * Без него действия панели не знают, к чему относятся: «В подборку»
+   * добавила бы неизвестно что, а «Статус» открыл бы панель звонка
+   * по чужому объекту.
+   */
+  address: string
+  children: ReactNode
+}) {
   const navigate = useNavigate()
+  const session = useSession()
+  const [collecting, setCollecting] = useState(false)
+
+  /** Куда ведут «Статус», «Напомнить» и «Заметка»: панель фиксации звонка. */
+  const openCallPanel = () => {
+    void navigate({ to: "/call", search: { at: address } })
+  }
   // Разбираем «9 из 247» на число и всё остальное: стрелки двигают позицию,
   // а не подпись. Позиция живёт в состоянии, потому что клавиша ← должна
   // делать ровно то же, что шаговая кнопка, — иначе это два разных продукта.
@@ -149,15 +185,43 @@ function CardShell({ position, children }: { position: string; children: ReactNo
             <div className="h-px flex-1" />
 
             <div className="flex items-center gap-2">
-              <PanelAction label="В подборку" hotkey="B" action="добавить объект в подборку" />
-              <PanelAction label="Статус" hotkey="S" action="сменить статус объекта" />
-              <PanelAction label="Напомнить" hotkey="H" action="назначить перезвон" />
-              <PanelAction label="Заметка" hotkey="N" action="написать заметку по объекту" />
+              <PanelAction
+                label="В подборку"
+                hotkey="B"
+                action="добавить объект в подборку"
+                onAction={() => setCollecting(true)}
+              />
+              <PanelAction
+                label="Статус"
+                hotkey="S"
+                action="сменить статус объекта"
+                onAction={openCallPanel}
+              />
+              <PanelAction
+                label="Напомнить"
+                hotkey="H"
+                action="назначить перезвон"
+                onAction={openCallPanel}
+              />
+              <PanelAction
+                label="Заметка"
+                hotkey="N"
+                action="написать заметку по объекту"
+                onAction={openCallPanel}
+              />
             </div>
           </div>
 
           <div className="flex w-full flex-1 flex-col gap-8 p-6">{children}</div>
         </div>
+
+        {collecting ? (
+          <CollectionPicker
+            address={address}
+            by={session?.name ?? ""}
+            onClose={() => setCollecting(false)}
+          />
+        ) : null}
     </CabinetShell>
   )
 }

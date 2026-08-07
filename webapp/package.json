@@ -14,6 +14,7 @@
     "e2e:ui": "playwright test --ui",
     "e2e:install": "playwright install chromium",
     "design:check": "playwright test -c playwright.design.config.ts",
+    "cabinet:check": "playwright test -c playwright.census.config.ts",
     "ui": "shadcn",
     "ui:add": "shadcn add",
     "ui:info": "shadcn info"
