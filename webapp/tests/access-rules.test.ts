@@ -31,18 +31,32 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 const URL = process.env.VITE_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const ANON =
   process.env.VITE_SUPABASE_ANON_KEY ??
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+  'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH'
 
-/** Есть ли поднятая база. Проверяется до тестов, чтобы не ждать таймаутов. */
+/** Есть ли доступная база со схемой. Проверяется до тестов, чтобы не ждать таймаутов. */
 let live = false
 
+/**
+ * Стучимся в НАСТОЯЩУЮ таблицу, а не в служебный корень.
+ *
+ * Корень `/rest/v1/` в облаке отвечает «нужен секретный ключ» — и проверка
+ * решала, что базы нет, хотя база работала. Локально этого не видно: там
+ * корень отвечает как обычно, и расхождение всплыло только на облаке.
+ *
+ * Запрос к таблице отвечает сразу на два вопроса: до базы достучались
+ * И схема в ней применена. Ждать до пяти секунд: до Франкфурта дальше,
+ * чем до соседнего процесса.
+ */
 async function reachable(): Promise<boolean> {
   try {
-    const response = await fetch(`${URL}/rest/v1/`, {
-      headers: { apikey: ANON },
-      signal: AbortSignal.timeout(2000),
+    // Спрашиваем `collections`: это единственная таблица, к которой гостю
+    // разрешено обращаться. Любая другая ответит «нет прав» — и проверка
+    // решит, что базы нет, хотя база работает.
+    const response = await fetch(`${URL}/rest/v1/collections?select=id&limit=1`, {
+      headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
+      signal: AbortSignal.timeout(5000),
     })
-    return response.ok || response.status === 404
+    return response.ok
   } catch {
     return false
   }
@@ -186,6 +200,19 @@ describe('правила доступа базы', () => {
 
     const staff = await guest.from('people').select('email')
     expect(staff.data ?? [], 'клиент не видит сотрудников агентства').toEqual([])
+
+    /**
+     * И у него нет даже ПРАВА обратиться к этим таблицам.
+     *
+     * Пустой ответ выше даёт отбор строк — один слой. Отказ в правах —
+     * второй. Держать защиту на одном слое значит поставить всё на то,
+     * что в одном правиле никогда не будет ошибки.
+     *
+     * Разница видна только на облаке: там новая таблица получает права
+     * гостю автоматически, и без явного отзыва этот слой отсутствовал.
+     */
+    expect(money.error?.code, 'у гостя нет права обращаться к раскрытиям').toBe('42501')
+    expect(staff.error?.code, 'у гостя нет права обращаться к сотрудникам').toBe('42501')
 
     // Ссылку отключили — подборка перестаёт открываться у всех, кому её
     // переслали. Это и есть смысл выключателя.
