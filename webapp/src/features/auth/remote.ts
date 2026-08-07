@@ -111,6 +111,43 @@ async function signUpRemote(input: {
   return created.error === null ? null : created.error.message
 }
 
+/**
+ * Завести человека по приглашению.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ПОЧЕМУ ЭТО НЕ ОБЫЧНАЯ РЕГИСТРАЦИЯ
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Обычная заводит агентство: `create_agency` делает человека руководителем
+ * собственной конторы. Приглашённому это ровно противоположно нужному —
+ * его зовут в ЧУЖОЕ агентство, на общий счёт, с чужим дневным лимитом.
+ * Пройди он общим путём, у него появилось бы своё пустое агентство,
+ * а приглашение осталось бы непринятым: `accept_invitation` отказывает
+ * тому, кто уже где-то состоит.
+ *
+ * Поэтому здесь два шага и ни одного лишнего: завести вход и принять
+ * приглашение. Имя, роль и лимит приходят из самого приглашения — их
+ * назначил руководитель, и переспрашивать их у приглашённого значит
+ * позволить ему их переписать.
+ */
+async function acceptInviteRemote(input: {
+  email: string
+  password: string
+  token: string
+}): Promise<string | null> {
+  const client = db()
+  if (client === null) return "База не настроена"
+
+  const signed = await client.auth.signUp({ email: input.email, password: input.password })
+  if (signed.error !== null) return signed.error.message
+  // Сеанса ещё нет — включено подтверждение почты. Приглашение принять
+  // нечем: функция базы читает вошедшего. Человек идёт читать письмо
+  // и возвращается по той же ссылке — ключ живёт семь дней.
+  if (signed.data.session === null) return "confirm-email"
+
+  return callRpc("accept_invitation", { invite_token: input.token })
+}
+
 async function signOutRemote(): Promise<void> {
   const client = db()
   if (client === null) return
@@ -149,9 +186,38 @@ async function callRpc(name: string, args: Record<string, unknown> = {}): Promis
   return error === null ? null : error.message
 }
 
-/** Позвать сотрудника. Возвращает текст отказа или `null`. */
-const inviteAgent = (email: string, name: string, limit: number | null) =>
-  callRpc("invite_agent", { invite_email: email, invite_name: name, invite_limit: limit })
+/**
+ * Позвать сотрудника. Возвращает КЛЮЧ приглашения или текст отказа.
+ *
+ * Ключ здесь не подробность, а весь смысл вызова: письма продукт не шлёт,
+ * и ссылку руководитель передаёт сам. Функция, вернувшая только «получилось»,
+ * оставляла его с приглашением, которого он не может отдать.
+ */
+async function inviteAgent(
+  email: string,
+  name: string,
+  limit: number | null,
+): Promise<{ token: string } | { failed: string }> {
+  const client = db()
+  if (client === null) return { failed: "База не настроена" }
+  const { data, error } = await client.rpc("invite_agent", {
+    invite_email: email,
+    invite_name: name,
+    invite_limit: limit,
+  })
+  if (error !== null) return { failed: error.message }
+  return { token: String(data) }
+}
+
+/**
+ * Принять приглашение по ключу из ссылки.
+ *
+ * Вызывается ПОСЛЕ входа: функция базы читает `auth.uid()`, и до сеанса
+ * ей нечего читать. Порядок «сначала завести человека, потом привязать
+ * его к агентству» — единственно возможный, а не выбранный.
+ */
+const acceptInvitation = (token: string) =>
+  callRpc("accept_invitation", { invite_token: token })
 
 /** Передать роль руководителя. Обе строки меняются в базе одним действием. */
 const transferOwner = (personId: string) => callRpc("transfer_owner", { to_person: personId })
@@ -185,6 +251,8 @@ async function saveRequisites(input: {
 }
 
 export {
+  acceptInvitation,
+  acceptInviteRemote,
   applyViewToAll,
   inviteAgent,
   loadIdentity,

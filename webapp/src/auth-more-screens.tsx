@@ -1,10 +1,18 @@
-import { useNavigate } from "@tanstack/react-router"
+import { useNavigate, useSearch } from "@tanstack/react-router"
 import { useState } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Checkbox } from "@/components/controls/Checkbox"
 import { Typography } from "@/components/typography"
-import { AuthField, AuthShell, useSession, useSessionActions } from "@/features/auth"
+import {
+  acceptInviteRemote,
+  AuthField,
+  AuthShell,
+  useSession,
+  useSessionActions,
+} from "@/features/auth"
+import { hasDatabase } from "@/platform/db"
+import { notifyError } from "@/platform/notify"
 
 /**
  * Оставшиеся экраны входа.
@@ -202,6 +210,11 @@ export function CheckMailPage() {
 export function InvitePage() {
   const navigate = useNavigate()
   const { signUp } = useSessionActions()
+  // Ключ из ссылки. Его нет — принимать нечего, и экран скажет это прямо.
+  // Экран открывается и по `/m/invite`, где такого параметра не объявлено,
+  // поэтому чтение не должно падать: `shouldThrow: false` и мягкий разбор.
+  const search = useSearch({ from: "/invite", shouldThrow: false }) as { token?: string } | null
+  const token = search?.token
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -228,6 +241,41 @@ export function InvitePage() {
    */
   const accept = () => {
     if (!ready) return
+
+    /**
+     * С базой приглашение принимается по ключу, а не заводится агентство.
+     *
+     * Разница не техническая. Обычная регистрация делает человека
+     * руководителем СВОЕЙ конторы; приглашённого зовут в чужую, на общий
+     * счёт и с чужим дневным лимитом. Пройди он общим путём — получил бы
+     * пустое агентство, а приглашение осталось бы висеть непринятым.
+     */
+    if (token !== undefined && hasDatabase()) {
+      void acceptInviteRemote({ email: email.trim().toLowerCase(), password, token }).then(
+        (failed) => {
+          if (failed === "confirm-email") {
+            void navigate({ to: "/check-mail" })
+            return
+          }
+          if (failed !== null) {
+            notifyError(
+              failed.includes("истёк")
+                ? "Срок приглашения истёк — попросите руководителя прислать новое"
+                : failed.includes("уже принято")
+                  ? "Это приглашение уже принято"
+                  : `Принять не вышло: ${failed}`,
+            )
+            return
+          }
+          void navigate({ to: "/first-run/employee" })
+        },
+      )
+      return
+    }
+
+    // Без базы продукт живёт демонстрационным сеансом. Название агентства
+    // уходит пустым: приглашение знает вывеску, но она приходит с сервера,
+    // а вписать её здесь значило бы повесить человеку чужую вывеску.
     void signUp({ name, email, agency: "" })
     void navigate({ to: "/first-run/employee" })
   }

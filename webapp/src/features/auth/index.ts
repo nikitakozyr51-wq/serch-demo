@@ -24,6 +24,8 @@ export type { DemoSession } from './demo-session'
  */
 export {
   applyViewToAll,
+  acceptInvitation,
+  acceptInviteRemote,
   inviteAgent,
   requestDeletion,
   saveRequisites,

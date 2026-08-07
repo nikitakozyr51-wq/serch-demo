@@ -59,21 +59,29 @@ export function AgencyInvitePage() {
   const invite = () => {
     if (!ready) return
     void inviteAgent(email.trim().toLowerCase(), name.trim(), role === "owner" ? null : limit).then(
-      (failed) => {
-        if (failed !== null) {
+      (result) => {
+        if ("failed" in result) {
           notifyError(
-            failed.includes("уже работает")
+            result.failed.includes("уже работает")
               ? "Этот человек уже работает в агентстве"
-              : `Приглашение не создалось: ${failed}`,
+              : `Приглашение не создалось: ${result.failed}`,
           )
           return
         }
         notifyDone("Приглашение создано")
-        // Ключ читается обратно: ссылку надо показать, отправить её нечем.
-        setToken("создано")
+        setToken(result.token)
       },
     )
   }
+
+  /**
+   * Ссылка, которую руководитель передаёт сам.
+   *
+   * Собирается из адреса текущей страницы, а не из записанной константы:
+   * кабинет живёт и на своём домене, и на демонстрационном, и вписанный
+   * домен отправил бы половину приглашённых не туда.
+   */
+  const link = token === null ? "" : `${window.location.origin}/app/invite?token=${token}`
 
   const pending = workspace.people.length
 
@@ -230,13 +238,62 @@ export function AgencyInvitePage() {
             «письмо ушло» значило бы заставить его ждать письма, которого
             не будет.
           */}
-          <Typography variant="metaText" tone="dense">
-            <>
-              {token === null
-                ? "Ссылка действует семь дней. Пока агент не принял приглашение, он не считается активным и мест не занимает."
-                : "Приглашение создано. Письма продукт пока не отправляет — передайте ссылку сотруднику сами, она в разделе «Сотрудники»."}
-            </>
-          </Typography>
+          {token === null ? (
+            <Typography variant="metaText" tone="dense">
+              Ссылка действует семь дней. Пока агент не принял приглашение,
+              он не считается активным и мест не занимает.
+            </Typography>
+          ) : (
+            /*
+              Ссылка показывается ЗДЕСЬ и целиком.
+
+              Прежде на этом месте стояло «она в разделе „Сотрудники“» —
+              и там её не было. Приглашение записывалось в базу, ключ
+              оставался внутри, а руководитель уходил с экрана ни с чем.
+              Путь «позвать человека» обрывался на последнем шаге.
+
+              Ссылка выделяется целиком по нажатию: копировать её из строки
+              мышью по буквам — это способ передать половину.
+            */
+            <div className="flex w-full flex-col gap-2">
+              <Typography variant="metaText" tone="dense">
+                Письма продукт пока не отправляет. Передайте ссылку сотруднику
+                сами — любым способом, каким вы с ним уже переписываетесь.
+              </Typography>
+              <div
+                data-action="выделить ссылку приглашения"
+                onClick={(event) => {
+                  const node = event.currentTarget
+                  const range = document.createRange()
+                  range.selectNodeContents(node)
+                  const selection = window.getSelection()
+                  selection?.removeAllRanges()
+                  selection?.addRange(range)
+                }}
+                className="w-full cursor-pointer rounded-lg border border-line-2 bg-surface px-3 py-2 break-all"
+              >
+                <Typography variant="metaText" tone="default">
+                  <>{link}</>
+                </Typography>
+              </div>
+              <Button
+                variant="quiet"
+                size="md"
+                block
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(link)
+                    .then(() => notifyDone("Ссылка скопирована"))
+                    // Буфер обмена закрыт в небезопасном соединении и в части
+                    // браузеров. Молчаливый отказ здесь хуже всего: человек
+                    // уверен, что скопировал, и вставляет прошлое.
+                    .catch(() => notifyError("Скопировать не вышло — выделите ссылку и скопируйте вручную"))
+                }}
+              >
+                Скопировать ссылку
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

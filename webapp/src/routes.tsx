@@ -384,10 +384,19 @@ function productRoute<TModule extends Record<string, unknown>, const TPath exten
   path: TPath,
   load: () => Promise<TModule>,
   name: keyof TModule & string,
+  /**
+   * Что экран читает из адреса.
+   *
+   * Почти всем экранам это не нужно, поэтому необязательно. Нужно ровно
+   * там, где адрес несёт данные: ключ приглашения, адрес объекта, номер
+   * сохранённого поиска.
+   */
+  extra?: { validateSearch: (search: Record<string, unknown>) => Record<string, unknown> },
 ) {
   return createRoute({
     getParentRoute: () => rootRoute,
     path,
+    ...(extra ?? {}),
     /**
      * Экран, подходящий устройству, выбирается ДО отрисовки.
      *
@@ -525,7 +534,21 @@ const authProductRoutes = [
   productRoute('/new-password', () => import('./auth-screens'), 'NewPasswordPage'),
   productRoute('/confirm-code', () => import('./auth-more-screens'), 'ConfirmCodePage'),
   productRoute('/check-mail', () => import('./auth-more-screens'), 'CheckMailPage'),
-  productRoute('/invite', () => import('./auth-more-screens'), 'InvitePage'),
+  /**
+   * Приём приглашения.
+   *
+   * Ключ приходит в адресе: `/invite?token=…`. Без него экран остаётся
+   * на месте, но принимать нечего — и он говорит об этом прямо, вместо
+   * того чтобы завести человеку пустое агентство и оставить приглашение
+   * висеть непринятым.
+   *
+   * Телефонный двойник `/m/invite` подставляется тем же `productRoute`,
+   * поэтому маршрут собирается им, а не голым `createRoute`.
+   */
+  productRoute('/invite', () => import('./auth-more-screens'), 'InvitePage', {
+    validateSearch: (search: Record<string, unknown>): { token?: string } =>
+      typeof search.token === 'string' ? { token: search.token } : {},
+  }),
   productRoute('/access-closed', () => import('./auth-more-screens'), 'AccessClosedPage'),
 ]
 
