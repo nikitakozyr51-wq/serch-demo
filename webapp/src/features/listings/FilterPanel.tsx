@@ -120,6 +120,14 @@ type FilterPanelProps = {
   onToggle?: (group: string, optionId: string) => void
   onChangeAddress?: () => void
   onSaveSearch?: () => void
+  /**
+   * Колонка показана наложением поверх выдачи, а не встроена в раскладку.
+   *
+   * Так она живёт на узком экране: место под постоянный столбец там кончилось,
+   * но выдача обязана остаться видимой справа — иначе повторяется главная
+   * ошибка конкурента, где во время настройки результата не видно.
+   */
+  overlay?: boolean
 }
 
 function FilterPanel({
@@ -135,6 +143,7 @@ function FilterPanel({
   onToggle,
   onChangeAddress,
   onSaveSearch,
+  overlay = false,
 }: FilterPanelProps) {
   const chipRows = (group: string, rows: ChipRows) =>
     rows.map((row) =>
@@ -152,31 +161,48 @@ function FilterPanel({
   return (
     <aside
       data-slot="filter-panel"
+      data-overlay={overlay || undefined}
       // Плотный режим сжимает и колонку: поля 14 → 12, зазор групп 24 → 12.
-      className="flex h-full w-filters shrink-0 flex-col gap-6 overflow-y-auto border-r border-line-2 bg-surface p-3.5 compact:gap-3 compact:p-3"
+      className={cn(
+        "flex w-filters shrink-0 flex-col gap-6 overflow-y-auto border-r border-line-2 bg-surface p-3.5 compact:gap-3 compact:p-3",
+        overlay
+          ? // Наложение начинается от края сайдбара и идёт до низа окна.
+            // Тень вправо отделяет панель от выдачи, которая остаётся видимой.
+            //
+            // Тень здесь — расхождение с DESIGN.md, где теней в продукте нет
+            // вовсе («мы на позиции Nike, и это позиция, а не пробел»).
+            // Расхождение названо и ограничено одним местом: панель ВИСИТ
+            // над выдачей, и без тени край панели читается как край экрана,
+            // а выдача под ней — как обрезанная.
+            "panel-in fixed top-(--height-header) bottom-0 left-(--width-sidebar) z-40 h-auto shadow-[24px_0_60px_-20px_#1e1e1e33]"
+          : "h-full",
+      )}
     >
       <div className="flex w-full items-center gap-2">
+        {/*
+          Имя колонки. Оно пропадало: 4 августа сегмент «Продажа | Аренда»
+          встал в шапку колонки и вытеснил слово «Фильтры». При жалобе
+          «три сущности поиска путаются» безымянная колонка — прямое
+          ухудшение, и имя вернулось.
+
+          «Сбросить» при этом уехало вниз, в один ряд с «Сохранить поиск»:
+          это действие над всей колонкой, и место ему там, где настройку
+          заканчивают, а не там, где начинают.
+        */}
         <GroupLabel>Фильтры</GroupLabel>
-        <div className="h-px flex-1" />
-        <button
-          type="button"
-          data-slot="filter-reset"
-          onClick={onReset}
-          className="cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-        >
-          <Typography variant="metaStrong" tone="default">
-            Сбросить {activeCount}
-          </Typography>
-        </button>
       </div>
 
       {/*
         «Только собственники» — свойство продукта, а не фильтр: переключателя
         у него нет и быть не должно. Поэтому здесь строка, а не чекбокс.
+        Пояснение в две строки: длиннее оно съедало место у самих условий.
       */}
       <div data-slot="owners-only" className="flex w-full flex-col gap-1">
         <Typography variant="metaStrong" tone="default">
           Только собственники
+        </Typography>
+        <Typography variant="metaText" tone="dense">
+          Посредники отсеяны до выдачи. Выключить нельзя — это и есть продукт.
         </Typography>
       </div>
 
@@ -233,15 +259,42 @@ function FilterPanel({
 
       <div className="flex-1" />
 
-      <Button
-        variant="quiet"
-        size="md"
-        block
-        onClick={onSaveSearch}
-        iconLeft={<ListFilter aria-hidden className="size-3.5" strokeWidth={2} />}
-      >
-        Сохранить поиск
-      </Button>
+      {/*
+        Низ колонки: два действия над всей настройкой сразу.
+
+        **Друг под другом, а не в ряд.** В ряд они не помещаются, и это
+        не вкусовщина: колонка 260, поля 14 с каждой стороны, «Сохранить
+        поиск» со значком занимает 188 из оставшихся 232 — «Сбросить 7»
+        рядом не влезает на 34 px. Проверка переполнения назвала это числом
+        раньше, чем глаз.
+
+        «Сохранить поиск» главное — оно и есть смысл колонки: условия,
+        которые будут приносить новое сами. «Сбросить» под ним подписью,
+        а не кнопкой: кнопка одного веса спорила бы с ним за нажатие.
+      */}
+      <div className="flex w-full shrink-0 flex-col items-center gap-2">
+        <Button
+          variant="quiet"
+          size="md"
+          block
+          onClick={onSaveSearch}
+          iconLeft={<ListFilter aria-hidden className="size-3.5" strokeWidth={2} />}
+        >
+          Сохранить поиск
+        </Button>
+        {activeCount === 0 ? null : (
+          <button
+            type="button"
+            data-slot="filter-reset"
+            onClick={onReset}
+            className="cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          >
+            <Typography variant="metaStrong" tone="default">
+              <>Сбросить {activeCount}</>
+            </Typography>
+          </button>
+        )}
+      </div>
     </aside>
   )
 }

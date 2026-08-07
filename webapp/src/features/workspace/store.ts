@@ -102,11 +102,48 @@ export type Collection = {
   by: string
 }
 
-/** Сохранённый поиск: условия и когда их сохранили. */
+/**
+ * Как часто сообщать о новых объектах по поиску.
+ *
+ * Набор закрыт и снят с экрана `bZOeU`: «Сразу», «Раз в час», «Утром»,
+ * «Выключено». Пятой частоты нет — каждая новая означала бы ещё одну
+ * очередь на сервере, а разница между «раз в час» и «раз в два часа»
+ * для агента не существует.
+ */
+export type SearchNotify = "instant" | "hourly" | "morning" | "off"
+
+/**
+ * Сохранённый поиск.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **Это главный экран продукта после входа**, и запись под ним обязана
+ * отвечать на все семь колонок `bZOeU`. Раньше здесь было три поля — имя,
+ * дата, условия, — и экран из них собрать было нельзя.
+ *
+ * Чего здесь НЕТ и почему: «новых за сутки» и «всего» не хранятся. Это
+ * не свойства поиска, а результат его применения к текущей базе, и записать
+ * их значило бы заморозить: объявление появилось ночью, а в строке по-прежнему
+ * вчерашняя цифра. Считаются на месте.
+ */
 export type SavedSearch = {
   id: string
   name: string
   createdAt: number
+  /** Кто завёл: имя сотрудника на момент сохранения. */
+  by: string
+  /**
+   * Виден всему агентству, а не только автору.
+   *
+   * Личный поиск — частное дело агента; общий заводит руководитель, и он
+   * появляется в сайдбаре у всех. Пока данные лежат в браузере одного
+   * человека, «общий» существовать не может физически, поэтому поле есть,
+   * а способа его включить в интерфейсе пока нет — появится вместе с сервером.
+   */
+  shared: boolean
+  notify: SearchNotify
+  /** Когда поиск открывали в последний раз. `undefined` — ни разу. */
+  lastOpenedAt?: number
   /** Условия в том виде, в каком их читает экран выдачи. */
   query: {
     districts: string[]
@@ -375,11 +412,23 @@ export function setCollectionLink(id: string, linked: boolean) {
   })
 }
 
-export function saveSearch(name: string, query: SavedSearch["query"]) {
+/**
+ * Сохранить поиск.
+ *
+ * Уведомления по умолчанию включены «сразу»: поиск заводят ради того, чтобы
+ * он приносил новое сам, и выключенный по умолчанию он был бы просто закладкой.
+ * Выключить можно на главном экране одним нажатием.
+ */
+export function saveSearch(
+  name: string,
+  query: SavedSearch["query"],
+  by: string,
+  shared = false,
+) {
   write({
     ...current,
     savedSearches: [
-      { id: nextId("s"), name, createdAt: stamp(), query },
+      { id: nextId("s"), name, createdAt: stamp(), by, shared, notify: "instant", query },
       ...current.savedSearches,
     ],
   })
@@ -387,6 +436,28 @@ export function saveSearch(name: string, query: SavedSearch["query"]) {
 
 export function removeSavedSearch(id: string) {
   write({ ...current, savedSearches: current.savedSearches.filter((item) => item.id !== id) })
+}
+
+/** Отметить, что поиск открывали: колонка «Последний просмотр» на главной. */
+export function touchSavedSearch(id: string) {
+  const found = current.savedSearches.find((item) => item.id === id)
+  if (found === undefined) return
+  write({
+    ...current,
+    savedSearches: current.savedSearches.map((item) =>
+      item.id === id ? { ...item, lastOpenedAt: stamp() } : item,
+    ),
+  })
+}
+
+/** Сменить частоту уведомлений по поиску. */
+export function setSearchNotify(id: string, notify: SearchNotify) {
+  write({
+    ...current,
+    savedSearches: current.savedSearches.map((item) =>
+      item.id === id ? { ...item, notify } : item,
+    ),
+  })
 }
 
 export function addPerson(input: Omit<Person, "id" | "addedAt">) {

@@ -35,10 +35,45 @@ type Row = {
   cells: ReactNode[]
 }
 
-function DataTable({ columns, rows }: { columns: Column[]; rows: Row[] }) {
+/**
+ * Пустая таблица.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **Шапка остаётся.** Правило доски `СИСТЕМА · Пустые списки`, и оно одно
+ * на все десять пустых списков кабинета: пустая таблица не схлопывается
+ * в картинку с надписью «пока ничего нет». На месте строк — одна строка
+ * текста: почему пусто и что это наполнит. Никаких иллюстраций и никаких
+ * извинений.
+ *
+ * Причина не в экономии. Шапка называет колонки, то есть отвечает на вопрос
+ * «что здесь будет», раньше и точнее любого объяснения. Картинка вместо
+ * таблицы заставляет человека гадать, что он вообще открыл.
+ *
+ * Исключение из правила ровно одно, и оно названо в своём месте: главный
+ * экран `bZOeU` при первом входе. Пустая таблица с шапкой — правильное
+ * пустое состояние и никуда не годный первый экран продукта.
+ */
+type Empty = {
+  /** «Ни одной подборки». */
+  title: string
+  /** Что это наполнит. Одной строкой. */
+  text: string
+}
+
+function DataTable({
+  columns,
+  rows,
+  empty,
+}: {
+  columns: Column[]
+  rows: Row[]
+  empty?: Empty
+}) {
   return (
     <div
       data-slot="data-table"
+      data-empty={rows.length === 0 || undefined}
       className="flex w-full shrink-0 flex-col overflow-hidden rounded-2xl bg-surface"
     >
       <div className="flex h-row-head w-full items-center gap-3 bg-warm px-4">
@@ -57,6 +92,22 @@ function DataTable({ columns, rows }: { columns: Column[]; rows: Row[] }) {
           </div>
         ))}
       </div>
+
+      {rows.length === 0 && empty !== undefined ? (
+        <div
+          data-slot="data-empty"
+          // Высота двух строк таблицы, а не своя: пустое состояние занимает
+          // ровно то место, куда встанут первые записи.
+          className="flex w-full flex-col justify-center gap-1 px-4 py-6"
+        >
+          <Typography variant="numericDense" tone="default">
+            <>{empty.title}</>
+          </Typography>
+          <Typography variant="denseText" tone="dense">
+            <>{empty.text}</>
+          </Typography>
+        </div>
+      ) : null}
 
       {rows.map((row, index) => (
         <div

@@ -418,6 +418,14 @@ function productRoute<TModule extends Record<string, unknown>, const TPath exten
 }
 
 const productRoutes = [
+  /**
+   * Главная кабинета — сохранённые поиски.
+   *
+   * Раньше вход вёл на «Сегодня». У агентства, созданного минуту назад,
+   * этот экран пуст, и продукт начинался с пустоты. Теперь начинается
+   * с вопроса «что вы ищете» и четырёх готовых ответов.
+   */
+  productRoute('/searches', () => import('./searches-screen'), 'SearchesPage'),
   productRoute('/today', () => import('./today-screen'), 'TodayScreenPage'),
   /**
    * Выдача помнит, куда вернуть курсор.
@@ -433,8 +441,15 @@ const productRoutes = [
     // Тип с необязательным ключом, а не `string | undefined`: иначе
     // маршрутизатор требует передавать `search` при каждом переходе
     // на выдачу, включая те девять мест, где возвращать некуда.
-    validateSearch: (search: Record<string, unknown>): { at?: string } =>
-      typeof search.at === 'string' ? { at: search.at } : {},
+    //
+    // `saved` — какой сохранённый поиск открыли. Условия при этом не едут
+    // в адресе: они уже лежат в журнале работы, и дублировать их значило бы
+    // завести второй источник правды, который разъедется с первым при первой
+    // же правке условий.
+    validateSearch: (search: Record<string, unknown>): { at?: string; saved?: string } => ({
+      ...(typeof search.at === 'string' ? { at: search.at } : {}),
+      ...(typeof search.saved === 'string' ? { saved: search.saved } : {}),
+    }),
     component: lazyRouteComponent(() => import('./search-screen'), 'SearchScreenPage'),
   }),
   /**

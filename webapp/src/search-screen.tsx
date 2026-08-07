@@ -9,15 +9,19 @@ import {
   CollectionPicker,
   disclosureOf,
   lastCall,
+  saveSearch,
   useWorkspace,
+  type SavedSearch,
   type Workspace,
 } from "@/features/workspace"
 import { CabinetShell, useHotkeys } from "@/features/cabinet"
 import {
+  FilterBar,
   FilterPanel,
   ListingRow,
   ResultsHeader,
   ResultTabs,
+  useFilterCollapse,
 } from "@/features/listings"
 
 /**
@@ -188,17 +192,55 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
     () => (own ? base.map((row) => withAgencyWork(row, workspace)) : base),
     [own, base, workspace],
   )
-  const [activeTab, setActiveTab] = useState("all")
+  /**
+   * Открыли сохранённый поиск — условия приезжают из журнала.
+   *
+   * Ключ у состояния фильтров — идентификатор поиска. Это не приём ради
+   * приёма: без него человек, перешедший с одного сохранённого поиска на
+   * другой, оставался бы с условиями первого. React пересоздаёт состояние
+   * при смене ключа, и условия встают те, которые открыли.
+   *
+   * Условия НЕ едут в адресе. Они уже лежат в журнале, и второй источник
+   * правды разъехался бы с первым при первой же правке.
+   */
+  const { at, saved } = useSearch({ from: '/search', shouldThrow: false }) ?? {}
+  const openedSearch = workspace.savedSearches.find((item) => item.id === saved)
+
+  return (
+    <SearchScreenBody
+      key={openedSearch?.id ?? "free"}
+      rows={rows}
+      at={at}
+      opened={openedSearch}
+      authorName={session?.name ?? ""}
+      navigate={navigate}
+    />
+  )
+}
+
+function SearchScreenBody({
+  rows,
+  at,
+  opened,
+  authorName,
+  navigate,
+}: {
+  rows: SearchRow[]
+  at?: string
+  opened?: SavedSearch
+  /** Кто заводит поиск: имя из сеанса. Пусто — сеанса нет, но сюда без него не попасть. */
+  authorName: string
+  navigate: ReturnType<typeof useNavigate>
+}) {
+  const [activeTab, setActiveTab] = useState(opened?.query.tab ?? "all")
   const [dense, setDense] = useState(false)
-  const [sort, setSort] = useState<SortId>("fresh")
+  const [sort, setSort] = useState<SortId>((opened?.query.sort as SortId | undefined) ?? "fresh")
   /** Потолок цены в миллионах. 0 — без потолка. */
-  const [priceCap, setPriceCap] = useState(15)
-  const [rooms, setRooms] = useState<number[]>([])
-  const [districts, setDistricts] = useState<string[]>([
-    "krasnogvardeisky",
-    "nevsky",
-    "kalininsky",
-  ])
+  const [priceCap, setPriceCap] = useState(opened?.query.priceCap ?? 15)
+  const [rooms, setRooms] = useState<number[]>(opened?.query.rooms ?? [])
+  const [districts, setDistricts] = useState<string[]>(
+    opened?.query.districts ?? ["krasnogvardeisky", "nevsky", "kalininsky"],
+  )
   /**
    * Строка под курсором.
    *
@@ -215,15 +257,27 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
    * Адрес переживает и фильтр, и сортировку; если объект ушёл из выдачи,
    * курсор честно пропадает, а не показывает на соседа.
    */
-  /**
-   * Куда вернуться, если пришли из прозвона или из карточки.
-   *
-   * Адрес объекта приезжает параметром `at`. Без него курсор встаёт на строку,
-   * выбранную в макете. Стенд параметров не читает: у него свой адрес.
-   */
-  const { at } = useSearch({ from: '/search', shouldThrow: false }) ?? { at: undefined }
-
   const [chosen, setChosen] = useState<string | null>(null)
+
+  /**
+   * Колонка фильтров: стоит в раскладке или прячется за полоску.
+   *
+   * Решает ширина окна, а не человек. Открытое наложение закрывается само,
+   * когда окно снова стало широким: иначе панель осталась бы висеть поверх
+   * выдачи рядом с такой же колонкой в раскладке.
+   */
+  const collapsed = useFilterCollapse()
+  const [open, setOpen] = useState(false)
+
+  // Правка состояния прямо в рендере, а не эффектом: эффект здесь дал бы
+  // лишний проход отрисовки, и правило `react-hooks` запрещает его прямо.
+  // Это тот самый случай, для которого React такую правку и разрешает —
+  // состояние зависит от изменившегося входного значения.
+  const [wasCollapsed, setWasCollapsed] = useState(collapsed)
+  if (wasCollapsed !== collapsed) {
+    setWasCollapsed(collapsed)
+    setOpen(false)
+  }
 
   /**
    * Курсор: сначала выбранный человеком, потом пришедший адресом, потом
@@ -421,15 +475,38 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
     },
   })
 
-  return (
-    <CabinetShell activeId="search">
+  /**
+   * Условия одной строкой — для свёрнутой полоски.
+   *
+   * Считается из того же состояния, что и сама колонка: второго описания
+   * условий в продукте быть не должно, иначе полоска и колонка разойдутся
+   * молча, и человек будет читать в полоске одно, а видеть другое.
+   */
+  const summary = [
+    districts.length === 0
+      ? "все районы"
+      : districts.map((id) => DISTRICTS.find((item) => item.id === id)?.label ?? id).join(" · "),
+    ...rooms.map((room) => `${room}-к`),
+    priceCap === 0 ? null : `до ${priceCap} млн`,
+    activeTab === "all" ? null : "вкладка сужена",
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ")
+
+  const activeCount =
+    districts.length + rooms.length + (priceCap === 0 ? 0 : 1) + (activeTab === "all" ? 0 : 1)
+
+  const resetFilters = () => {
+    setDistricts([])
+    setRooms([])
+    setPriceCap(0)
+    setActiveTab("all")
+  }
+
+  const panel = (
         <FilterPanel
-          activeCount={
-            districts.length +
-            rooms.length +
-            (priceCap === 0 ? 0 : 1) +
-            (activeTab === "all" ? 0 : 1)
-          }
+          overlay={collapsed}
+          activeCount={activeCount}
           onToggle={(group, id) => {
             if (group === "district") toggleDistrict(id)
             if (group === "price") setPriceCap(Number.parseInt(id, 10))
@@ -444,12 +521,7 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
               }
             }
           }}
-          onReset={() => {
-            setDistricts([])
-            setRooms([])
-            setPriceCap(0)
-            setActiveTab("all")
-          }}
+          onReset={resetFilters}
           districts={[
             DISTRICTS.slice(0, 1).map((item) => ({
               id: item.id,
@@ -499,7 +571,38 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
               selected: priceCap === cap,
             })),
           ]}
+          onSaveSearch={() => {
+            const name = summary === "" ? "Новый поиск" : summary
+            saveSearch(name, { districts, rooms, priceCap, tab: activeTab, sort }, authorName)
+            void navigate({ to: "/searches" })
+          }}
         />
+  )
+
+  return (
+    <CabinetShell activeId="search">
+        {/* На широком окне колонка стоит в раскладке и всегда видна.
+            На узком — уходит в полоску над выдачей и открывается наложением
+            поверх неё. Решает окно, а не человек: см. `useFilterCollapse`. */}
+        {collapsed ? null : panel}
+
+        {collapsed && open ? (
+          <>
+            {/*
+              Затемнение накрывает выдачу, но НЕ сайдбар: уйти в другой раздел
+              можно, не закрывая фильтры. И выдача остаётся видна справа —
+              счётчик найденного пересчитывается на каждом касании чипа, и
+              видеть результат во время настройки принципиально: это первая
+              претензия к конкуренту, где фильтр закрывает выдачу целиком.
+            */}
+            <div
+              data-slot="filter-scrim"
+              className="fixed top-(--height-header) right-0 bottom-0 left-(--width-sidebar) z-30 bg-[#1e1e1e26]"
+              onPointerDown={() => setOpen(false)}
+            />
+            {panel}
+          </>
+        ) : null}
 
         <main
           data-slot="results"
@@ -518,6 +621,15 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
             шапка обещала бы 892 объявления там, где показано двенадцать строк,
             и первый же внимательный человек поймал бы продукт на вранье.
           */}
+          {collapsed ? (
+            <FilterBar
+              activeCount={activeCount}
+              summary={summary}
+              onOpen={() => setOpen(true)}
+              onReset={resetFilters}
+            />
+          ) : null}
+
           <ResultsHeader
             listings={visible.length + Math.round(visible.length * 3.3) + Math.round(visible.length * 2.2)}
             duplicates={Math.round(visible.length * 3.3)}
@@ -583,7 +695,7 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
       {collecting === null ? null : (
         <CollectionPicker
           address={collecting}
-          by={session?.name ?? ""}
+          by={authorName}
           onClose={() => setCollecting(null)}
         />
       )}

@@ -133,8 +133,19 @@ export async function seedAgency(page: Page, spec: AgencySpec) {
       const now = Date.now()
       const at = (agoMinutes: number) => now - agoMinutes * 60_000
 
+      /**
+       * Работа сажается ОДИН раз, а не при каждом переходе.
+       *
+       * `addInitScript` выполняется на каждой навигации, и без этой проверки
+       * журнал переписывался заново после каждого перехода: проверка нажимала
+       * «готовый набор», поиск сохранялся, страница переходила на выдачу — и
+       * там же затиралась пустым журналом. Возврат на главную показывал ноль
+       * поисков, будто сохранение не сработало.
+       */
+      const key = `serch.workspace.${email}`
+      if (window.localStorage.getItem(key) === null)
       window.localStorage.setItem(
-        `serch.workspace.${email}`,
+        key,
         JSON.stringify({
           version: 1,
           people: (plan.people ?? []).map((person, index) => ({

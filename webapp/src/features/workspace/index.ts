@@ -19,6 +19,8 @@ export {
   renameCollection,
   saveSearch,
   setCollectionLink,
+  setSearchNotify,
+  touchSavedSearch,
   useNow,
   useWorkspace,
   useWorkspaceActions,
@@ -31,6 +33,7 @@ export type {
   Person,
   Refund,
   SavedSearch,
+  SearchNotify,
   TopUp,
   Workspace,
 } from './store'
