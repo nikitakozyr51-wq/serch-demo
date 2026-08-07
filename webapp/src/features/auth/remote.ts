@@ -128,4 +128,71 @@ async function setBalance(balance: number, trial: number): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
-export { loadIdentity, setBalance, signInRemote, signOutRemote, signUpRemote }
+/**
+ * Действия руководителя.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Все пять — вызовы функций базы, а не запросы к таблицам, и это не стиль.
+ * Правило доступа отвечает на вопрос «чьи это строки»; здесь вопрос другой —
+ * «имеет ли право этот человек». Разница видна на передаче роли: строки
+ * свои у обоих, а передать роль может только руководитель.
+ *
+ * Проверка права живёт ВНУТРИ базы (`i_am_owner`), а не здесь. Этот файл
+ * уезжает в браузер, и любая проверка в нём снимается за минуту через
+ * консоль.
+ */
+async function callRpc(name: string, args: Record<string, unknown> = {}): Promise<string | null> {
+  const client = db()
+  if (client === null) return "База не настроена"
+  const { error } = await client.rpc(name, args)
+  return error === null ? null : error.message
+}
+
+/** Позвать сотрудника. Возвращает текст отказа или `null`. */
+const inviteAgent = (email: string, name: string, limit: number | null) =>
+  callRpc("invite_agent", { invite_email: email, invite_name: name, invite_limit: limit })
+
+/** Передать роль руководителя. Обе строки меняются в базе одним действием. */
+const transferOwner = (personId: string) => callRpc("transfer_owner", { to_person: personId })
+
+/** Поставить вид всем сотрудникам агентства. */
+const applyViewToAll = (view: "spacious" | "compact") =>
+  callRpc("apply_view_to_all", { next_view: view })
+
+/** Запросить удаление агентства. Именно запросить — см. миграцию. */
+const requestDeletion = () => callRpc("request_deletion")
+
+/** Сохранить реквизиты юрлица. Печатаются в счёте, акте и счёте-фактуре. */
+async function saveRequisites(input: {
+  legalName: string
+  inn: string
+  legalAddress: string
+}): Promise<string | null> {
+  const client = db()
+  if (client === null) return "База не настроена"
+  const agency = await client.rpc("my_agency_id")
+  if (agency.error !== null) return agency.error.message
+  const { error } = await client
+    .from("agencies")
+    .update({
+      legal_name: input.legalName,
+      inn: input.inn,
+      legal_address: input.legalAddress,
+    })
+    .eq("id", agency.data as string)
+  return error === null ? null : error.message
+}
+
+export {
+  applyViewToAll,
+  inviteAgent,
+  loadIdentity,
+  requestDeletion,
+  saveRequisites,
+  setBalance,
+  signInRemote,
+  signOutRemote,
+  signUpRemote,
+  transferOwner,
+}

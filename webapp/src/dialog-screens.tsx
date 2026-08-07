@@ -3,7 +3,8 @@ import { useState } from "react"
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
-import { DialogCard, HotkeysDialog } from "@/features/cabinet"
+import { DialogCard } from "@/components/DialogCard"
+import { HotkeysDialog } from "@/features/cabinet"
 import { cn } from "@/lib/utils"
 
 /**

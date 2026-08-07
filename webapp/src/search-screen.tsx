@@ -23,6 +23,7 @@ import {
   FilterPanel,
   ListingRow,
   ResultsHeader,
+  NearAddressDialog,
   ResultTabs,
   useFilterCollapse,
   type SearchMode,
@@ -349,6 +350,16 @@ function SearchScreenBody({
    * когда окно снова стало широким: иначе панель осталась бы висеть поверх
    * выдачи рядом с такой же колонкой в раскладке.
    */
+  /**
+   * Ограничение по адресу.
+   *
+   * Сужает по совпадению в адресе: «Лиговский» оставит весь Лиговский
+   * проспект. Радиус пока не сужает — координат у объектов нет, — и окно
+   * говорит об этом прямо, а не делает вид.
+   */
+  const [nearAddress, setNearAddress] = useState("")
+  const [addressOpen, setAddressOpen] = useState(false)
+
   const collapsed = useFilterCollapse()
   const [open, setOpen] = useState(false)
 
@@ -413,6 +424,11 @@ function SearchScreenBody({
     .filter((row) => districts.length === 0 || districts.includes(row.district))
     .filter((row) => priceCap === 0 || row.priceValue <= priceCap * PRICE_UNIT[mode ?? "sale"])
     .filter((row) => rooms.length === 0 || rooms.includes(row.rooms))
+    .filter(
+      (row) =>
+        nearAddress === "" ||
+        row.address.toLowerCase().includes(nearAddress.toLowerCase()),
+    )
     .sort(SORTS[sort].compare)
 
   /**
@@ -591,6 +607,7 @@ function SearchScreenBody({
             }
           }}
           onReset={resetFilters}
+          onChangeAddress={() => setAddressOpen(true)}
           districts={[
             DISTRICTS.slice(0, 1).map((item) => ({
               id: item.id,
@@ -630,7 +647,7 @@ function SearchScreenBody({
               { id: "walk-20", label: "до 20 мин" },
             ],
           ]}
-          nearAddress="Лиговский пр., 44 · 1 км"
+          nearAddress={nearAddress === "" ? undefined : nearAddress}
           more={[
             [1, 2, 3, 4].map((room) => ({
               id: String(room),
@@ -765,6 +782,16 @@ function SearchScreenBody({
       {/* Окно выбора подборки: клавиша `B` и кнопка в строке ведут сюда.
           Живёт на уровне экрана, а не строки: строк на экране полсотни,
           и полсотни окон в дереве — это полсотни лишних узлов. */}
+      {addressOpen ? (
+        <NearAddressDialog
+          address={nearAddress}
+          found={visible.length}
+          onApply={setNearAddress}
+          onClear={() => setNearAddress("")}
+          onClose={() => setAddressOpen(false)}
+        />
+      ) : null}
+
       {collecting === null ? null : (
         <CollectionPicker
           address={collecting}

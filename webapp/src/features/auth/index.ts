@@ -16,6 +16,19 @@ export {
   useSessionActions,
 } from './demo-session'
 export type { DemoSession } from './demo-session'
+/**
+ * Действия руководителя.
+ *
+ * Отдаются наружу из раздела входа, а не из журналов работы: «кто здесь
+ * руководитель и что ему можно» — это вход, а не то, что агентство наработало.
+ */
+export {
+  applyViewToAll,
+  inviteAgent,
+  requestDeletion,
+  saveRequisites,
+  transferOwner,
+} from './remote'
 export { AuthApi } from './api'
 export { bootstrapAuthSession } from './bootstrap'
 // Продуктовые экраны входа, снятые с макета. `AuthPageShell` ниже — шаблонный,

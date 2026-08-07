@@ -1,41 +1,5 @@
-import type { ReactNode } from "react"
-
+import { DialogCard } from "@/components/DialogCard"
 import { Typography } from "@/components/typography"
-import { cn } from "@/lib/utils"
-
-/**
- * Каркас диалога кабинета (`JHW4q`): 520 или 640, поля 24, радиус 16,
- * белая заливка, кнопки внизу справа.
- *
- * Живёт в общем месте, а не рядом со стендом: карта горячих клавиш всплывает
- * на любом экране кабинета по «?», и тянуть её из страницы-стенда значило бы
- * поставить продукт в зависимость от стенда.
- */
-function DialogCard({
-  wide = false,
-  rhythm = "tight",
-  children,
-}: {
-  wide?: boolean
-  /** 16 у диалогов-подтверждений, 20 у диалогов с выбором, 24 у формы поиска. */
-  rhythm?: "tight" | "medium" | "loose"
-  children: ReactNode
-}) {
-  return (
-    <div
-      role="dialog"
-      aria-modal="false"
-      data-slot="dialog-card"
-      className={cn(
-        "flex shrink-0 flex-col rounded-2xl bg-surface p-6",
-        wide ? "w-160" : "w-130",
-        rhythm === "tight" ? "gap-4" : rhythm === "medium" ? "gap-5" : "gap-6",
-      )}
-    >
-      {children}
-    </div>
-  )
-}
 
 /** Строка карты клавиш: клавиша 52 × 24 и что она делает. */
 function HotkeyRow({ keys, action }: { keys: string; action: string }) {
@@ -127,4 +91,4 @@ function HotkeysDialog() {
   )
 }
 
-export { DialogCard, HotkeysDialog }
+export { HotkeysDialog }

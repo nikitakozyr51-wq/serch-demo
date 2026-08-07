@@ -487,6 +487,7 @@ const productRoutes = [
   productRoute('/collections/inside', () => import('./collections-screens'), 'CollectionInsidePage'),
   productRoute('/agency', () => import('./agency-efficiency-screen'), 'AgencyEfficiencyPage'),
   productRoute('/agency/staff', () => import('./agency-staff-screen'), 'AgencyStaffPage'),
+  productRoute('/agency/invite', () => import('./agency-invite-screen'), 'AgencyInvitePage'),
   productRoute('/agency/staff/person', () => import('./agency-staff-screen'), 'AgencyPersonPage'),
   productRoute('/agency/refusals', () => import('./agency-refusals-screen'), 'AgencyRefusalsPage'),
   productRoute('/agency/access', () => import('./agency-access-screen'), 'AgencyAccessPage'),

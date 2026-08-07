@@ -112,6 +112,7 @@ function useStaff(): Staff[] {
 }
 
 export function AgencyStaffPage() {
+  const navigate = useNavigate()
   const staff = useStaff()
 
   return (
@@ -127,7 +128,7 @@ export function AgencyStaffPage() {
         // Формы приглашения на большом экране в макете нет — она нарисована
         // только для телефона. Рисовать её здесь по памяти значило бы
         // придумать продукт, поэтому действие названо и молчит.
-        <Button variant="primary" size="sm" data-action="приглашение агента в агентство">
+        <Button variant="primary" size="sm" data-action="приглашение агента в агентство" onClick={() => void navigate({ to: "/agency/invite" })}>
           Пригласить агента
         </Button>
       }

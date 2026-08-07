@@ -3,7 +3,13 @@ import { useState } from "react"
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
-import { useSession } from "@/features/auth"
+import {
+  applyViewToAll,
+  requestDeletion,
+  saveRequisites,
+  transferOwner,
+  useSession,
+} from "@/features/auth"
 import {
   accountingDocument,
   download,
@@ -12,7 +18,17 @@ import {
   useNow,
   useWorkspace,
 } from "@/features/workspace"
-import { AgencyShell, FormField, SettingRow } from "@/features/agency"
+import {
+  AgencyShell,
+  ApplyViewDialog,
+  DeleteAgencyDialog,
+  FormField,
+  RequisitesDialog,
+  SettingRow,
+  TransferOwnerDialog,
+} from "@/features/agency"
+import { notifyDone, notifyError } from "@/platform/notify"
+import { useDensity } from "@/platform/density"
 
 /**
  * АГЕНТСТВО · Настройки агентства.
@@ -63,9 +79,41 @@ function RuleChips({ options, initial }: { options: string[]; initial: string })
   )
 }
 
+/** Какое из четырёх окон открыто. Одновременно бывает только одно. */
+type OpenDialog = "none" | "requisites" | "transfer" | "view" | "delete"
+
 export function AgencySettingsPage() {
   const session = useSession()
   const workspace = useWorkspace()
+  const [dense] = useDensity()
+  const [open, setOpen] = useState<OpenDialog>("none")
+
+  /**
+   * Реквизиты живут в базе, а до неё — нигде.
+   *
+   * Без сервера сохранять их некуда: колонки есть только в базе, а в браузере
+   * они пережили бы ровно до смены устройства. Поэтому окно открывается
+   * с тем, что уже записано, и пустые поля здесь — не ошибка, а «ещё
+   * не заполняли».
+   */
+  const [requisites, setRequisites] = useState({ legalName: "", inn: "", legalAddress: "" })
+
+  /**
+   * Кому можно передать роль и кого коснётся раскатка вида — все, кроме себя.
+   *
+   * Себя в списке быть не может по обеим причинам сразу: передать роль себе
+   * бессмысленно, а свой вид человек и так меняет переключателем.
+   */
+  const colleagues = workspace.people.filter(
+    (person) => person.email.trim().toLowerCase() !== (session?.email ?? "").trim().toLowerCase(),
+  )
+
+  /** Отчитаться о том, что сделал сервер. Молча такие действия проходить не должны. */
+  const report = (done: string) => (failed: string | null) => {
+    if (failed === null) notifyDone(done)
+    else notifyError(failed)
+    setOpen("none")
+  }
   const now = useNow()
   // Экран за охраной, без сеанса сюда не попасть. Пустая строка — не «на всякий
   // случай», а единственный запасной вариант: подставить сюда чужое название
@@ -164,9 +212,15 @@ export function AgencySettingsPage() {
             hint="подставится из ЕГРЮЛ после проверки ИНН"
           />
           <div className="flex">
-            {/* Правка реквизитов — отдельная форма с проверкой ИНН по ЕГРЮЛ.
-                В макете её нет, поэтому действие только названо. */}
-            <Button variant="quiet" size="md" data-action="правка реквизитов агентства">
+            {/* Правка реквизитов открывает окно `cXuHY`. Форма с проверкой
+                ИНН по ЕГРЮЛ нарисована, а сверка появится на стороне сервера:
+                здесь поля и сохранение. */}
+            <Button
+              variant="quiet"
+              size="md"
+              data-action="правка реквизитов агентства"
+              onClick={() => setOpen("requisites")}
+            >
               Изменить реквизиты
             </Button>
           </div>
@@ -191,12 +245,13 @@ export function AgencySettingsPage() {
             </Typography>
           </div>
           <div className="flex">
-            {/* Ответственного за данные выбирают из сотрудников — списка
-                для выбора в макете нет, поэтому действие только названо. */}
+            {/* Ответственного выбирают из сотрудников — окно `B3hBi`.
+                Роль неразрывна с руководительской: ролей в системе две. */}
             <Button
               variant="quiet"
               size="md"
               data-action="передана роль ответственного за данные"
+              onClick={() => setOpen("transfer")}
             >
               Передать роль
             </Button>
@@ -247,12 +302,14 @@ export function AgencySettingsPage() {
             title="Вид по умолчанию для агентства"
             note="плотность и набор полей для всех сотрудников"
             control={
-              // Раскатка вида на всех сотрудников меняет чужие экраны, и в макете
-              // нет ни подтверждения, ни отчёта о том, к кому это применилось.
+              // Раскатка меняет ЧУЖИЕ экраны, и прежний выбор каждого
+              // не сохраняется — отменить нечем. Поэтому перед ней окно
+              // `fmHiq` с числом и именами, а не молчаливое применение.
               <Button
                 variant="quiet"
                 size="sm"
                 data-action="вид по умолчанию применён ко всем сотрудникам"
+                onClick={() => setOpen("view")}
               >
                 Применить ко всем
               </Button>
@@ -272,15 +329,75 @@ export function AgencySettingsPage() {
             title="Удаление агентства"
             note="данные удаляются за три рабочих дня, журнал доступа хранится год по закону"
             control={
-              // Самое необратимое действие кабинета. Без экрана подтверждения
-              // выполнять его по нажатию нельзя, поэтому оно только названо.
-              <Button variant="quiet" size="sm" data-action="запрошено удаление агентства">
+              // Самое необратимое действие кабинета — и потому единственное,
+              // где кнопка подтверждения залита цветом ошибки. Окно `d7JoII`
+              // перечисляет всё, что пропадёт, включая то, о чём человек
+              // не подумает: ссылки на подборки у клиентов.
+              <Button
+                variant="quiet"
+                size="sm"
+                data-action="запрошено удаление агентства"
+                onClick={() => setOpen("delete")}
+              >
                 Запросить удаление
               </Button>
             }
           />
         </div>
       </div>
+
+      {open === "requisites" ? (
+        <RequisitesDialog
+          legalName={requisites.legalName || (session?.agency ?? "")}
+          inn={requisites.inn}
+          legalAddress={requisites.legalAddress}
+          onClose={() => setOpen("none")}
+          onSave={(next) => {
+            setRequisites(next)
+            void saveRequisites(next).then(report("Реквизиты сохранены"))
+          }}
+        />
+      ) : null}
+
+      {open === "transfer" ? (
+        <TransferOwnerDialog
+          ownerName={session?.name ?? ""}
+          people={colleagues.map((person) => ({
+            id: person.id,
+            name: person.name,
+            note: `${person.role === "owner" ? "руководитель" : "агент"} · ${
+              person.limit === null ? "без лимита" : `лимит ${person.limit} в сутки`
+            }`,
+          }))}
+          onClose={() => setOpen("none")}
+          onTransfer={(id) => void transferOwner(id).then(report("Роль передана"))}
+        />
+      ) : null}
+
+      {open === "view" ? (
+        <ApplyViewDialog
+          dense={dense}
+          people={colleagues.map((person) => person.name)}
+          onClose={() => setOpen("none")}
+          onApply={() =>
+            void applyViewToAll(dense ? "compact" : "spacious").then(
+              report("Вид поставлен всем сотрудникам"),
+            )
+          }
+        />
+      ) : null}
+
+      {open === "delete" ? (
+        <DeleteAgencyDialog
+          agency={session?.agency ?? ""}
+          onClose={() => setOpen("none")}
+          onRequest={() =>
+            void requestDeletion().then(
+              report("Запрос на удаление принят: данные удалим за три рабочих дня"),
+            )
+          }
+        />
+      ) : null}
     </AgencyShell>
   )
 }

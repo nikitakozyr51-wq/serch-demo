@@ -120,15 +120,33 @@ async function census(page: import('@playwright/test').Page, paths: string[], wi
 
     await page.setViewportSize({ width, height: 1000 })
 
-    try {
-      // `networkidle` здесь не годится: приложение держит соединение
-      // с сервером разработки, и «тишина в сети» не наступает никогда.
-      // Тридцать экранов по такому ожиданию не помещаются ни в какой бюджет.
-      await page.goto(path, { waitUntil: 'domcontentloaded' })
-      await page.waitForSelector('[data-slot]', { timeout: 8000 })
-      await page.waitForTimeout(200)
-    } catch (error) {
-      broken.push({ path, error: String(error) })
+    /**
+     * Экран считается упавшим только со второй попытки.
+     *
+     * `networkidle` здесь не годится: приложение держит соединение с сервером
+     * разработки, и «тишина в сети» не наступает никогда. Ждём появления
+     * первого узла — но на тридцатом переходе подряд сборщик догружает
+     * очередной кусок кода дольше обычного, и один экран падал по времени,
+     * будучи целым.
+     *
+     * Красное по расписанию хуже отсутствия проверки: ему перестают верить,
+     * а вместе с ним и настоящему красному. Поэтому вторая попытка — и она
+     * же граница: если экран не открылся дважды, дело не в расписании.
+     */
+    let opened = false
+    for (const attempt of [0, 1]) {
+      try {
+        await page.goto(path, { waitUntil: 'domcontentloaded' })
+        await page.waitForSelector('[data-slot]', { timeout: 20_000 })
+        await page.waitForTimeout(200)
+        opened = true
+        break
+      } catch (error) {
+        if (attempt === 1) broken.push({ path, error: String(error) })
+      }
+    }
+
+    if (!opened) {
       page.off('pageerror', onError)
       continue
     }
