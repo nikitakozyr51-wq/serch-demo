@@ -175,6 +175,29 @@ if ((await cta.count()) === 0) {
     if (!opened) note('кабинет открылся, но формы регистрации на нём нет')
 
     if (opened) {
+      /**
+       * Поля заполняются, а не считаются заполненными.
+       *
+       * Раньше проверка только тикала галочки и ждала, что кнопка оживёт.
+       * Это работало, пока форма приезжала заполненной образцами из макета —
+       * «Невский проспект», «Смирнова Ирина». Образцы убраны, форма
+       * открывается пустой (так и должно быть), и проверка начала падать
+       * на своём же допущении.
+       *
+       * Имя, почта и название агентства обязательны: без имени кабинет
+       * подписал бы человека словом «Руководитель» и поставил бы его
+       * в журнал раскрытий рядом с каждым списанием.
+       */
+      for (const [name, value] of [
+        ['agency', 'Проверочное агентство'],
+        ['name', 'Проверяющий'],
+        ['email', 'demo-check@serch.test'],
+        ['password', 'ochen-dlinnyi-parol-10'],
+      ]) {
+        const field = page.locator(`[data-slot="auth-field"] input[name="${name}"]`)
+        if ((await field.count()) > 0) await field.fill(value)
+      }
+
       const boxes = page.locator('[data-slot="checkbox"]')
       const count = await boxes.count()
       for (let index = 0; index < count; index += 1) await boxes.nth(index).click()
