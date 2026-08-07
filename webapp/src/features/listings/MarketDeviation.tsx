@@ -29,9 +29,39 @@ import { Typography } from "@/components/typography"
 type MarketDeviationProps = {
   /** Отклонение в процентах: −12 значит на 12 % дешевле рынка. */
   percent: number
+  /**
+   * Сколько сопоставимых объектов дали медиану.
+   *
+   * `undefined` — вопрос не стоит: в продаже медиана района считается по
+   * сотням объектов и всегда набирается.
+   */
+  comparables?: number
 }
 
-function MarketDeviation({ percent }: MarketDeviationProps) {
+/**
+ * Ниже этого числа аналогов отклонение не показывается вовсе.
+ *
+ * В аренде объявление живёт дни, а не месяцы, и аналогов может не набраться.
+ * Отклонение от медианы трёх квартир — это не отклонение, а совпадение.
+ *
+ * **Врать про рынок хуже, чем промолчать.** Колонка отклонения — ядро
+ * продукта: ради неё агент и платит за контакт. Одно неверное число в ней
+ * стоит дороже десяти пустых клеток, потому что после него не верят и
+ * верным.
+ */
+const ENOUGH = 8
+
+function MarketDeviation({ percent, comparables }: MarketDeviationProps) {
+  if (comparables !== undefined && comparables < ENOUGH) {
+    return (
+      <span data-slot="market-deviation" data-band="unknown" className="inline-flex h-5 items-center">
+        <Typography variant="metaText" tone="dense">
+          мало данных
+        </Typography>
+      </span>
+    )
+  }
+
   const isNeutral = Math.abs(percent) <= 5
   const isCheaper = percent < 0
 

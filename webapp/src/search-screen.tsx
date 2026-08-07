@@ -3,6 +3,7 @@ import { useMemo, useState } from "react"
 
 import { Typography } from "@/components/typography"
 
+import { rentalRows } from "@/data/rental-rows"
 import { ALL_ROWS, DISTRICTS, MEASURED_ROWS, type SearchRow } from "@/data/search-rows"
 import { initialsOf, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import {
@@ -10,6 +11,7 @@ import {
   disclosureOf,
   lastCall,
   saveSearch,
+  useNow,
   useWorkspace,
   type SavedSearch,
   type Workspace,
@@ -23,6 +25,7 @@ import {
   ResultsHeader,
   ResultTabs,
   useFilterCollapse,
+  type SearchMode,
 } from "@/features/listings"
 
 /**
@@ -78,8 +81,34 @@ const SORTS = {
 
 type SortId = keyof typeof SORTS
 
-/** Ступени потолка цены. Числа те же, что стоят в колонке фильтров файла. */
-const PRICE_CAPS = [8, 15, 25, 0] as const
+/**
+ * Ступени потолка цены — свои у каждого режима.
+ *
+ * У продажи миллионы, у аренды тысячи рублей в месяц: «до 15 млн» в аренде
+ * не сужает ничего, потому что дороже пятнадцати миллионов в месяц квартир
+ * не бывает. Общий набор означал бы, что в одном из режимов фильтр цены
+ * просто не работает — и работал бы вид, а не фильтр.
+ *
+ * Значения аренды взяты из колонки, описанной в `АРЕНДА-v1.md`:
+ * «от 40 000 · до 90 000». Единица хранится числом рублей, а подпись
+ * собирается из режима.
+ */
+const PRICE_CAPS: Record<SearchMode, readonly number[]> = {
+  sale: [8, 15, 25, 0],
+  rent: [40_000, 60_000, 90_000, 0],
+}
+
+/** Потолок по умолчанию: то, с чем открывается выдача в этом режиме. */
+const PRICE_CAP_DEFAULT: Record<SearchMode, number> = { sale: 15, rent: 90_000 }
+
+/** Во сколько раз ступень больше рубля. Продажа считается в миллионах. */
+const PRICE_UNIT: Record<SearchMode, number> = { sale: 1_000_000, rent: 1 }
+
+/** Как ступень называется: «до 15 млн» или «до 90 000». */
+function capLabel(mode: SearchMode, cap: number): string {
+  if (cap === 0) return "без потолка"
+  return mode === "sale" ? `до ${cap} млн` : `до ${cap.toLocaleString("ru-RU")}`
+}
 
 type Row = SearchRow
 
@@ -188,7 +217,26 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
   const session = useSession()
   const navigate = useNavigate()
   const workspace = useWorkspace()
-  const base = dataset === "measured" ? MEASURED_ROWS : ALL_ROWS
+  /**
+   * Режим: продажа или аренда.
+   *
+   * Живёт выше фильтров, потому что меняет саму базу, а не сужает найденное.
+   * На стенде сверки режима нет вовсе — там девять замеренных строк продажи,
+   * и подставлять туда обойму значило бы дорисовать в замеренный кадр то,
+   * чего в нём не было.
+   */
+  const [mode, setMode] = useState<SearchMode>("sale")
+  const now = useNow()
+
+  const base = useMemo(() => {
+    if (dataset === "measured") return MEASURED_ROWS
+    // Аренда пересобирается от «сейчас»: свежесть считается от даты
+    // объявления, и постоянный список к вечеру начал бы врать на часы.
+    // Час — достаточная точность и не заставляет пересобирать 211 строк
+    // на каждой отрисовке.
+    return mode === "rent" ? rentalRows(now) : ALL_ROWS
+  }, [dataset, mode, now])
+
   const rows = useMemo(
     () => (own ? base.map((row) => withAgencyWork(row, workspace)) : base),
     [own, base, workspace],
@@ -215,6 +263,8 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
       opened={openedSearch}
       authorName={session?.name ?? ""}
       navigate={navigate}
+      mode={dataset === "measured" ? undefined : mode}
+      onChangeMode={setMode}
     />
   )
 }
@@ -225,6 +275,8 @@ function SearchScreenBody({
   opened,
   authorName,
   navigate,
+  mode,
+  onChangeMode,
 }: {
   rows: SearchRow[]
   at?: string
@@ -232,6 +284,9 @@ function SearchScreenBody({
   /** Кто заводит поиск: имя из сеанса. Пусто — сеанса нет, но сюда без него не попасть. */
   authorName: string
   navigate: ReturnType<typeof useNavigate>
+  /** Режим выдачи. `undefined` — стенд сверки, там режима нет. */
+  mode?: SearchMode
+  onChangeMode: (next: SearchMode) => void
 }) {
   const [activeTab, setActiveTab] = useState(opened?.query.tab ?? "all")
   /**
@@ -245,7 +300,26 @@ function SearchScreenBody({
   const [dense, setDense] = useDensity()
   const [sort, setSort] = useState<SortId>((opened?.query.sort as SortId | undefined) ?? "fresh")
   /** Потолок цены в миллионах. 0 — без потолка. */
-  const [priceCap, setPriceCap] = useState(opened?.query.priceCap ?? 15)
+  const [priceCap, setPriceCap] = useState(
+    opened?.query.priceCap ?? PRICE_CAP_DEFAULT[mode ?? "sale"],
+  )
+
+  /**
+   * Сменили режим — потолок цены встаёт на свой.
+   *
+   * «До 15 млн» в аренде не сужает ничего: дороже пятнадцати миллионов
+   * в месяц квартир не бывает. Оставить чужой потолок значило бы показать
+   * работающий на вид фильтр, который ничего не делает.
+   *
+   * Правится в рендере, а не эффектом: состояние зависит от изменившегося
+   * входного значения, и это тот случай, для которого React такую правку
+   * и разрешает.
+   */
+  const [wasMode, setWasMode] = useState(mode)
+  if (wasMode !== mode) {
+    setWasMode(mode)
+    setPriceCap(PRICE_CAP_DEFAULT[mode ?? "sale"])
+  }
   const [rooms, setRooms] = useState<number[]>(opened?.query.rooms ?? [])
   const [districts, setDistricts] = useState<string[]>(
     opened?.query.districts ?? ["krasnogvardeisky", "nevsky", "kalininsky"],
@@ -337,7 +411,7 @@ function SearchScreenBody({
   const visible = rows
     .filter((row) => (TAB_FILTER[activeTab] ?? TAB_FILTER.all!)(row))
     .filter((row) => districts.length === 0 || districts.includes(row.district))
-    .filter((row) => priceCap === 0 || row.priceValue <= priceCap * 1_000_000)
+    .filter((row) => priceCap === 0 || row.priceValue <= priceCap * PRICE_UNIT[mode ?? "sale"])
     .filter((row) => rooms.length === 0 || rooms.includes(row.rooms))
     .sort(SORTS[sort].compare)
 
@@ -480,7 +554,7 @@ function SearchScreenBody({
       ? "все районы"
       : districts.map((id) => DISTRICTS.find((item) => item.id === id)?.label ?? id).join(" · "),
     ...rooms.map((room) => `${room}-к`),
-    priceCap === 0 ? null : `до ${priceCap} млн`,
+    priceCap === 0 ? null : capLabel(mode ?? "sale", priceCap),
     activeTab === "all" ? null : "вкладка сужена",
   ]
     .filter((part): part is string => part !== null)
@@ -498,6 +572,8 @@ function SearchScreenBody({
 
   const panel = (
         <FilterPanel
+          mode={mode}
+          onChangeMode={onChangeMode}
           overlay={collapsed}
           activeCount={activeCount}
           onToggle={(group, id) => {
@@ -532,7 +608,10 @@ function SearchScreenBody({
               selected: districts.includes(item.id),
             })),
           ]}
-          price={["6 000 000", priceCap === 0 ? "без потолка" : `до ${priceCap} млн`]}
+          price={[
+            mode === "rent" ? "от 40 000" : "6 000 000",
+            capLabel(mode ?? "sale", priceCap),
+          ]}
           area={["от 40", "до 80"]}
           floor={[
             [
@@ -558,9 +637,9 @@ function SearchScreenBody({
               label: `${room}-к`,
               selected: rooms.includes(room),
             })),
-            PRICE_CAPS.map((cap) => ({
+            PRICE_CAPS[mode ?? "sale"].map((cap) => ({
               id: String(cap),
-              label: cap === 0 ? "без потолка" : `до ${cap} млн`,
+              label: capLabel(mode ?? "sale", cap),
               selected: priceCap === cap,
             })),
           ]}
@@ -628,6 +707,7 @@ function SearchScreenBody({
             duplicates={Math.round(visible.length * 3.3)}
             intermediaries={Math.round(visible.length * 2.2)}
             dense={dense}
+            unit={mode === "rent" ? "₽/мес" : undefined}
           />
 
           <ResultTabs

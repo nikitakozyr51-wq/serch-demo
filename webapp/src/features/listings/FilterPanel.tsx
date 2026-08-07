@@ -3,8 +3,10 @@ import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { FilterChip } from "@/components/controls/FilterChip"
+import { Segment } from "@/components/controls/Segment"
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
+import type { SearchMode } from "./mode"
 
 /**
  * Колонка фильтров.
@@ -128,6 +130,14 @@ type FilterPanelProps = {
    * ошибка конкурента, где во время настройки результата не видно.
    */
   overlay?: boolean
+  /**
+   * Что ищем: продажу или аренду.
+   *
+   * Необязателен: на стендах сверки режима нет, и рисовать там обойму
+   * значило бы добавить в замеренный кадр то, чего в нём не было.
+   */
+  mode?: SearchMode
+  onChangeMode?: (next: SearchMode) => void
 }
 
 function FilterPanel({
@@ -144,6 +154,8 @@ function FilterPanel({
   onChangeAddress,
   onSaveSearch,
   overlay = false,
+  mode,
+  onChangeMode,
 }: FilterPanelProps) {
   const chipRows = (group: string, rows: ChipRows) =>
     rows.map((row) =>
@@ -193,6 +205,28 @@ function FilterPanel({
       </div>
 
       {/*
+        Режим стоит первой строкой и отделён линией.
+
+        Он не фильтр: фильтр сужает найденное, а режим меняет саму базу
+        и единицу цены. Поэтому он выше всех чипов и за чертой — соседство
+        должно означать родство.
+      */}
+      {mode === undefined ? null : (
+        <div className="flex w-full flex-col gap-3.5">
+          <Segment
+            label="Что ищем"
+            value={mode}
+            onChange={(next) => onChangeMode?.(next)}
+            options={[
+              { id: "sale", label: "Продажа" },
+              { id: "rent", label: "Аренда" },
+            ]}
+          />
+          <span aria-hidden className="h-px w-full bg-line-1" />
+        </div>
+      )}
+
+      {/*
         «Только собственники» — свойство продукта, а не фильтр: переключателя
         у него нет и быть не должно. Поэтому здесь строка, а не чекбокс.
         Пояснение в две строки: длиннее оно съедало место у самих условий.
@@ -209,7 +243,10 @@ function FilterPanel({
       <FilterGroup label="Район" rows={chipRows("district", districts)} />
 
       <div className="flex w-full flex-col gap-4">
-        <GroupLabel>Цена, ₽</GroupLabel>
+        {/* Единица живёт в подписи группы, а не в каждом поле: у аренды это
+            «Цена, ₽/мес», у продажи просто «Цена, ₽». Иначе «₽/мес»
+            повторяется на экране два десятка раз и перестаёт читаться. */}
+        <GroupLabel>{mode === "rent" ? "Цена, ₽/мес" : "Цена, ₽"}</GroupLabel>
         <div className="flex w-full gap-2">
           <RangeField value={price[0]} />
           <RangeField value={price[1]} />

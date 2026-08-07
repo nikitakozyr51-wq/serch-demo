@@ -77,6 +77,16 @@ type ResultsHeaderProps = {
    * и чистоту выдачи — так в файле, и это решение, а не пропуск.
    */
   dense?: boolean
+  /**
+   * Единица цены, если она не подразумевается.
+   *
+   * У продажи цена пишется словом — «8,6 млн ₽», — и единица очевидна.
+   * У аренды в строке стоит голое «70 000», и без подписи это число можно
+   * прочесть как что угодно. Колонок с шапками в выдаче нет (строка —
+   * карточка, а не ячейка таблицы), поэтому единица называется здесь,
+   * один раз на экран, а не двадцать четыре раза в строках.
+   */
+  unit?: string
 }
 
 function ResultsHeader({
@@ -85,6 +95,7 @@ function ResultsHeader({
   intermediaries,
   purityPercent,
   dense = false,
+  unit,
 }: ResultsHeaderProps) {
   const found = listings - duplicates - intermediaries
 
@@ -104,7 +115,9 @@ function ResultsHeader({
   return (
     <ResultsHeaderShell
       dense={dense}
-      title={`Найдено ${groupDigits(shownFound)} ${plural(found, "объект", "объекта", "объектов")}`}
+      title={`Найдено ${groupDigits(shownFound)} ${plural(found, "объект", "объекта", "объектов")}${
+        unit === undefined ? "" : ` · цены в ${unit}`
+      }`}
       note={
         dense
           ? `из ${groupDigits(listings)} ${plural(listings, "объявления", "объявлений", "объявлений")} · ` +

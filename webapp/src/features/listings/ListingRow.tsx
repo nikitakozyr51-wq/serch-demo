@@ -51,6 +51,12 @@ type ListingRowProps = {
   price: string
   /** Отклонение от медианы аналогов в процентах. */
   deviation: number
+  /**
+   * Сколько сопоставимых объектов дали медиану. Меньше восьми — отклонение
+   * не показывается вовсе, и в клетке стоит «мало данных». Есть только
+   * у аренды: в продаже медиана всегда набирается.
+   */
+  comparables?: number
   /** Сколько времени назад объект появился: «14 минут назад». */
   freshness: string
   /** Метро, этаж, площадка: «Ладожская 6 мин · 4/9 · Авито». */
@@ -109,6 +115,7 @@ function ListingRow({
   address,
   price,
   deviation,
+  comparables,
   freshness,
   meta,
   strength,
@@ -186,7 +193,7 @@ function ListingRow({
             </Typography>
           </div>
           <div className="w-16 shrink-0">
-            <MarketDeviation percent={deviation} />
+            <MarketDeviation percent={deviation} comparables={comparables} />
           </div>
         </div>
         <div className="flex w-full items-center gap-1.5">
