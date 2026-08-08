@@ -9,10 +9,10 @@ import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { demoPhone, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
-import { ListingPhoto, TitledBlock } from "@/features/listings"
+import { ListingPhoto, TitledBlock, groupDigits } from "@/features/listings"
 import { notifyDone, notifyError } from "@/platform/notify"
 import { Reveal, SPRING } from "@/platform/motion"
-import { disclosureOf, formatMoment, useWorkspace } from "@/features/workspace"
+import { disclosureOf, formatMoment, useWorkspace, type Workspace } from "@/features/workspace"
 import {
   AgeAndPriceBlock,
   ByPhotoBlock,
@@ -196,41 +196,63 @@ type SimilarObject = {
   kind: "disclose" | "open"
 }
 
-const SIMILAR: SimilarObject[] = [
-  {
-    id: "partizanskaya",
-    compared: "КУХНЯ И КУХНЯ",
-    address: "Партизанская ул., 15",
-    meta: "Красногвардейский · 2-комн · 56 м² · 6/9",
-    why: "панельный 1969-го, школа в 200 м",
-    price: "9,2 млн ₽",
-    deviation: "▼ −7 %",
-    cheaper: true,
-    kind: "disclose",
-  },
-  {
-    id: "grazhdansky",
-    compared: "КОМНАТА И КОМНАТА",
-    address: "Гражданский пр., 92",
-    meta: "Калининский · 2-комн · 55 м² · 5/9",
-    why: "двор без проезда, парк в 300 м",
-    price: "9,1 млн ₽",
-    deviation: "▼ −11 %",
-    cheaper: true,
-    kind: "disclose",
-  },
-  {
-    id: "demyana",
-    compared: "КУХНЯ И КУХНЯ",
-    address: "Демьяна Бедного ул., 24",
-    meta: "Калининский · 2-комн · 54 м² · 3/9",
-    why: "та же серия 1-ЛГ-602, тот же 1969 год",
-    price: "9,8 млн ₽",
-    deviation: "≈ рынок",
-    cheaper: false,
-    kind: "open",
-  },
-]
+/**
+ * Похожие объекты — ПО ПРАВИЛУ, КОТОРОЕ БЛОК САМ ОБЪЯВЛЯЕТ.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Подзаголовок блока говорит: «Та же комнатность, цена ±15 %. Район — в каждой
+ * строке». Правило написано, а список под ним стоял тремя вписанными строками:
+ * «Партизанская ул., 15», «Гражданский пр., 92», «Демьяна Бедного ул., 24» —
+ * при любом открытом объекте. Кнопка «Показать все 3» при этом раскрывала
+ * три из трёх, то есть не делала ничего.
+ *
+ * Теперь список считается по объявленному правилу от того объекта, который
+ * открыт. Кадр `NKj5L` рисует три строки и слово «Все» — три и показываются,
+ * остальные за кнопкой. Отдельный экран `OKo5j` («Похожие на Ленскую ул., 10»)
+ * в файле нарисован и не собран; раскрытие на месте его не заменяет, и когда
+ * он появится, кнопка станет ссылкой.
+ *
+ * Полей `compared` и `why` в базе нет и вывести их нельзя: «КУХНЯ И КУХНЯ» —
+ * это редакторское сравнение двух планировок, а планировок в данных нет.
+ * Вместо них стоит то, что база знает: чем этот объект отличается от открытого
+ * по цене и площади. Придуманное сравнение было бы хуже честного.
+ */
+const SIMILAR_SPREAD = 0.15
+
+function similarTo(address: string, workspace: Workspace): SimilarObject[] {
+  const base = ALL_ROWS.find((item) => item.address === address)
+  if (base === undefined) return []
+
+  return ALL_ROWS.filter(
+    (row) =>
+      row.address !== base.address
+      && row.rooms === base.rooms
+      && Math.abs(row.priceValue - base.priceValue) <= base.priceValue * SIMILAR_SPREAD,
+  ).map((row) => {
+    const rubles = row.priceValue - base.priceValue
+    const meters = row.area - base.area
+    const money =
+      rubles === 0
+        ? "та же цена"
+        : `${rubles < 0 ? "дешевле" : "дороже"} на ${groupDigits(Math.round(Math.abs(rubles) / 1000))} тыс ₽`
+    const space =
+      meters === 0 ? "та же площадь" : `${meters < 0 ? "меньше" : "больше"} на ${Math.abs(meters)} м²`
+
+    return {
+      id: row.address,
+      compared: `${row.rooms}-КОМН · ${row.districtName.toUpperCase()}`,
+      address: row.address,
+      meta: `${row.districtName} · ${row.rooms}-комн · ${row.area} м² · ${row.floor}/${row.floors}`,
+      why: `${money}, ${space}`,
+      price: row.price,
+      deviation: row.deviation === 0 ? "≈ рынок" : `${row.deviation > 0 ? "+" : "−"}${Math.abs(row.deviation)} %`,
+      cheaper: row.deviation < 0,
+      kind: disclosureOf(workspace, row.address) === undefined ? "disclose" : "open",
+    }
+  })
+}
+
 
 /**
  * Строка похожего объекта: 1152 × 114, зазор 20, поля [20, 0].
@@ -357,6 +379,12 @@ export function ObjectCardDisclosedPage() {
    * «это продукт, а не стенд», и второго источника правды тут не нужно.
    */
   const workspace = useWorkspace()
+  /**
+   * Похожие — от ОТКРЫТОГО объекта, по правилу подзаголовка блока.
+   * Пересчитываются вместе с адресом: стрелки листают объекты, и похожие
+   * обязаны меняться вместе с ними.
+   */
+  const similar = similarTo(address, workspace)
   const inProduct = useOwnAgency()
   const paid = disclosureOf(workspace, address)
   const hidden = inProduct && paid === undefined
@@ -630,20 +658,32 @@ export function ObjectCardDisclosedPage() {
             Отдельный экран нужен, чтобы на похожие можно было прислать
             ссылку, и он появится вместе со своим адресом.
           */}
+          {/*
+            Кнопка раскрывает СПИСОК ДЛИННЕЕ ТРЁХ, иначе её нет.
+
+            Здесь она стояла всегда и не делала ничего: в списке было ровно
+            три строки, а свёрнутый вид показывал `slice(0, 3)` — те же три.
+            Нажатие меняло подпись на «Свернуть» и больше ничего, а атрибут
+            рядом обещал «показать все 8 похожих объектов».
+
+            Список теперь считается по правилу, которое блок сам и объявляет
+            строкой выше: та же комнатность, цена ±15 %. Значит и число
+            в подписи настоящее, и раскрывать есть что.
+          */}
           <button
             type="button"
-            data-action="показать все 8 похожих объектов"
+            data-action={`показать все ${similar.length} похожих объектов`}
             onClick={() => setAllSimilar((was) => !was)}
             className="-mx-2 cursor-pointer rounded-sm bg-transparent px-2 py-0.5 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <Typography variant="numericDense" tone="default">
-              <>{allSimilar ? "Свернуть" : `Показать все ${SIMILAR.length}`}</>
+              <>{allSimilar ? "Свернуть" : `Показать все ${similar.length}`}</>
             </Typography>
           </button>
         </div>
 
         <div className="flex w-full flex-col">
-          {(allSimilar ? SIMILAR : SIMILAR.slice(0, 3)).map((item) => {
+          {(allSimilar ? similar : similar.slice(0, 3)).map((item) => {
             const paid = item.kind === "open" || opened.includes(item.address)
             return (
               <SimilarRow

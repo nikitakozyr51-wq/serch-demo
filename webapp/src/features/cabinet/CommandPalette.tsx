@@ -4,7 +4,17 @@ import type { LucideIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Typography } from "@/components/typography"
+import { ALL_ROWS } from "@/data/search-rows"
+import { plural } from "@/features/listings"
+import { useDensity } from "@/platform/density"
+import { callQueue, disclosureOf, useNow, useWorkspace } from "@/features/workspace"
 import { cn } from "@/lib/utils"
+
+/** Пункты, подходящие запросу. Пустой запрос не сужает: показываются все. */
+function byQuery(items: PaletteItem[], clean: string): PaletteItem[] {
+  if (clean === "") return items
+  return items.filter((item) => item.label.toLowerCase().includes(clean))
+}
 
 /**
  * Командная палитра (`rs1pv`).
@@ -33,44 +43,25 @@ type PaletteItem = {
   /** Цена объекта, клавиша действия или путь к разделу. */
   aside: string
   to?: string
+  /** Что уходит в адрес: карточка объекта открывается по своему адресу. */
+  search?: Record<string, string>
+  /** Действие на месте, без перехода. Пока такое одно — плотность. */
+  run?: () => void
 }
 
 type PaletteGroup = { label: string; items: PaletteItem[] }
 
-const GROUPS: PaletteGroup[] = [
-  {
-    label: "Объекты",
-    items: [
-      {
-        icon: Building,
-        label: "Ленская ул., 10",
-        aside: "8,6 млн ₽ · 2-комн · раскрыт",
-        to: "/object/disclosed",
-      },
-      { icon: Building, label: "Ленская ул., 6", aside: "9,7 млн ₽ · 2-комн · новый", to: "/object" },
-    ],
-  },
-  {
-    label: "Действия",
-    items: [
-      { icon: Sun, label: "Открыть «Перезвонить сегодня»", aside: "7 объектов", to: "/today" },
-      { icon: Phone, label: "Начать прозвон по текущей выдаче", aside: "⇧P", to: "/call" },
-      { icon: Rows4, label: "Переключить плотность на «Плотно»", aside: "строка 64 px" },
-    ],
-  },
-  {
-    label: "Перейти",
-    items: [
-      { icon: Building2, label: "Агентство → Эффективность", aside: "G затем A", to: "/agency" },
-      { icon: Wallet, label: "Баланс → Возвраты", aside: "G затем K", to: "/balance/refunds" },
-    ],
-  },
+/**
+ * Разделы, куда палитра умеет уводить. Постоянные: это карта продукта,
+ * а не результат поиска.
+ */
+const PLACES: PaletteItem[] = [
+  { icon: Building2, label: "Агентство → Эффективность", aside: "G затем A", to: "/agency" },
+  { icon: Wallet, label: "Баланс → Возвраты", aside: "G затем K", to: "/balance/refunds" },
 ]
 
-const FLAT = GROUPS.flatMap((group) => group.items)
-
-/** Порядковый номер пункта в общем списке: считается один раз, а не в рендере. */
-const ORDER = new Map(FLAT.map((item, index) => [item.label, index]))
+/** Сколько объектов палитра показывает по запросу: список, а не выдача. */
+const OBJECT_LIMIT = 5
 
 /**
  * Палитра монтируется только открытой — так её состояние начинается заново
@@ -95,6 +86,106 @@ function CommandPalette({
   const navigate = useNavigate()
   const [active, setActive] = useState(0)
   const boxRef = useRef<HTMLDivElement>(null)
+  const workspace = useWorkspace()
+  const now = useNow()
+  const [dense, setDense] = useDensity()
+
+  /**
+   * ЗАПРОС ПЕЧАТАЕТСЯ, А НЕ НАРИСОВАН.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Здесь стояла строка `Typography` с текстом «ленск» — картинка набранного
+   * запроса. То есть человек нажимал поле «Адрес, телефон или номер» в шапке,
+   * открывалась палитра, и в ней уже был чужой запрос, который нельзя ни
+   * стереть, ни дописать. Список под ним тоже был вписан: «Ленская ул., 10»
+   * и «Ленская ул., 6» независимо от того, что в базе.
+   *
+   * Кадр `MULT9` рисует «Ввод» первым узлом палитры: высота 52, лупа 16,
+   * запрос 16/500, «Esc» справа 12/500. Собрано по этим числам.
+   */
+  const [query, setQuery] = useState("")
+  const clean = query.trim().toLowerCase()
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  /**
+   * Уходящая палитра отпускает фокус.
+   *
+   * Узел живёт ещё 120 мс после закрытия, чтобы нарисовать уход, — и всё это
+   * время фокус остаётся в поле ввода. Горячие клавиши кабинета намеренно
+   * молчат, пока человек печатает, поэтому «?» сразу после Esc не открывал
+   * карту клавиш: продукт считал, что в палитре всё ещё набирают.
+   */
+  useEffect(() => {
+    if (leaving) inputRef.current?.blur()
+  }, [leaving])
+
+  /**
+   * Объекты — из базы, по адресу.
+   *
+   * Подпись строки собирается из самой строки: цена, комнатность и то,
+   * платило ли агентство за этот контакт. Пока запрос пуст, объектов нет —
+   * палитра не угадывает, с чего человек начнёт.
+   */
+  const objects: PaletteItem[] =
+    clean === ""
+      ? []
+      : ALL_ROWS.filter((row) => row.address.toLowerCase().includes(clean))
+          .slice(0, OBJECT_LIMIT)
+          .map((row) => {
+            const paid = disclosureOf(workspace, row.address) !== undefined
+            return {
+              icon: Building,
+              label: row.address,
+              aside: `${row.price} · ${row.rooms}-комн · ${paid ? "раскрыт" : "новый"}`,
+              to: paid ? "/object/disclosed" : "/object",
+              search: { at: row.address },
+            }
+          })
+
+  /** Действия. Числа в подписях считаются, а не вписаны. */
+  const queue = callQueue(workspace, now).length
+  const actions: PaletteItem[] = [
+    {
+      icon: Sun,
+      label: "Открыть «Перезвонить сегодня»",
+      aside: `${queue} ${plural(queue, "объект", "объекта", "объектов")}`,
+      to: "/today",
+    },
+    { icon: Phone, label: "Начать прозвон по текущей выдаче", aside: "⇧P", to: "/call" },
+    {
+      icon: Rows4,
+      // Единственный пункт, который не уводит, а делает. Раньше он не делал
+      // и этого: ни адреса, ни действия — подпись и всё.
+      label: `Переключить плотность на «${dense ? "Просторно" : "Плотно"}»`,
+      aside: dense ? "строка 88 px" : "строка 64 px",
+      run: () => setDense(!dense),
+    },
+  ]
+
+  const groups: PaletteGroup[] = [
+    { label: "Объекты", items: objects },
+    { label: "Действия", items: byQuery(actions, clean) },
+    { label: "Перейти", items: byQuery(PLACES, clean) },
+  ].filter((group) => group.items.length > 0)
+
+  const flat = groups.flatMap((group) => group.items)
+  const order = new Map(flat.map((item, index) => [item.label, index]))
+  /** Курсор не уезжает за конец списка, когда запрос сузил его на ходу. */
+  const cursor = flat.length === 0 ? 0 : Math.min(active, flat.length - 1)
+
+  const pick = (item: PaletteItem | undefined) => {
+    if (item === undefined) return
+    if (item.run) {
+      item.run()
+      onClose()
+      return
+    }
+    onClose()
+    if (item.to) {
+      void navigate(item.search ? { to: item.to, search: item.search } : { to: item.to })
+    }
+  }
 
   useEffect(() => {
     // Клавиши палитры перехватываются, пока она открыта: иначе стрелка вниз
@@ -103,26 +194,25 @@ function CommandPalette({
       // `stopPropagation` рядом с `preventDefault`: первый не даёт событию
       // дойти до экрана под палитрой, второй гасит прокрутку страницы.
       // Без первого стрелки и Enter доходили до выдачи — и Enter списывал.
+      if (flat.length === 0) return
       if (event.key === "ArrowDown") {
         event.preventDefault()
         event.stopPropagation()
-        setActive((index) => (index + 1) % FLAT.length)
+        setActive((index) => (Math.min(index, flat.length - 1) + 1) % flat.length)
       } else if (event.key === "ArrowUp") {
         event.preventDefault()
         event.stopPropagation()
-        setActive((index) => (index - 1 + FLAT.length) % FLAT.length)
+        setActive((index) => (Math.min(index, flat.length - 1) - 1 + flat.length) % flat.length)
       } else if (event.key === "Enter") {
         event.preventDefault()
         event.stopPropagation()
-        const item = FLAT[active]
-        onClose()
-        if (item?.to) void navigate({ to: item.to })
+        pick(flat[cursor])
       }
     }
 
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [active, navigate, onClose])
+  })
 
   return (
     // Скрим гасит экран, но не прячет его: человек должен видеть, откуда
@@ -150,17 +240,43 @@ function CommandPalette({
       >
         <div className="flex h-13 w-full shrink-0 items-center gap-2.5 border-b border-line-2 px-4">
           <Search aria-hidden className="size-4 shrink-0 text-text-dense" strokeWidth={2} />
-          <div className="min-w-0 flex-1">
-            <Typography variant="controlLabelLg" tone="default">
-              ленск
-            </Typography>
-          </div>
+          <Typography asChild variant="controlLabelLg" tone="default">
+            <input
+              ref={inputRef}
+              data-slot="palette-input"
+              autoFocus
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value)
+                // Новый запрос — курсор на первую строку: он мог стоять
+                // на пункте, которого в новом списке уже нет.
+                setActive(0)
+              }}
+              placeholder="Адрес, телефон или номер"
+              aria-label="Что найти"
+              className="h-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-dense"
+            />
+          </Typography>
           <Typography variant="metaText" tone="dense">
             Esc
           </Typography>
         </div>
 
-        {GROUPS.map((group) => (
+        {/*
+          Пусто — не тишина. Палитра открывается без запроса, и человеку
+          надо сказать, что она умеет искать, а не показать ей пустой список.
+        */}
+        {flat.length === 0 ? (
+          <div className="flex h-10 w-full items-center px-4">
+            <Typography variant="denseText" tone="dense">
+              {clean === ""
+                ? "Начните печатать адрес — или выберите действие"
+                : `По запросу «${query.trim()}» ничего не нашлось`}
+            </Typography>
+          </div>
+        ) : null}
+
+        {groups.map((group) => (
           <div key={group.label} className="flex w-full flex-col">
             <div className="flex h-7 w-full items-center px-4">
               <Typography variant="columnHeader" tone="dense">
@@ -168,7 +284,7 @@ function CommandPalette({
               </Typography>
             </div>
             {group.items.map((item) => {
-              const current = ORDER.get(item.label) === active
+              const current = order.get(item.label) === cursor
               const Icon = item.icon
               return (
                 <button
@@ -176,10 +292,7 @@ function CommandPalette({
                   type="button"
                   data-slot="palette-item"
                   data-active={current || undefined}
-                  onPointerDown={() => {
-                    onClose()
-                    if (item.to) void navigate({ to: item.to })
-                  }}
+                  onPointerDown={() => pick(item)}
                   className={cn(
                     "flex h-10 w-full cursor-pointer items-center gap-2.5 px-4 text-left transition-colors",
                     current ? "bg-warm" : "bg-surface hover:bg-warm",

@@ -244,11 +244,26 @@ test('кабинет: ⌘K открывает палитру, «?» — карт
   await page.keyboard.press('Control+k')
   await expect(page.locator('[data-slot="command-palette"]')).toBeVisible()
 
+  /*
+    ЗАПРОС ПЕЧАТАЕТСЯ, И СПИСОК ИДЁТ ЗА НИМ.
+
+    Здесь проверялось, что первым пунктом стоит «Ленская ул., 10», а стрелка
+    переводит на «Ленскую ул., 6». Это были два ВПИСАННЫХ в палитру пункта,
+    и проверка закрепляла их: поля ввода в палитре не существовало вовсе,
+    а запрос был нарисован строкой «ленск». То есть проверка держала дефект.
+
+    Теперь проверяется то, ради чего палитра есть: в неё печатают, и находится
+    то, что напечатали.
+  */
+  await page.locator('[data-slot="palette-input"]').fill('бестуж')
+  const items = () => page.locator('[data-slot="palette-item"]')
+  await expect(items().first()).toContainText('Бестужевская')
+
   // Стрелка в палитре двигает выбор, а не прокручивает страницу под ней.
   const active = () => page.locator('[data-slot="palette-item"][data-active]').first().innerText()
-  expect(await active()).toContain('Ленская ул., 10')
+  const first = await active()
   await page.keyboard.press('ArrowDown')
-  expect(await active()).toContain('Ленская ул., 6')
+  expect(await active()).not.toBe(first)
 
   await page.keyboard.press('Escape')
   await expect(page.locator('[data-slot="command-palette"]')).toHaveCount(0)

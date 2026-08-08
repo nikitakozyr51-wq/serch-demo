@@ -26,6 +26,7 @@ import {
 import { BalanceStoppedBar, CabinetShell, useHotkeys } from "@/features/cabinet"
 import { useDensity } from "@/platform/density"
 import {
+  ChipPickerDialog,
   FilterBar,
   FilterPanel,
   ListingRow,
@@ -125,11 +126,33 @@ type Row = SearchRow
 /**
  * Снять с объекта следы чужой работы.
  *
- * Остаются только факты о собственнике: он в стоп-листе, телефона нет, согласие
- * отозвано. Всё остальное — «взят в работу», «прозвонен», «раскрыт», «отказ» —
- * принадлежит агентству, которое это сделало, и новому агентству не переходит.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Остаются только факты о СОБСТВЕННИКЕ: телефона нет, согласие отозвано.
+ * Всё остальное — «взят в работу», «прозвонен», «раскрыт», «отказ» —
+ * принадлежит агентству, которое это сделало, и новому не переходит.
+ *
+ * **Стоп-лист отсюда убран.** Он был в этом наборе как «факт о собственнике»,
+ * и из-за этого агентство, заведённое минуту назад, видело в выдаче три
+ * строки «Просил не звонить». Но стоп-лист — реестр агентства: экран
+ * `/agency/refusals` называет его «Собственный реестр отказов», и запись
+ * в него делает сотрудник в панели звонка. Чужая отметка о чужом отказе —
+ * ровно та «чужая работа», которую эта функция и должна снимать.
  */
-const OWNER_FACTS = new Set(["stop-list", "no-phone", "revoked"])
+const OWNER_FACTS = new Set(["no-phone", "revoked"])
+
+/**
+ * Что стоит в колонке действия у факта о собственнике.
+ *
+ * Подпись берётся из статуса, а не из данных строки. У «Товарищеского пр., 22»
+ * в базе стоит `no-phone` с подписью «Возврат оформлен» — и она уезжала
+ * в новое агентство вместе со статусом. Возврат оформляет агентство: это
+ * его работа, а не свойство объекта, и в чужой выдаче ей делать нечего.
+ */
+const OWNER_FACT_ACTION: Record<string, Row["action"]> = {
+  "no-phone": { kind: "blocked", label: "Номера нет", quiet: true },
+  revoked: { kind: "blocked", label: "Контакт отозван", quiet: true },
+}
 
 /**
  * Как исход разговора выглядит в строке выдачи.
@@ -158,12 +181,20 @@ const OUTCOME_STATUS: Record<string, SearchRow["status"]> = {
  * Теперь состояние строки собирается из журналов: раскрыт — «Открыть · 0 ₽»,
  * прозвонен — исход последнего звонка, в стоп-листе — не звонить.
  *
- * Факты о собственнике не трогаются: стоп-лист, отсутствие телефона и отзыв
- * согласия верны для всех агентств одинаково.
+ * Факты о собственнике не трогаются: отсутствие телефона и отзыв согласия
+ * верны для всех агентств одинаково. Стоп-лист к ним не относится — он
+ * приходит из журнала СВОЕГО агентства, см. `OWNER_FACTS`.
  */
 function withAgencyWork(row: SearchRow, workspace: Workspace): SearchRow {
   if (row.status !== undefined && OWNER_FACTS.has(row.status)) {
-    return { ...row, takenBy: undefined, selected: undefined }
+    // Статус остаётся, подпись действия пересобирается: в данных рядом
+    // с фактом о собственнике могла лежать чужая работа («Возврат оформлен»).
+    return {
+      ...row,
+      takenBy: undefined,
+      selected: undefined,
+      action: OWNER_FACT_ACTION[row.status] ?? row.action,
+    }
   }
 
   if (workspace.stopList.includes(row.address)) {
@@ -409,6 +440,88 @@ function SearchScreenBody({
    */
   const [nearAddress, setNearAddress] = useState("")
   const [addressOpen, setAddressOpen] = useState(false)
+  /** Какое окно выбора открыто: районы, станции или ничего. */
+  const [picking, setPicking] = useState<"district" | "metro" | null>(null)
+
+  /**
+   * Что можно выбрать и сколько за каждым объектов.
+   *
+   * Счётчик считается по ТЕКУЩЕЙ базе режима, а не по всей: в аренде и продаже
+   * это разные списки, и «Пионерская · 9» в аренде обещала бы девять квартир,
+   * которых в аренде нет.
+   */
+  const districtOptions = DISTRICTS.map((item) => ({
+    id: item.id,
+    label: item.label,
+    count: rows.filter((row) => row.district === item.id).length,
+  }))
+
+  const metroOptions = [...new Set(rows.map((row) => row.metro))]
+    .sort((a, b) => a.localeCompare(b, "ru"))
+    .map((name) => ({
+      id: name,
+      label: name,
+      count: rows.filter((row) => row.metro === name).length,
+    }))
+
+  /**
+   * Три ряда районов: выбранное впереди, «+ район» последним.
+   *
+   * Ряды заданы явно, а не автопереносом, — это правило колонки из файла.
+   * В первые два ряда встаёт то, что выбрано (а пока не выбрано ничего —
+   * первые районы базы, как нарисовано в кадре), третий ряд занимает плюс.
+   */
+  const shownDistricts = (districts.length > 0 ? districts : DISTRICTS.slice(0, 3).map((d) => d.id))
+    .map((id) => districtOptions.find((item) => item.id === id))
+    .filter((item): item is (typeof districtOptions)[number] => item !== undefined)
+
+  const districtChip = (item: (typeof districtOptions)[number]) => ({
+    id: item.id,
+    label: item.label,
+    selected: districts.includes(item.id),
+  })
+
+  /**
+   * Плюс несёт число невлезшего, а не молчит.
+   *
+   * В колонке три ряда, и выбранных районов может быть больше трёх. Первая
+   * сборка молча их прятала: человек выбирал «Приморский», выдача сужалась
+   * до 91 объекта, а в колонке его не было — то есть условие работало
+   * невидимо. У чипа файла (`Eym57`) для этого есть отдельный узел
+   * «Счётчик», и он ровно про такой случай.
+   */
+  const hiddenDistricts = Math.max(0, districts.length - 3)
+  const hiddenMetro = Math.max(0, metro.length - 2)
+
+  const districtRows = [
+    shownDistricts.slice(0, 1).map(districtChip),
+    shownDistricts.slice(1, 3).map(districtChip),
+    [
+      {
+        id: "add-district",
+        label: hiddenDistricts === 0 ? "+ район" : `+ район · ещё ${hiddenDistricts}`,
+        muted: true,
+      },
+    ],
+  ].filter((row) => row.length > 0)
+
+  /** Метро: выбранные станции, «+ станция» и ступени пешей доступности. */
+  const metroRows = [
+    ...(metro.length === 0
+      ? [[{ id: "Лиговский проспект", label: "Лиговский проспект", selected: false }]]
+      : [metro.slice(0, 2).map((name) => ({ id: name, label: name, selected: true }))]),
+    [
+      {
+        id: "add-station",
+        label: hiddenMetro === 0 ? "+ станция" : `+ станция · ещё ${hiddenMetro}`,
+        muted: true,
+      },
+    ],
+    [
+      { id: "walk-10", label: "до 10 мин", selected: walk === 10 },
+      { id: "walk-20", label: "до 20 мин", selected: walk === 20 },
+    ],
+  ]
 
   const collapsed = useFilterCollapse()
   const [open, setOpen] = useState(false)
@@ -823,7 +936,8 @@ function SearchScreenBody({
    */
   const filters = useExit(open, 200)
   const address = useExit(addressOpen)
-  const picker = useExitValue(collecting)
+  const picker = useExitValue(picking)
+  const collectPicker = useExitValue(collecting)
 
   const panel = (
         <FilterPanel
@@ -833,7 +947,11 @@ function SearchScreenBody({
           leaving={filters.leaving}
           activeCount={activeCount}
           onToggle={(group, id) => {
-            if (group === "district") toggleDistrict(id)
+            if (group === "district") {
+              // «+ район» — не условие, а дверь к остальным районам.
+              if (id === "add-district") setPicking("district")
+              else toggleDistrict(id)
+            }
             if (group === "price") setPriceCap(Number.parseInt(id, 10))
             if (group === "more") {
               const room = Number.parseInt(id, 10)
@@ -856,6 +974,10 @@ function SearchScreenBody({
               )
             }
             if (group === "metro") {
+              if (id === "add-station") {
+                setPicking("metro")
+                return
+              }
               // Пешая доступность — одно значение, а не набор: «до 10 мин»
               // и «до 20 мин» вместе означали бы «до 20», то есть первое
               // условие молча пропадало бы.
@@ -882,23 +1004,19 @@ function SearchScreenBody({
           }}
           onReset={resetFilters}
           onChangeAddress={() => setAddressOpen(true)}
-          districts={[
-            DISTRICTS.slice(0, 1).map((item) => ({
-              id: item.id,
-              label: item.label,
-              selected: districts.includes(item.id),
-            })),
-            DISTRICTS.slice(1, 3).map((item) => ({
-              id: item.id,
-              label: item.label,
-              selected: districts.includes(item.id),
-            })),
-            DISTRICTS.slice(3).map((item) => ({
-              id: item.id,
-              label: item.label,
-              selected: districts.includes(item.id),
-            })),
-          ]}
+          /*
+            ТРИ РЯДА И «+ РАЙОН» — как в кадре `I55fb`.
+
+            Здесь выводились все восемь районов базы подряд. В кадре в группе
+            четыре чипа, и четвёртый — «+ район»: колонка показывает выбранное
+            и даёт способ добавить остальное, а не перечисляет город. Восемь
+            чипов переносились, и ритм колонки ломался — шаг между явными
+            рядами 44, между перенесёнными строками 36.
+
+            Первые три ряда держат выбранное (и первые районы базы, пока
+            не выбрано ничего), остальное живёт за «+ район».
+          */
+          districts={districtRows}
           price={[ranges.priceFrom, ranges.priceTo]}
           area={[ranges.areaFrom, ranges.areaTo]}
           floor={[
@@ -909,34 +1027,13 @@ function SearchScreenBody({
           ]}
           // Станции названы так, как они лежат в базе: чип «Лиговский
           // проспект» отбирает объекты у Лиговского проспекта, а не
-          // подсвечивается сам по себе. Разбивка по рядам — из кадра `I55fb`.
+          // подсвечивается сам по себе. Три ряда — из кадра `I55fb`.
           //
-          // «+ станция» осталась подсказкой и НЕ работает: выбора станции
-          // в файле не нарисовано ни одним кадром, и придумывать его здесь
-          // я не стал. Она выключена, чтобы не выглядеть нажимаемой, — это
-          // единственное расхождение с кадром в этой группе, и оно названо.
-          metro={[
-            [
-              {
-                id: "Лиговский проспект",
-                label: "Лиговский проспект",
-                selected: metro.includes("Лиговский проспект"),
-              },
-            ],
-            [
-              {
-                id: "Обводный канал",
-                label: "Обводный канал",
-                selected: metro.includes("Обводный канал"),
-                muted: true,
-              },
-              { id: "add-station", label: "+ станция", muted: true, disabled: true },
-            ],
-            [
-              { id: "walk-10", label: "до 10 мин", selected: walk === 10 },
-              { id: "walk-20", label: "до 20 мин", selected: walk === 20 },
-            ],
-          ]}
+          // «+ станция» ОТКРЫВАЕТ ВЫБОР. Раньше это был чип без действия,
+          // а станций в колонке стояло две из тридцати одной, что есть
+          // в базе, — то есть фильтр по метро существовал для двух станций
+          // города. Теперь за плюсом лежат все.
+          metro={metroRows}
           nearAddress={nearAddress === "" ? undefined : nearAddress}
           more={[
             [1, 2, 3, 4].map((room) => ({
@@ -1207,6 +1304,35 @@ function SearchScreenBody({
         />
       ) : null}
 
+      {/*
+        Выбор района и станции — за плюсами в колонке.
+
+        Окно одно на две группы: вопрос у них один — «добавить из полного
+        списка», — и второе окно разошлось бы с первым на первой же правке.
+        Уход рисуется тем же `useExit`, что у окна адреса.
+      */}
+      {picker.mounted ? (
+        <ChipPickerDialog
+          key={picker.value ?? "picker"}
+          title={picker.value === "metro" ? "Станции метро" : "Районы"}
+          lead={
+            picker.value === "metro"
+              ? "Станции, у которых в базе есть объекты. Число рядом — сколько их сейчас."
+              : "Районы Петербурга, по которым в базе есть объекты. Число рядом — сколько их сейчас."
+          }
+          label={picker.value === "metro" ? "НАЙТИ СТАНЦИЮ" : "НАЙТИ РАЙОН"}
+          placeholder={picker.value === "metro" ? "Пионерская" : "Приморский"}
+          options={picker.value === "metro" ? metroOptions : districtOptions}
+          selected={picker.value === "metro" ? metro : districts}
+          onApply={(next: string[]) => {
+            if (picker.value === "metro") setMetro(next)
+            else setDistricts(next)
+          }}
+          onClose={() => setPicking(null)}
+          leaving={picker.leaving}
+        />
+      ) : null}
+
       {/* Та же дверь, что и для одного объекта: окно одно и умеет оба случая.
           Второе окно «положить двенадцать» разошлось бы с первым на первой же
           правке списка подборок. */}
@@ -1221,12 +1347,12 @@ function SearchScreenBody({
         />
       ) : null}
 
-      {picker.mounted ? (
+      {collectPicker.mounted ? (
         <CollectionPicker
-          address={picker.value ?? ""}
+          address={collectPicker.value ?? ""}
           by={authorName}
           onClose={() => setCollecting(null)}
-          leaving={picker.leaving}
+          leaving={collectPicker.leaving}
         />
       ) : null}
     </CabinetShell>
