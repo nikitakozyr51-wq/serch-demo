@@ -1,7 +1,10 @@
+import { motion } from "motion/react"
+
 import { Button } from "@/components/controls/Button"
 import { Checkbox } from "@/components/controls/Checkbox"
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
+import { SPRING, stepOf } from "@/platform/motion"
 import { MarketDeviation } from "./MarketDeviation"
 import { OwnerAvatar } from "./OwnerAvatar"
 import { OwnerSignal, type OwnerStrength } from "./OwnerSignal"
@@ -97,6 +100,21 @@ type ListingRowProps = {
   onCheckedChange?: (checked: boolean) => void
   onOpen?: () => void
   onAction?: () => void
+  /**
+   * Номер строки в списке — им задаётся очередь появления.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Необязателен намеренно. Строка стоит не только в выдаче: она же собрана
+   * на стендах сверки и в состояниях выдачи, а там очередь ни к чему —
+   * снимок должен быть одинаковым сегодня и через месяц. Без номера строка
+   * появляется мгновенно, как и появлялась.
+   *
+   * Потолок очереди зашит в `stepOf`: после четырнадцатой строки задержка
+   * перестаёт расти. Иначе пятьдесят строк по 18 мс дают почти секунду,
+   * в течение которой человек ждёт список, который уже посчитан.
+   */
+  index?: number
 }
 
 /**
@@ -150,11 +168,40 @@ function ListingRow({
   onCheckedChange,
   onOpen,
   onAction,
+  index,
 }: ListingRowProps) {
   const blocked = action.kind === "blocked"
 
+  /**
+   * Список собирается волной, а не возникает целиком.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Каскад по строкам спека запрещала прямо, и запрет был не пустой:
+   * агент меняет условия по сто раз за смену. Владелец запрет снял, но
+   * арифметика осталась, и ответ на неё — потолок очереди в четырнадцать
+   * строк: волна читается, ожидания нет. Пятнадцатая и пятидесятая
+   * приезжают вместе с четырнадцатой.
+   *
+   * Подъём 10 px, а не 14 как у блоков карточки: строк на экране полтора
+   * десятка сразу, и на каждой лишний пиксель умножается на это число.
+   *
+   * Пересборка списка от смены фильтра идёт ключом на контейнере выдачи —
+   * строки размонтируются, и волна начинается заново. Это и есть ответ
+   * на нажатие чипа, которого раньше не было видно вовсе.
+   */
+  const arrival =
+    index === undefined
+      ? undefined
+      : {
+          initial: { opacity: 0, y: 10 },
+          animate: { opacity: 1, y: 0 },
+          transition: { ...SPRING.enter, delay: stepOf(index) },
+        }
+
   return (
-    <div
+    <motion.div
+      {...arrival}
       data-slot="listing-row"
       // Адрес атрибутом: по нему проверка пути находит объект, который
       // человек правда выбрал, а не угадывает его по тексту строки.
@@ -293,7 +340,7 @@ function ListingRow({
           </Button>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }
 

@@ -191,10 +191,7 @@ test('окна приезжают переходом, а не подменой �
       return { name: style.animationName, seconds: Number.parseFloat(style.animationDuration) }
     }, selector)
 
-  // Список выдачи проявляется целиком при смене условий — он на экране сразу.
-  const shown: { name: string; selector: string }[] = [
-    { name: 'список выдачи', selector: '[data-slot="results-list"]' },
-  ]
+  const shown: { name: string; selector: string }[] = []
 
   // Палитра открывается с клавиатуры на любом экране кабинета.
   await page.keyboard.press('Control+k')
@@ -239,6 +236,64 @@ test('окна приезжают переходом, а не подменой �
     failures.push('затемнение палитры: узел снят сразу, ухода нет')
   } else if (!leaving.name.endsWith('-out')) {
     failures.push(`затемнение палитры: при закрытии играет «${leaving.name}», а не кадр ухода`)
+  }
+
+  expect(failures, failures.join('\n')).toEqual([])
+})
+
+/**
+ * Список выдачи собирается волной при смене условий.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **Проверяется иначе, чем окна, и это важно понимать.** Окна двигает CSS,
+ * и объявленную анимацию видно в вычисленных стилях. Строки двигает
+ * библиотека — она пишет значения напрямую, никакого `animation-name`
+ * у строки нет, и проверка по имени кадра докладывала бы «движения нет»
+ * ровно там, где оно есть.
+ *
+ * Поэтому здесь замеряется факт, а не объявление: сразу после пересборки
+ * списка первая строка обязана быть НЕ до конца проявленной, а через
+ * сотню миллисекунд — заметно ближе к единице. Две выборки во времени
+ * доказывают движение независимо от того, чем оно сделано.
+ *
+ * Эта проверка и поймала переход: когда появление переехало с панели
+ * на строки, прежний вариант — «у списка объявлена анимация» — стал врать.
+ */
+test('список выдачи собирается волной, а не подменяется', async ({ page }) => {
+  await seedSession(page)
+  await page.goto('/search')
+  await page.waitForSelector('[data-slot="listing-row"]')
+
+  // Волна на первой загрузке уже доиграла, поэтому список пересобирается
+  // нажатием чипа — тем самым событием, ради которого движение и заведено.
+  await page.locator('[data-slot="filter-chip"]:not([data-selected])').first().click()
+
+  const sample = await page.evaluate(async () => {
+    const read = () => {
+      const row = document.querySelector('[data-slot="listing-row"]')
+      return row === null ? null : Number.parseFloat(getComputedStyle(row).opacity)
+    }
+    const first = read()
+    await new Promise((resolve) => setTimeout(resolve, 110))
+    return { first, second: read() }
+  })
+
+  const failures: string[] = []
+
+  if (sample.first === null || sample.second === null) {
+    failures.push('строк выдачи после смены условий не осталось: проверять нечего')
+  } else {
+    if (sample.first >= 1) {
+      failures.push(
+        `первая строка появилась сразу целиком (прозрачность ${sample.first}) — волны нет`,
+      )
+    }
+    if (sample.second <= sample.first) {
+      failures.push(
+        `строка не проявляется: ${sample.first} → ${sample.second} за 110 мс`,
+      )
+    }
   }
 
   expect(failures, failures.join('\n')).toEqual([])

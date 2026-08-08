@@ -1,9 +1,10 @@
 import { useNavigate, useSearch } from "@tanstack/react-router"
+import { motion } from "motion/react"
 import { useMemo, useState } from "react"
 
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
-import { useExit, useExitValue } from "@/platform/motion"
+import { SPRING, useExit, useExitValue } from "@/platform/motion"
 import { notifyDone, notifyError } from "@/platform/notify"
 
 import { rentalRows } from "@/data/rental-rows"
@@ -1110,22 +1111,43 @@ function SearchScreenBody({
               весь кабинет.
             */
             data-slot="results-list"
-            className="list-in flex flex-1 flex-col overflow-y-auto overscroll-contain rounded-2xl bg-surface"
+            /*
+              Затухания всей панели здесь больше нет — появление несут строки.
+
+              Раньше `.list-in` гасил и проявлял панель целиком. Когда строки
+              стали приезжать волной, панель поверх них давала второе движение
+              на то же событие: список ехал и одновременно проявлялся, и это
+              читалось как подтормаживание, а не как плавность. Одно событие —
+              одно движение.
+            */
+            className="flex flex-1 flex-col overflow-y-auto overscroll-contain rounded-2xl bg-surface"
           >
             {visible.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 px-20">
+              // Пустота приезжает тем же движением, что приехала бы первая
+              // строка: иначе «Ничего не найдено» возникает рывком ровно там,
+              // где только что была живая волна.
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={SPRING.enter}
+                className="flex flex-1 flex-col items-center justify-center gap-2 px-20"
+              >
                 <Typography variant="panelTitle" tone="default" align="center">
                   Ничего не найдено
                 </Typography>
                 <Typography variant="uiText" tone="secondary" align="center">
                   Условия сошлись в ноль. Снимите район или выберите другой таб.
                 </Typography>
-              </div>
+              </motion.div>
             ) : (
-              visible.map((row) => (
+              visible.map((row, order) => (
                 <ListingRow
                   key={row.address}
                   {...row}
+                  // Номер задаёт очередь появления. Он есть только в продукте:
+                  // стенды сверки строку показывают неподвижной, чтобы снимок
+                  // был одинаковым сегодня и через месяц.
+                  index={order}
                   /*
                     Колонка выбора стоит только в ПРОДУКТЕ, не на стенде.
 
