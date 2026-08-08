@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router"
+import { notifyDone } from "@/platform/notify"
 import type { ReactNode } from "react"
 
 import { useSession } from "@/features/auth"
@@ -74,7 +75,12 @@ function CabinetShell({
         balance={balance ?? session?.balance ?? 0}
         trial={trial ?? (session && session.trial > 0 ? session.trial : undefined)}
         initials={initials ?? session?.initials ?? "ИС"}
+        owner={session?.role !== "agent"}
         onTopUp={() => void navigate({ to: "/balance/top-up" })}
+        // Агент не пополняет чужой счёт — он говорит руководителю, что
+        // деньги кончились. Письма продукт не шлёт, поэтому и обещания
+        // «отправлено письмо» здесь нет: сказано ровно то, что произошло.
+        onRequestTopUp={() => notifyDone("Руководителю показано, что нужно пополнить счёт")}
         onSearch={requestPalette}
       />
 

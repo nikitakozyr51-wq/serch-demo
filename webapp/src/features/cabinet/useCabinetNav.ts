@@ -1,4 +1,5 @@
 import { NAV } from "@/cabinet-demo-nav"
+import { useSession } from "@/features/auth"
 import { callbacksDue, takenNotCalled, useNow, useWorkspace } from "@/features/workspace"
 import type { NavEntry } from "./CabinetSidebar"
 
@@ -40,13 +41,35 @@ type CabinetNav = {
   agencySearches: NavEntry[] | undefined
 }
 
+/**
+ * Разделы, которых у агента нет.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * «Агентство» — это сотрудники, дневные лимиты, журнал доступа и отчёты
+ * по чужой работе. Всё это принадлежит руководителю, и агенту там нечего
+ * ни смотреть, ни менять: правила доступа в базе его туда не пустят.
+ *
+ * Пункт при этом стоял у обоих, и это была не косметика. Агент нажимал
+ * на него и получал либо пустоту, либо отказ базы — то есть продукт
+ * обещал раздел, которого у этого человека нет. Обещание, которое нельзя
+ * сдержать, хуже отсутствующего пункта: первое человек считает поломкой,
+ * второе не замечает вовсе.
+ *
+ * Меню от этого становится четырёхпунктовым — так и нарисовано в обучении,
+ * где у агента пять глав вместо шести.
+ */
+const OWNER_ONLY = new Set(["agency"])
+
 export function useCabinetNav(): CabinetNav {
   const workspace = useWorkspace()
+  const session = useSession()
   const now = useNow()
 
+  const owner = session?.role !== "agent"
   const dueToday = callbacksDue(workspace, now).length + takenNotCalled(workspace).length
 
-  const items: NavEntry[] = NAV.map((item) => {
+  const items: NavEntry[] = NAV.filter((item) => owner || !OWNER_ONLY.has(item.id)).map((item) => {
     if (item.id === "today") return { ...item, count: dueToday || undefined }
     if (item.id === "collections") {
       return { ...item, count: workspace.collections.length || undefined }

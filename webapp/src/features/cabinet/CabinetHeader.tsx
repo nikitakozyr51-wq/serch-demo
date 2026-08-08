@@ -51,11 +51,15 @@ type CabinetHeaderProps = {
   trial?: number
   /** Инициалы вошедшего по правилу «имя, фамилия»: ИС, МЛ, АТ. */
   initials: string
+  /** Руководитель ли вошедший. От этого зависит, что он может со счётом. */
+  owner: boolean
   onTopUp?: () => void
+  /** Что делает агент вместо пополнения: сообщает руководителю. */
+  onRequestTopUp?: () => void
   onSearch?: () => void
 }
 
-function CabinetHeader({ balance, trial, initials, onTopUp, onSearch }: CabinetHeaderProps) {
+function CabinetHeader({ balance, trial, initials, owner, onTopUp, onRequestTopUp, onSearch }: CabinetHeaderProps) {
   // Счёт идёт 600 мс — единственное обязательное движение кабинета.
   // Ширина числа при этом не скачет: `numeric` набран моноширинными цифрами.
   const shownBalance = useAnimatedNumber(balance)
@@ -116,9 +120,34 @@ function CabinetHeader({ balance, trial, initials, onTopUp, onSearch }: CabinetH
           </Typography>
         </div>
 
-        <Button variant="quiet" size="sm" onClick={onTopUp}>
-          Пополнить
-        </Button>
+        {/*
+          У агента кнопка другая, и это не формулировка, а право.
+
+          ═══════════════════════════════════════════════════════════════════
+
+          Счёт общий и принадлежит агентству. Пополнять его — вносить деньги,
+          выставлять счёт на юрлицо, получать закрывающие — может только
+          руководитель: у агента нет ни доступа к реквизитам, ни права
+          обязывать агентство платить. Правила доступа в базе его туда
+          и не пустят.
+
+          Кнопка «Пополнить» у агента вела на экран пополнения, где он
+          упирался либо в пустоту, либо в отказ. Продукт обещал действие,
+          которого у этого человека нет.
+
+          «Запросить пополнение» — то, что агент правда может: сказать
+          руководителю, что деньги кончились. Действие настоящее и своё,
+          а не урезанная копия чужого.
+        */}
+        {owner ? (
+          <Button variant="quiet" size="sm" onClick={onTopUp}>
+            Пополнить
+          </Button>
+        ) : (
+          <Button variant="quiet" size="sm" onClick={onRequestTopUp}>
+            Запросить пополнение
+          </Button>
+        )}
 
         <AvatarMenu initials={initials} />
       </div>

@@ -74,6 +74,9 @@ function AgencyShell({ activeTab, title, note, action, children }: AgencyShellPr
         balance={session?.balance ?? 0}
         trial={session && session.trial > 0 ? session.trial : undefined}
         initials={session?.initials ?? "ИС"}
+        // Раздел «Агентство» открыт только руководителю: агент сюда
+        // не попадает вовсе, пункта меню у него нет.
+        owner
         onTopUp={() => void navigate({ to: "/balance/top-up" })}
         onSearch={requestPalette}
       />

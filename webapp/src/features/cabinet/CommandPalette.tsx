@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
+import { demoPhone } from "@/features/auth"
 import { plural } from "@/features/listings"
 import { useDensity } from "@/platform/density"
 import { callQueue, disclosureOf, useNow, useWorkspace } from "@/features/workspace"
@@ -127,17 +128,44 @@ function CommandPalette({
    * платило ли агентство за этот контакт. Пока запрос пуст, объектов нет —
    * палитра не угадывает, с чего человек начнёт.
    */
+  /*
+    Поле обещает три способа найти: «Адрес, телефон или номер».
+
+    Телефон искался только на телефоне — группа была собрана в мобильной
+    палитре и не собрана в десктопной. Поле при этом обещало поиск
+    по номеру на обоих: человек вводил цифры, палитра молчала, и он решал,
+    что номера в базе нет. Обещание в плейсхолдере — такое же обещание,
+    как надпись на кнопке.
+
+    Ищется по цифрам, а не по строке: человек вводит номер как придётся —
+    «+7 900 123-45-67», «89001234567», «123-45-67», — и пробелы, скобки
+    и дефисы к делу не относятся. Хвоста в четыре цифры достаточно, чтобы
+    не показывать пол-базы на первой же цифре.
+  */
+  const digits = clean.replace(/\D/g, "")
+  const byPhone = digits.length >= 4
+
   const objects: PaletteItem[] =
     clean === ""
       ? []
-      : ALL_ROWS.filter((row) => row.address.toLowerCase().includes(clean))
+      : ALL_ROWS.filter((row) =>
+          byPhone
+            ? demoPhone(row.address).replace(/\D/g, "").includes(digits)
+            : row.address.toLowerCase().includes(clean),
+        )
           .slice(0, OBJECT_LIMIT)
           .map((row) => {
             const paid = disclosureOf(workspace, row.address) !== undefined
             return {
               icon: Building,
               label: row.address,
-              aside: `${row.price} · ${row.rooms}-комн · ${paid ? "раскрыт" : "новый"}`,
+              // При поиске по номеру подпись показывает НАЙДЕННЫЙ номер:
+              // иначе человек не понимает, почему нашлась именно эта строка.
+              // У нераскрытого объекта номер скрыт до раскрытия — показываем
+              // хвост, по которому он и искал.
+              aside: byPhone
+                ? `${paid ? demoPhone(row.address) : `+7 900 •••-••-${demoPhone(row.address).slice(-2)}`} · ${row.price}`
+                : `${row.price} · ${row.rooms}-комн · ${paid ? "раскрыт" : "новый"}`,
               to: paid ? "/object/disclosed" : "/object",
               search: { at: row.address },
             }
