@@ -1,9 +1,11 @@
 import { Link, useNavigate } from "@tanstack/react-router"
+import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useRef, useState } from "react"
 
 import { Typography } from "@/components/typography"
 import { useSession, useSessionActions } from "@/features/auth"
 import { cn } from "@/lib/utils"
+import { SPRING } from "@/platform/motion"
 
 /**
  * Меню аватара — компонент `C Меню аватара` (`eoCoZ`), состояние в контексте
@@ -122,12 +124,44 @@ function AvatarMenu({ initials }: { initials: string }) {
         </Typography>
       </button>
 
-      {open ? (
-        <div
+      {/*
+        Меню раскрывается из-под аватара, а не возникает готовым.
+
+        ═══════════════════════════════════════════════════════════════════════
+
+        Это был последний попап кабинета без движения вовсе: нажал — и панель
+        появилась одним кадром, нажал ещё раз — исчезла тем же. Владелец
+        описал прямо: «выезжает неплавно, некрасиво».
+
+        **Точка роста — правый верхний угол**, тот самый, из которого меню
+        и растёт: его правый край совпадает с правым краем аватара, а верх
+        отстоит от низа шапки на 8. Без явной точки браузер берёт центр,
+        и меню раздувается во все стороны разом — движение есть, а откуда
+        оно взялось, непонятно.
+
+        Масштаб 0.96, а не 0.8: меню всего 260 в ширину, и сильное сжатие
+        читается как прыжок. Подъём 4 px добавляет направление — панель
+        приходит сверху, оттуда, где аватар.
+
+        `AnimatePresence` нужен ради второй половины: без него узел уходит
+        из дерева в том же кадре, в котором закрылся, и анимировать нечего.
+        Исчезновение здесь заметнее появления — человек уже смотрит в это
+        место, он сам себя туда и привёл.
+
+        Пружина `overlay` общая со всеми окнами продукта: меню профиля
+        не имеет права двигаться по-своему.
+      */}
+      <AnimatePresence>
+        {open ? (
+        <motion.div
           data-slot="avatar-menu"
           role="menu"
           aria-label="Профиль"
-          className="absolute top-full right-0 z-50 mt-2 flex w-65 flex-col rounded-2xl border border-line-2 bg-surface p-2"
+          initial={{ opacity: 0, scale: 0.96, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: -4 }}
+          transition={SPRING.overlay}
+          className="absolute top-full right-0 z-50 mt-2 flex w-65 origin-top-right flex-col rounded-2xl border border-line-2 bg-surface p-2"
         >
           {/* Подпись, а не пункт: не нажимается и не подсвечивается.
 
@@ -169,8 +203,9 @@ function AvatarMenu({ initials }: { initials: string }) {
           >
             Выйти из аккаунта
           </MenuRow>
-        </div>
-      ) : null}
+        </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   )
 }

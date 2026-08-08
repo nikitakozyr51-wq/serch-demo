@@ -230,12 +230,35 @@ test('окна приезжают переходом, а не подменой �
    * на экране и уже нести кадр ухода. Если его нет в дереве в этот момент,
    * значит окно пропало за кадр.
    */
+  /*
+    Кадр ухода ищется опросом, а не одним замером.
+
+    Между нажатием Escape и перерисовкой React проходит неопределимое время,
+    а сам узел живёт после закрытия ровно 120 мс. Один замер сразу после
+    нажатия попадал то до перерисовки, то после снятия узла — и проверка
+    падала на здоровом продукте, что хуже пропущенной ошибки.
+
+    Опрос закрывает обе стороны: он ждёт появления кадра ухода, но не дольше
+    жизни самого узла.
+  */
   await page.keyboard.press('Escape')
-  const leaving = await animationOf('[data-slot="palette-scrim"]')
+  const leaving = await page.evaluate(async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const node = document.querySelector('[data-slot="palette-scrim"]')
+      if (node !== null) {
+        const name = getComputedStyle(node).animationName
+        if (name.endsWith('-out')) return name
+      }
+      await new Promise((resolve) => setTimeout(resolve, 12))
+    }
+    const node = document.querySelector('[data-slot="palette-scrim"]')
+    return node === null ? null : getComputedStyle(node).animationName
+  })
+
   if (leaving === null) {
     failures.push('затемнение палитры: узел снят сразу, ухода нет')
-  } else if (!leaving.name.endsWith('-out')) {
-    failures.push(`затемнение палитры: при закрытии играет «${leaving.name}», а не кадр ухода`)
+  } else if (!leaving.endsWith('-out')) {
+    failures.push(`затемнение палитры: при закрытии играет «${leaving}», а не кадр ухода`)
   }
 
   expect(failures, failures.join('\n')).toEqual([])
@@ -293,6 +316,53 @@ test('список выдачи собирается волной, а не по�
       failures.push(
         `строка не проявляется: ${sample.first} → ${sample.second} за 110 мс`,
       )
+    }
+  }
+
+  expect(failures, failures.join('\n')).toEqual([])
+})
+
+/**
+ * Меню профиля раскрывается, а не возникает готовым.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **Эта проверка появилась после того, как дыру нашёл владелец, а не код.**
+ * Меню аватара было единственным попапом кабинета вовсе без движения:
+ * нажал — панель появилась одним кадром. Ни одна из сорока с лишним проверок
+ * этого не заметила, потому что смотреть на меню было некому.
+ *
+ * Замеряется фактом, как и волна выдачи: меню двигает библиотека, и в
+ * вычисленных стилях объявленной анимации у него нет.
+ */
+test('меню профиля раскрывается, а не появляется готовым', async ({ page }) => {
+  await seedSession(page)
+  await page.goto('/search')
+  await page.waitForSelector('[data-slot="user-avatar"]')
+
+  await page.locator('[data-slot="user-avatar"]').click()
+  await page.waitForSelector('[data-slot="avatar-menu"]')
+
+  const sample = await page.evaluate(async () => {
+    const read = () => {
+      const menu = document.querySelector('[data-slot="avatar-menu"]')
+      return menu === null ? null : Number.parseFloat(getComputedStyle(menu).opacity)
+    }
+    const first = read()
+    await new Promise((resolve) => setTimeout(resolve, 90))
+    return { first, second: read() }
+  })
+
+  const failures: string[] = []
+
+  if (sample.first === null || sample.second === null) {
+    failures.push('меню профиля не открылось')
+  } else {
+    if (sample.first >= 1) {
+      failures.push(`меню появилось сразу целиком (прозрачность ${sample.first})`)
+    }
+    if (sample.second <= sample.first) {
+      failures.push(`меню не раскрывается: ${sample.first} → ${sample.second} за 90 мс`)
     }
   }
 
