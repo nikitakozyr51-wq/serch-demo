@@ -519,12 +519,17 @@ export function SearchesPage() {
                     data-slot="scope-tab"
                     data-active={active || undefined}
                     onClick={() => setScope(item.id)}
-                    className="flex h-row-head cursor-pointer items-center bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg"
+                    // Вкладка отвечает цветом подписи: заливка превратила бы
+                    // её в кнопку, а подчёркивания в этом ряду нет и в файле.
+                    // Прежде ряд не отвечал ни на что и читался как подписи.
+                    className={cn(
+                      "flex h-row-head cursor-pointer items-center bg-transparent",
+                      "transition-colors duration-120",
+                      active ? "text-fg" : "text-text-2 hover:text-fg active:text-fg-hover",
+                      "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg",
+                    )}
                   >
-                    <Typography
-                      variant={active ? "strongText" : "uiText"}
-                      tone={active ? "default" : "secondary"}
-                    >
+                    <Typography variant={active ? "strongText" : "uiText"} tone="current">
                       {item.label}
                     </Typography>
                   </button>

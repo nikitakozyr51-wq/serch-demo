@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import { useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 import {
@@ -14,9 +14,11 @@ import {
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { useOwnAgency, useSession } from "@/features/auth"
+import { useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import { MobileBottomNav, MobileEmptyState, MobileHeader, MobileSectionHeader, PhoneFrame } from "@/features/cabinet"
 import { ListingPhoto, MarketDeviation } from "@/features/listings"
+import { notifyDone, notifyError } from "@/platform/notify"
+import { recordCall, useNow, type CallOutcome } from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
 /**
@@ -102,10 +104,22 @@ function TouchChip({
         "flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-full px-4 whitespace-nowrap",
         "outline-solid outline-1 -outline-offset-1",
         "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg",
+        /*
+          Отклик на касание. На телефоне наведения не существует, поэтому
+          нажатие берёт СРАЗУ вторую ступень лестницы — ту же, что берёт
+          строка выдачи в `.row-tap`: `surface → warm-hover`, `fg → fg-press`.
+          Первая ступень на касании была бы почти не видна: палец закрывает
+          собой ровно то место, которое подсветилось.
+
+          Спека, раздел 5: «Отклик на касание, а не на отпускание. Подсветка
+          мгновенно». Время действия уже приходит по `pointerdown` через
+          `pressProps`; здесь — то, что человек при этом видит.
+        */
+        "transition-colors duration-120",
         selected
-          ? "bg-fg text-surface outline-fg"
+          ? "bg-fg text-surface outline-fg active:bg-fg-press"
           : cn(
-              "bg-surface text-fg",
+              "bg-surface text-fg active:bg-warm-hover",
               edge === "control" && "outline-border-control",
               edge === "line-2" && "outline-line-2",
               edge === "line-3" && "outline-line-3",
@@ -260,10 +274,10 @@ function TodayCardRow({ card }: { card: TodayCard }) {
             // Имя для читалки несёт адрес: четыре одинаковых «Позвонить»
             // подряд в списке ссылок ничего не различают.
             <Link
-              to="/screen/mobile-call"
+              to="/m/call"
               aria-label={`Позвонить: ${card.address}`}
               data-slot="today-call"
-              className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-md bg-fg px-4 text-surface outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+              className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-md bg-fg px-4 text-surface transition-colors duration-120 outline-none active:bg-fg-press focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
             >
               <Typography variant="controlLabel" tone="current">
                 Позвонить
@@ -399,7 +413,13 @@ function OutcomeTile({
         "flex h-26 min-w-0 flex-1 cursor-pointer flex-col items-start justify-end gap-1.5 rounded-2xl p-3.5 text-left",
         "outline-solid outline-1 -outline-offset-1",
         "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg",
-        selected ? "bg-fg text-surface outline-fg" : "bg-surface text-text-2 outline-line-3",
+        // Плитка исхода — то, чем заканчивается звонок. Молчать под пальцем
+        // ей нельзя тем более: человек жмёт её один раз и должен видеть, что
+        // попал. Ступени те же, что у чипа выше.
+        "transition-colors duration-120",
+        selected
+          ? "bg-fg text-surface outline-fg active:bg-fg-press"
+          : "bg-surface text-text-2 outline-line-3 active:bg-warm-hover",
       )}
       {...pressProps(onPress)}
     >
@@ -418,11 +438,85 @@ function OutcomeTile({
   )
 }
 
+/** Плитка исхода → запись в журнале. Один список на экран и на журнал. */
+const OUTCOME_TO_CALL: Record<string, { outcome: CallOutcome; days: number }> = {
+  meeting: { outcome: "дозвонился", days: 0 },
+  callback: { outcome: "отложен", days: 1 },
+  refused: { outcome: "отказ", days: 0 },
+  agent: { outcome: "посредник", days: 0 },
+}
+
+/** Через сколько дней напомнить. Подписи чипов — они же сроки. */
+const REMIND_DAYS: Record<string, number> = {
+  завтра: 1,
+  "через 3 дня": 3,
+  "через неделю": 7,
+}
+
 export function MobileRecordPage() {
   const [outcome, setOutcome] = useState("meeting")
   const [answered, setAnswered] = useState("Собственник")
   const [remind, setRemind] = useState("через 3 дня")
   const navigate = useNavigate()
+  const session = useSession()
+  const actions = useSessionActions()
+  const now = useNow()
+
+  /**
+   * О каком объекте запись.
+   *
+   * Приходит из прозвона параметром. Без него запись некуда положить: адрес —
+   * это ключ записи в журнале.
+   */
+  // Читается мягко и с приведением: маршрут собран общей сборкой
+  // `productRoute`, а она типы параметров до экрана не доносит — тот же
+  // приём, что на приёме приглашения.
+  const search = useSearch({ from: "/m/record", shouldThrow: false }) as { at?: string } | null
+  const at = search?.at
+
+  /**
+   * Сохранить исход.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * До этой правки кнопка не писала НИЧЕГО: человек отмечал «Договорились»,
+   * кто ответил и когда напомнить, жал «Сохранить» — и улетал на стенд,
+   * которого в собранной версии не существует. В журнале не появлялось ни
+   * исхода, ни перезвона, ни заметки, а плитка «Это агент · вернуть 199 ₽»
+   * только красилась. То есть телефонный путь агента заканчивался ничем
+   * ровно в той точке, ради которой он и шёл.
+   *
+   * Запись идёт той же функцией, что на компьютере: два экрана одного дела
+   * не могут иметь двух журналов.
+   */
+  const save = () => {
+    if (at === undefined) {
+      void navigate({ to: "/m/today" })
+      return
+    }
+
+    const mapped = OUTCOME_TO_CALL[outcome] ?? { outcome: "в работе" as CallOutcome, days: 0 }
+    const days = mapped.days === 0 ? 0 : (REMIND_DAYS[remind] ?? mapped.days)
+
+    recordCall({
+      address: at,
+      outcome: mapped.outcome,
+      answered,
+      remindAt: days === 0 ? undefined : now + days * 24 * 60 * 60 * 1000,
+      by: session?.name ?? "",
+    })
+
+    // «Это агент» — то же самое, что «Брак» на компьютере: за контакт
+    // заплатили, а собственника на том конце не оказалось. Деньги возвращает
+    // та же единственная дверь, что и везде, с той же проверкой.
+    if (outcome === "agent") {
+      const returned = actions.refund(at, "Ответил не собственник", true)
+      if (returned === "ok") notifyDone("Вернули 199 ₽ на счёт агентства")
+      else if (returned === "already") notifyError("За этот контакт возврат уже брали")
+    }
+
+    void navigate({ to: "/m/call", search: { at: undefined } })
+  }
 
   return (
     <PhoneStand slot="mobile-record">
@@ -437,9 +531,13 @@ export function MobileRecordPage() {
             кнопкой «Записать результат». Запись при этом пропадает: она
             нигде не сохранена, и в этом весь смысл слова «Отмена». */}
         <Link
-          to="/screen/mobile-call"
+          to="/m/call"
           data-slot="mobile-record-cancel"
-          className="flex h-11 shrink-0 cursor-pointer items-center gap-2 bg-transparent text-text-2 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          // Подложка появляется только под пальцем и гасится отрицательным
+          // полем на ту же величину: подпись остаётся стоять там, где стоит
+          // в макете. Своей заливки у контрола нет, поэтому нажатие красит
+          // фон, а не сдвигает его на ступень.
+          className="-mx-2 flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-md bg-transparent px-2 text-text-2 transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
         >
           <ArrowLeft aria-hidden className="size-4.5 shrink-0" strokeWidth={2} />
           <Typography variant="strongText" tone="current">
@@ -523,7 +621,7 @@ export function MobileRecordPage() {
           type="button"
           data-action="запись заметки голосом"
           data-slot="voice-note"
-          className="flex h-12 w-full shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-surface px-4 text-fg outline-solid outline-1 -outline-offset-1 outline-border-control focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg"
+          className="flex h-12 w-full shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-surface px-4 text-fg transition-colors duration-120 outline-solid outline-1 -outline-offset-1 outline-border-control active:bg-warm-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg"
         >
           <Mic aria-hidden className="size-4.5 shrink-0" strokeWidth={2} />
           <Typography variant="strongText" tone="current">
@@ -564,12 +662,7 @@ export function MobileRecordPage() {
         {/* Сохранение возвращает в прозвон: агент идёт по списку подряд,
             и после записи ему нужен следующий объект, а не эта же форма.
             Ссылкой кнопка стать не может — см. отчёт про `asChild`. */}
-        <Button
-          variant="primary"
-          size="lg"
-          block
-          {...pressProps(() => void navigate({ to: "/screen/mobile-call" }))}
-        >
+        <Button variant="primary" size="lg" block {...pressProps(save)}>
           Сохранить
         </Button>
       </div>
@@ -883,10 +976,10 @@ export function MobileFiltersSheetPage() {
 
             Закрытие возвращает в выдачу — лист поверх неё и открывался. */}
         <Link
-          to="/screen/mobile"
+          to="/m/search"
           aria-label="Закрыть фильтры"
           data-slot="mobile-filters-close"
-          className="flex h-11 w-6 shrink-0 cursor-pointer items-center justify-center bg-transparent text-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          className="flex h-11 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md bg-transparent text-fg transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
         >
           <X aria-hidden className="size-6" strokeWidth={2} />
         </Link>
@@ -900,7 +993,7 @@ export function MobileFiltersSheetPage() {
         <button
           type="button"
           data-slot="mobile-filters-reset"
-          className="flex h-11 shrink-0 cursor-pointer items-center bg-transparent text-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          className="-mx-2 flex h-11 shrink-0 cursor-pointer items-center rounded-md bg-transparent px-2 text-fg transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           {...pressProps(reset)}
         >
           <Typography variant="strongText" tone="current">
@@ -937,7 +1030,7 @@ export function MobileFiltersSheetPage() {
               type="button"
               data-action="изменить адрес поиска"
               data-slot="filters-address-edit"
-              className="flex h-11 shrink-0 cursor-pointer items-center bg-transparent text-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+              className="-mx-2 flex h-11 shrink-0 cursor-pointer items-center rounded-md bg-transparent px-2 text-fg transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
             >
               <Typography variant="tabActive" tone="current">
                 Изменить
@@ -980,7 +1073,7 @@ export function MobileFiltersSheetPage() {
           variant="primary"
           size="lg"
           block
-          {...pressProps(() => void navigate({ to: "/screen/mobile" }))}
+          {...pressProps(() => void navigate({ to: "/m/search" }))}
         >
           Показать 247 объектов
         </Button>

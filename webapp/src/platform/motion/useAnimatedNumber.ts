@@ -24,14 +24,31 @@ function useAnimatedNumber(target: number, durationMs = 600) {
   const fromRef = useRef(target)
 
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)")
     const from = fromRef.current
 
-    if (reduce || from === target) {
+    if (media.matches || from === target) {
       fromRef.current = target
       setValue(target)
       return
     }
+
+    /**
+     * Настройку могли включить прямо во время отсчёта.
+     *
+     * Раньше она читалась один раз на старте, и человек, которому от движения
+     * делается плохо, досматривал начатую анимацию до конца — то есть запрет
+     * действовал со следующего раза, а не с этого. Счёт обрывается на месте
+     * и показывает итог: сумма важнее способа её показать.
+     */
+    const stopOnReduce = () => {
+      if (!media.matches) return
+      cancelAnimationFrame(frameRef.current)
+      fromRef.current = target
+      setValue(target)
+    }
+
+    media.addEventListener("change", stopOnReduce)
 
     const start = performance.now()
 
@@ -46,7 +63,10 @@ function useAnimatedNumber(target: number, durationMs = 600) {
     }
 
     frameRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frameRef.current)
+    return () => {
+      media.removeEventListener("change", stopOnReduce)
+      cancelAnimationFrame(frameRef.current)
+    }
   }, [target, durationMs])
 
   return value

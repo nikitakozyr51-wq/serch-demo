@@ -131,6 +131,15 @@ type FilterPanelProps = {
    */
   overlay?: boolean
   /**
+   * Колонка уходит обратно под сайдбар: 200 мс, которые она ещё стоит
+   * на экране после закрытия.
+   *
+   * Имеет смысл только вместе с `overlay`: встроенная в раскладку колонка
+   * не закрывается вовсе, она просто есть. Решение о жизни узла принимает
+   * выдача — панель только рисует уход.
+   */
+  leaving?: boolean
+  /**
    * Что ищем: продажу или аренду.
    *
    * Необязателен: на стендах сверки режима нет, и рисовать там обойму
@@ -154,6 +163,7 @@ function FilterPanel({
   onChangeAddress,
   onSaveSearch,
   overlay = false,
+  leaving = false,
   mode,
   onChangeMode,
 }: FilterPanelProps) {
@@ -199,7 +209,13 @@ function FilterPanel({
             // Расхождение названо и ограничено одним местом: панель ВИСИТ
             // над выдачей, и без тени край панели читается как край экрана,
             // а выдача под ней — как обрезанная.
-            "panel-in fixed top-(--height-header) bottom-0 left-(--width-sidebar) z-40 h-auto shadow-[24px_0_60px_-20px_#1e1e1e33]"
+            //
+            // Уход зеркалит приход: колонка возвращается туда, откуда пришла.
+            // Прежде она пропадала за кадр — приезжала мягко, исчезала рывком.
+            cn(
+              "fixed top-(--height-header) bottom-0 left-(--width-sidebar) z-40 h-auto shadow-[24px_0_60px_-20px_#1e1e1e33]",
+              leaving ? "panel-out" : "panel-in",
+            )
           : "h-full",
       )}
     >
@@ -294,7 +310,10 @@ function FilterPanel({
             <button
               type="button"
               onClick={onChangeAddress}
-              className="shrink-0 cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+              // Строка «Изменить» сходится в поле впритык (232 − 24 − 8 = 208
+              // при 145 + 55), поэтому подложка не расширяет её: поле гасится
+              // отрицательным ровно на свою величину.
+              className="-mx-1.5 shrink-0 cursor-pointer rounded-sm bg-transparent px-1.5 py-0.5 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
             >
               <Typography variant="metaStrong" tone="default">
                 Изменить
@@ -344,7 +363,7 @@ function FilterPanel({
             type="button"
             data-slot="filter-reset"
             onClick={onReset}
-            className="cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+            className="-mx-2 cursor-pointer rounded-sm bg-transparent px-2 py-0.5 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <Typography variant="metaStrong" tone="default">
               <>Сбросить {activeCount}</>

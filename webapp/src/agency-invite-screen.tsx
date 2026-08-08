@@ -7,7 +7,7 @@ import { SelectChip } from "@/components/controls/SelectChip"
 import { TextField } from "@/components/controls/TextField"
 import { Typography } from "@/components/typography"
 import { AgencyShell, NoticeBar } from "@/features/agency"
-import { inviteAgent } from "@/features/auth"
+import { useSessionActions } from "@/features/auth"
 import { plural } from "@/features/listings"
 import { useWorkspace } from "@/features/workspace"
 import { notifyDone, notifyError } from "@/platform/notify"
@@ -53,25 +53,29 @@ export function AgencyInvitePage() {
   const [limit, setLimit] = useState<number | null>(5)
   /** Ключ созданного приглашения. Появляется после отправки. */
   const [token, setToken] = useState<string | null>(null)
+  const actions = useSessionActions()
 
   const ready = name.trim() !== "" && email.trim().includes("@")
 
   const invite = () => {
     if (!ready) return
-    void inviteAgent(email.trim().toLowerCase(), name.trim(), role === "owner" ? null : limit).then(
-      (result) => {
-        if ("failed" in result) {
-          notifyError(
-            result.failed.includes("уже работает")
-              ? "Этот человек уже работает в агентстве"
-              : `Приглашение не создалось: ${result.failed}`,
-          )
-          return
-        }
-        notifyDone("Приглашение создано")
-        setToken(result.token)
-      },
-    )
+    void actions.invite({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      role,
+      limit: role === "owner" ? null : limit,
+    }).then((result) => {
+      if ("failed" in result) {
+        notifyError(
+          result.failed.includes("уже работает")
+            ? "Этот человек уже работает в агентстве"
+            : `Приглашение не создалось: ${result.failed}`,
+        )
+        return
+      }
+      notifyDone("Приглашение создано")
+      setToken(result.token)
+    })
   }
 
   /**
@@ -81,7 +85,17 @@ export function AgencyInvitePage() {
    * кабинет живёт и на своём домене, и на демонстрационном, и вписанный
    * домен отправил бы половину приглашённых не туда.
    */
-  const link = token === null ? "" : `${window.location.origin}/app/invite?token=${token}`
+  /**
+   * Ссылка, которую руководитель передаёт сам.
+   *
+   * Папка приложения берётся из сборки, а не вписана строкой. Вписанное
+   * `/app/` уводило агента мимо продукта везде, где кабинет живёт не на
+   * корне домена, — а демонстрация живёт этажом глубже (`/serch-demo/app/`),
+   * и там ссылка открывала «Такой страницы нет». Комментарий рядом при этом
+   * уверял, что домен не вписан: вписан был не домен, а папка.
+   */
+  const base = import.meta.env.BASE_URL.replace(/\/+$/, "")
+  const link = token === null ? "" : `${window.location.origin}${base}/invite?token=${token}`
 
   const pending = workspace.people.length
 
@@ -261,6 +275,7 @@ export function AgencyInvitePage() {
                 сами — любым способом, каким вы с ним уже переписываетесь.
               </Typography>
               <div
+                data-slot="invite-link"
                 data-action="выделить ссылку приглашения"
                 onClick={(event) => {
                   const node = event.currentTarget

@@ -169,7 +169,7 @@ export function FirstSearchPage() {
                 key={preset}
                 to="/search"
                 data-slot="preset-card"
-                className="flex min-w-0 flex-1 cursor-pointer flex-col gap-2 rounded-lg border border-line-2 bg-surface p-4 text-left hover:bg-warm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+                className="flex min-w-0 flex-1 cursor-pointer flex-col gap-2 rounded-lg border border-line-2 bg-surface p-4 text-left transition-colors duration-120 hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
               >
                 <Typography variant="strongText" tone="default">
                   {preset}

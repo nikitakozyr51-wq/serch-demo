@@ -6,10 +6,11 @@ import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { AgencyChip, AgencyEmpty, DataTable, NoticeBar } from "@/features/agency"
-import { useSession, useSessionActions } from "@/features/auth"
+import { DISCLOSURE_PRICE, useSession, useSessionActions } from "@/features/auth"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
 import { FillBar, groupDigits, plural } from "@/features/listings"
 import {
+  SUBJECTIVE_REFUND_LIMIT,
   accountingDocument,
   disclosedSince,
   download,
@@ -22,9 +23,6 @@ import {
   type Workspace,
 } from "@/features/workspace"
 import { cn } from "@/lib/utils"
-
-/** Раскрытие стоит 199 ₽ — цена продукта, а не число экрана. */
-const DISCLOSURE_PRICE = 199
 
 /** Доступ агентства — 3 000 ₽ в месяц. Вторая и последняя цена продукта. */
 const SUBSCRIPTION_PRICE = 3000
@@ -537,10 +535,10 @@ export function BalanceRefundsPage() {
       activeTab="refunds"
     >
       <NoticeBar
-        rule={`Лимит возвратов по субъективным причинам: ${subjectiveRefunds(workspace, now)} из 12 за 30 дней`}
+        rule={`Лимит возвратов по субъективным причинам: ${subjectiveRefunds(workspace, now)} из ${SUBJECTIVE_REFUND_LIMIT} за 30 дней`}
         aside={
           <div className="w-40 shrink-0">
-            <FillBar filled={subjectiveRefunds(workspace, now)} total={12} />
+            <FillBar filled={subjectiveRefunds(workspace, now)} total={SUBJECTIVE_REFUND_LIMIT} />
           </div>
         }
         note="объективные причины в лимит не считаются: номер не существует, объект продан, согласие отозвано"
@@ -812,7 +810,9 @@ function RowAction({
       // «Скачать» подряд ничего не различают.
       onClick={onClick}
       aria-label={`${children} ${doc}`}
-      className="inline-flex h-6 shrink-0 cursor-pointer items-center rounded-sm bg-transparent px-2 hover:bg-warm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg"
+      // Переход и ступень нажатия: без перехода подсветка щёлкала, а нажатие
+      // не показывало ничего — кнопка отвечала только наведением.
+      className="inline-flex h-6 shrink-0 cursor-pointer items-center rounded-sm bg-transparent px-2 transition-colors duration-120 hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg"
     >
       <Typography variant="metaStrong" tone="default">
         {children}

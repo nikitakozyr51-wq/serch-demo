@@ -1,5 +1,6 @@
 import { Typography } from "@/components/typography"
 import { groupDigits } from "@/features/listings"
+import { useAnimatedNumber } from "@/platform/motion"
 
 /**
  * Шапка кабинета на телефоне.
@@ -25,6 +26,21 @@ type MobileHeaderProps = {
 }
 
 function MobileHeader({ balance, initials }: MobileHeaderProps) {
+  /**
+   * Счётчик баланса — единственное место кабинета, где движение ОБЯЗАНО быть.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Так записано в спеке, и причина не в красоте: 199 ₽ ушли, и человек
+   * обязан это увидеть. На телефоне число печаталось напрямую, то есть
+   * списание проходило молча — а именно на телефоне агент и работает в полях,
+   * где промах в двести рублей заметить некому.
+   *
+   * 600 мс — те же, что в десктопной шапке. Одно движение на два кабинета,
+   * потому что подтверждает оно одно и то же.
+   */
+  const shownBalance = useAnimatedNumber(balance)
+
   return (
     <header
       data-slot="mobile-header"
@@ -42,7 +58,7 @@ function MobileHeader({ balance, initials }: MobileHeaderProps) {
 
       {/* Баланс вторичным, а не графитом: он справка, а не действие. */}
       <Typography variant="metaStrong" tone="secondary">
-        {`${groupDigits(balance)} ₽`}
+        {`${groupDigits(shownBalance)} ₽`}
       </Typography>
 
       {/* Аватар 28 графитом — на десктопе он такой же, а инициалы наследуют

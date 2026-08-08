@@ -57,7 +57,35 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      // Слой движения идёт своим проектом: под общим `reducedMotion: 'reduce'`
+      // движения нет по определению, и проверка была бы вечнозелёной.
+      // Обратная половина — «при отключённом движении всё мгновенно» —
+      // наоборот остаётся здесь: ей нужна именно общая настройка полосы.
+      testIgnore: '**/motion.spec.ts',
+    },
+    {
+      name: 'motion',
+      use: {
+        ...devices['Desktop Chrome'],
+        reducedMotion: 'no-preference',
+        /**
+         * Ширина кабинета из макета, выставленная ЯВНО.
+         *
+         * `devices['Desktop Chrome']` несёт свой размер окна 1280 × 720,
+         * и он перебивает общий `use` выше: настройка проекта старше общей.
+         * На 1280 колонка фильтров сворачивается в полоску (порог 1360),
+         * то есть чипов на странице нет вовсе — проверка отклика искала бы
+         * узел, которого не существует, и падала бы не на том.
+         */
+        viewport: { width: 1440, height: 1024 },
+      },
+      testMatch: '**/motion.spec.ts',
+    },
+  ],
   webServer: {
     command: `bun run dev --host 127.0.0.1 --port ${webPort}`,
     /**

@@ -1,10 +1,11 @@
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import { ArrowLeft, ChevronRight, LockOpen, MapPin, Phone } from "lucide-react"
 import { useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
+import { ALL_ROWS } from "@/data/search-rows"
 import { useSession, useSessionActions } from "@/features/auth"
 import { MobileBottomNav, MobileHeader, PhoneFrame } from "@/features/cabinet"
 import {
@@ -13,6 +14,7 @@ import {
   StatusChip,
   type ListingStatus,
 } from "@/features/listings"
+import { notifyDone, notifyError } from "@/platform/notify"
 import { cn } from "@/lib/utils"
 
 /**
@@ -58,7 +60,7 @@ function pressProps(onPress: () => void) {
  * нарисована двумя разными шапками.
  */
 /** Куда возвращает шапка. Адресов ровно два — других выходов у ветки нет. */
-type BackTarget = "/screen/mobile" | "/m/object"
+type BackTarget = "/m/search" | "/m/object"
 
 function ObjectBackBar({
   label,
@@ -85,7 +87,10 @@ function ObjectBackBar({
       <Link
         to={to}
         data-slot="mobile-back"
-        className="flex shrink-0 cursor-pointer items-center gap-2 bg-transparent text-text-2 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+        // Возврат — самый нажимаемый контрол ветки объекта, и он молчал.
+        // Подложка появляется только под пальцем, поле гасится отрицательным
+        // на ту же величину: подпись стоит там же, где в макете.
+        className="-mx-2 flex shrink-0 cursor-pointer items-center gap-2 rounded-md bg-transparent px-2 py-1 text-text-2 transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
       >
         <ArrowLeft aria-hidden className="size-4.5" strokeWidth={2} />
         <Typography variant="controlLabel" tone="current">
@@ -150,7 +155,7 @@ function StatusButton({ address }: { address: string }) {
       data-action="сменить статус объекта"
       onClick={() => void navigate({ to: "/m/call", search: { at: address } })}
       data-slot="mobile-status-button"
-      className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-md bg-warm px-4 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-md bg-warm px-4 transition-colors duration-120 outline-none active:bg-warm-press focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
     >
       <Typography variant="controlLabel" tone="default">
         Статус
@@ -210,7 +215,7 @@ function ObjectMap({ label, address }: { label: string; address: string }) {
         window.location.href = `geo:0,0?q=${encodeURIComponent(`Санкт-Петербург, ${address}`)}`
       }}
       data-slot="mobile-object-map"
-      className="flex h-33 w-full shrink-0 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border border-line-2 bg-warm outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      className="flex h-33 w-full shrink-0 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border border-line-2 bg-warm transition-colors duration-120 outline-none active:bg-warm-press focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
     >
       <MapPin aria-hidden className="size-5 text-text-2" strokeWidth={2} />
       <Typography variant="numericDense" tone="secondary">
@@ -322,7 +327,7 @@ export function MobileObjectPage() {
 
   return (
     <PhoneFrame slot="mobile-screen">
-      <ObjectBackBar label="К списку" to="/screen/mobile" status="disclosed" />
+      <ObjectBackBar label="К списку" to="/m/search" status="disclosed" />
 
       <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-bg">
         <ObjectPhoto address="Ленская ул., 10" />
@@ -391,29 +396,83 @@ export function MobileObjectPage() {
  * возврат снимает страх «а если всё-таки агентство». Красная кнопка —
  * единственное место продукта, где красный значит «сейчас спишутся деньги».
  */
-/** Объект этой карточки. Раскрытие списывает деньги именно за него. */
+/** Объект этой карточки, когда адрес не пришёл ссылкой. */
 const BEFORE_ADDRESS = "Ленская ул., 6"
+
+/**
+ * Сказать, чем кончилось раскрытие.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Раскрывают на телефоне из трёх мест: карточка до раскрытия, блок похожих
+ * и полный список похожих. Все три выбрасывали ответ и не показывали ничего:
+ * списали, не списали, кончились деньги — экран не менялся, а шапки со счётом
+ * у этих экранов нет. Человек жал кнопку снова и снова.
+ *
+ * Правило живёт одной функцией, а не тремя копиями: копии разъедутся на
+ * четвёртом месте, и одно из них снова замолчит.
+ */
+function tellDisclosure(
+  result: "already" | "trial" | "paid" | "no-money",
+  navigate: ReturnType<typeof useNavigate>,
+) {
+  if (result === "paid") notifyDone("Списали 199 ₽, контакт раскрыт")
+  else if (result === "trial") notifyDone("Раскрыто, пробное раскрытие")
+  else if (result === "already") notifyDone("Контакт уже раскрыт, второй раз не списываем")
+  else {
+    notifyError("На счету агентства не хватает денег")
+    void navigate({ to: "/m/balance/top-up" })
+  }
+}
 
 export function MobileObjectBeforePage() {
   const actions = useSessionActions()
+  const navigate = useNavigate()
+
+  /**
+   * Какой объект раскрывают.
+   *
+   * Карточка была одна на всю базу: адрес стоял константой, и любая строка
+   * выдачи вела в одну и ту же квартиру — а раскрытие списывало деньги
+   * именно за неё. То есть человек платил не за тот объект, который выбрал.
+   */
+  const search = useSearch({ from: "/m/object/before", shouldThrow: false }) as
+    | { at?: string }
+    | null
+  const address = search?.at ?? BEFORE_ADDRESS
+  const row = ALL_ROWS.find((item) => item.address === address)
+
+  /**
+   * Раскрытие говорит, чем кончилось.
+   *
+   * Раньше ответ выбрасывался (`void actions.disclose(...)`), и экран не
+   * менялся ничем: списали, не списали, кончились деньги — тишина. Человек
+   * жал кнопку второй и третий раз. Шапки со счётом у этой карточки нет,
+   * поэтому сообщение здесь — единственный способ узнать про свои деньги.
+   *
+   * Кадра «карточка на телефоне после раскрытия» в файле нет, поэтому
+   * экран не подменяется: сообщение и переход на пополнение при нехватке —
+   * ровно то, что можно сделать, ничего не выдумывая.
+   */
+  const disclose = () => tellDisclosure(actions.disclose(address), navigate)
 
   return (
     <PhoneFrame slot="mobile-screen">
-      <ObjectBackBar label="К списку" to="/screen/mobile" status="new" />
+      <ObjectBackBar label="К списку" to="/m/search" status="new" />
 
       <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-bg">
-        <ObjectPhoto address={BEFORE_ADDRESS} />
+        <ObjectPhoto address={address} />
 
         <div className="flex w-full flex-1 flex-col gap-4 p-4">
           <div className="flex w-full shrink-0 items-center gap-2.5">
             <Typography variant="cardPrice" tone="default">
-              8,8 млн ₽
+              {row?.price ?? "8,8 млн ₽"}
             </Typography>
-            <MarketDeviation percent={-10} />
+            <MarketDeviation percent={row?.deviation ?? -10} />
           </div>
 
           <Typography variant="rowPrice" tone="default" as="h1">
-            Ленская ул., 6 · 2-комн · 57 м² · 8/9 эт
+            {row ? `${row.address}${row.meta}` : `${address} · 2-комн · 57 м² · 8/9 эт`}
           </Typography>
 
           <Typography variant="denseText" tone="dense">
@@ -484,20 +543,20 @@ export function MobileObjectBeforePage() {
 
             **Экрана «раскрыто» у этой карточки в макете нет.** Соседний
             `/m/object` — другой объект, а не её продолжение, и уводить туда
-            значило бы соврать адресом. Поэтому списание видно там, где живут
-            деньги: в шапке «Сегодня» и в балансе. Названо в отчёте.
+            значило бы соврать адресом. Поэтому итог говорится сообщением,
+            а деньги видны там, где они живут: в «Сегодня» и в балансе.
           */}
           <Button
             variant="money"
             size="lg"
             block
             iconLeft={<LockOpen aria-hidden className="size-4.5" strokeWidth={2} />}
-            {...pressProps(() => void actions.disclose(BEFORE_ADDRESS))}
+            {...pressProps(disclose)}
           >
             Раскрыть контакт · 199 ₽
           </Button>
         </div>
-        <StatusButton address="Ленская ул., 6" />
+        <StatusButton address={address} />
       </StickyActionBar>
     </PhoneFrame>
   )
@@ -546,7 +605,7 @@ export function MobileObjectSimilarPage() {
 
   return (
     <PhoneFrame slot="mobile-screen">
-      <ObjectBackBar label="К списку" to="/screen/mobile" status="disclosed" />
+      <ObjectBackBar label="К списку" to="/m/search" status="disclosed" />
 
       <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-bg">
         <div
@@ -601,12 +660,14 @@ export function MobileObjectSimilarPage() {
                 </Typography>
 
                 {/* Раскрытие похожего списывает деньги за его собственный
-                    адрес, а не за объект, из карточки которого он показан. */}
+                    адрес, а не за объект, из карточки которого он показан.
+                    Итог называется вслух — правило одно на все три места,
+                    откуда на телефоне раскрывают. */}
                 <Button
                   variant="primary"
                   size="md"
                   block
-                  {...pressProps(() => void actions.disclose(card.address))}
+                  {...pressProps(() => tellDisclosure(actions.disclose(card.address), navigate))}
                 >
                   {card.action}
                 </Button>
@@ -617,7 +678,7 @@ export function MobileObjectSimilarPage() {
           <Link
             to="/m/similar"
             data-slot="mobile-similar-more"
-            className="flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+            className="flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md bg-transparent transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <Typography variant="controlLabel" tone="default">
               Ещё 6 похожих
@@ -752,9 +813,10 @@ export function MobileSimilarListPage() {
                 className={cn(
                   "flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-md border px-3",
                   "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+                  "transition-colors duration-120",
                   selected
-                    ? "border-fg bg-fg text-surface"
-                    : "border-line-2 bg-surface text-fg",
+                    ? "border-fg bg-fg text-surface active:border-fg-press active:bg-fg-press"
+                    : "border-line-2 bg-surface text-fg active:bg-warm-hover",
                 )}
                 {...pressProps(() => setSort(label))}
               >
@@ -812,10 +874,10 @@ export function MobileSimilarListPage() {
                   size="sm"
                   {...pressProps(() => {
                     if (row.paid) {
-                      void navigate({ to: "/m/object" })
+                      void navigate({ to: "/m/object", search: { at: row.address } })
                       return
                     }
-                    void actions.disclose(row.address)
+                    tellDisclosure(actions.disclose(row.address), navigate)
                   })}
                 >
                   {row.action}
@@ -917,7 +979,7 @@ export function MobileTakenByColleaguesPage() {
                   to="/m/similar"
                   data-slot="mobile-taken-similar"
                   aria-label={`Похожие на ${row.address}`}
-                  className="flex shrink-0 cursor-pointer items-center bg-transparent text-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+                  className="-mx-2 flex shrink-0 cursor-pointer items-center rounded-md bg-transparent px-2 py-1 text-fg transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
                 >
                   <Typography variant="numericDense" tone="current">
                     Похожие

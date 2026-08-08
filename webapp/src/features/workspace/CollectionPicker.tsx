@@ -3,6 +3,8 @@ import { useState } from "react"
 import { Button } from "@/components/controls/Button"
 import { TextField } from "@/components/controls/TextField"
 import { Typography } from "@/components/typography"
+import { plural } from "@/features/listings"
+import { cn } from "@/lib/utils"
 import { addToCollection, createCollection, useWorkspace } from "./store"
 
 /**
@@ -26,19 +28,32 @@ function CollectionPicker({
   address,
   by,
   onClose,
+  leaving = false,
 }: {
-  address: string
+  /**
+   * Что кладут: один адрес или несколько.
+   *
+   * Массив появился вместе с выделением строк (кадр `SUsxy`): панель
+   * выбранного кладёт двенадцать объектов разом. Отдельного окна для этого
+   * заводить нельзя — оно разошлось бы с одиночным на первой же правке
+   * списка подборок, — поэтому окно одно и умеет оба случая.
+   */
+  address: string | readonly string[]
   /** Кто собирает подборку. Приходит свойством, а не из сеанса: пространство
    *  агентства не должно знать про вход — иначе два модуля начинают зависеть
    *  друг от друга по кругу. */
   by: string
   onClose: () => void
+  /** Окно уходит: 120 мс после закрытия. Решение о жизни узла — у выдачи. */
+  leaving?: boolean
 }) {
   const workspace = useWorkspace()
   const [name, setName] = useState("")
 
+  const addresses = typeof address === "string" ? [address] : address
+
   const put = (id: string) => {
-    addToCollection(id, address)
+    for (const item of addresses) addToCollection(id, item)
     onClose()
   }
 
@@ -46,14 +61,17 @@ function CollectionPicker({
     const clean = name.trim()
     if (!clean) return
     const collection = createCollection(clean, by)
-    addToCollection(collection.id, address)
+    for (const item of addresses) addToCollection(collection.id, item)
     onClose()
   }
 
   return (
     <div
       data-slot="collection-picker"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1e1e1e59]"
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center bg-[#1e1e1e59]",
+        leaving ? "scrim-out" : "scrim-in",
+      )}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -61,14 +79,21 @@ function CollectionPicker({
       <div
         role="dialog"
         aria-label="Добавить в подборку"
-        className="motion-in flex w-130 flex-col gap-4 rounded-2xl bg-surface p-6"
+        className={cn(
+          "flex w-130 flex-col gap-4 rounded-2xl bg-surface p-6",
+          leaving ? "motion-out" : "motion-in",
+        )}
       >
         <div className="flex flex-col gap-1">
           <Typography variant="panelTitle" tone="default" as="h2">
             В какую подборку
           </Typography>
+          {/* Один объект называется адресом, дюжина — числом: двенадцать
+              адресов в подзаголовке окна не читаются вовсе. */}
           <Typography variant="metaText" tone="dense">
-            {address}
+            {addresses.length === 1
+              ? addresses[0]
+              : `${addresses.length} ${plural(addresses.length, "объект", "объекта", "объектов")}`}
           </Typography>
         </div>
 
@@ -92,7 +117,7 @@ function CollectionPicker({
                   </Typography>
                 </div>
                 <Typography variant="metaText" tone="dense">
-                  {collection.items.includes(address)
+                  {addresses.every((item) => collection.items.includes(item))
                     ? "уже здесь"
                     : `${collection.items.length}`}
                 </Typography>

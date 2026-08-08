@@ -112,9 +112,10 @@ function AgencySegments({ active }: { active: string }) {
             className={cn(
               "flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-full px-3.5",
               "focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+              "transition-colors duration-120",
               selected
-                ? "bg-fg text-surface"
-                : "bg-surface text-fg outline-solid outline-1 -outline-offset-1 outline-border-control",
+                ? "bg-fg text-surface active:bg-fg-press"
+                : "bg-surface text-fg outline-solid outline-1 -outline-offset-1 outline-border-control active:bg-warm-hover",
             )}
           >
             {/* Цвет подписи берётся у капсулы: на графите она белая (#ffffff),
@@ -210,7 +211,9 @@ function AgencyListRow({
       data-slot="agency-list-row"
       className={cn(
         shape,
-        "cursor-pointer text-left",
+        // Строка списка отвечает тем же правилом, что строка выдачи: одно
+        // на все нажимаемые строки кабинета, живёт в `index.css`.
+        "row-tap cursor-pointer text-left",
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg",
       )}
     >
@@ -268,6 +271,7 @@ function AgencySettingRow({
       className={cn(
         "flex min-h-16 w-full cursor-pointer items-center gap-3 bg-transparent py-2 text-left",
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+        "transition-colors duration-120 active:bg-warm-hover",
         !last && "border-b border-line-2",
       )}
     >

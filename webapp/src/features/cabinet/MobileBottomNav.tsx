@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import { Bookmark, Menu, Search, Sun, Wallet } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -27,22 +28,36 @@ type MobileTab = {
   id: string
   label: string
   icon: LucideIcon
+  /** Куда ведёт вкладка. Без адреса панель — картинка, а не навигация. */
+  to: string
 }
 
+/**
+ * У каждой вкладки есть адрес — и это не подробность, а вся её работа.
+ *
+ * Панель стоит на двух десятках телефонных экранов и до этой правки не
+ * открывала ни одного: у вкладки был только необязательный обработчик,
+ * которого никто не передавал. Человек жал «Баланс» — экран не менялся.
+ * Разделы кабинета на телефоне были достижимы только набором адреса руками,
+ * то есть недостижимы.
+ *
+ * Хуже молчания было одно место: выдача передавала обработчик, который
+ * переставлял подсветку и больше ничего. Панель говорила «вы перешли»,
+ * а человек оставался на месте — это не отсутствие перехода, а ложь о нём.
+ */
 const TABS: MobileTab[] = [
-  { id: "today", label: "Сегодня", icon: Sun },
-  { id: "search", label: "Поиск", icon: Search },
-  { id: "collections", label: "Подборки", icon: Bookmark },
-  { id: "balance", label: "Баланс", icon: Wallet },
-  { id: "more", label: "Ещё", icon: Menu },
+  { id: "today", label: "Сегодня", icon: Sun, to: "/m/today" },
+  { id: "search", label: "Поиск", icon: Search, to: "/m/search" },
+  { id: "collections", label: "Подборки", icon: Bookmark, to: "/m/collections" },
+  { id: "balance", label: "Баланс", icon: Wallet, to: "/m/balance" },
+  { id: "more", label: "Ещё", icon: Menu, to: "/m/more" },
 ]
 
 type MobileBottomNavProps = {
   activeId: string
-  onSelect?: (id: string) => void
 }
 
-function MobileBottomNav({ activeId, onSelect }: MobileBottomNavProps) {
+function MobileBottomNav({ activeId }: MobileBottomNavProps) {
   return (
     <nav
       data-slot="mobile-bottom-nav"
@@ -55,16 +70,19 @@ function MobileBottomNav({ activeId, onSelect }: MobileBottomNavProps) {
         const active = tab.id === activeId
         const Icon = tab.icon
         return (
-          <button
+          <Link
             key={tab.id}
-            type="button"
+            to={tab.to}
             data-slot="mobile-tab"
             data-active={active || undefined}
             aria-current={active ? "page" : undefined}
-            onClick={() => onSelect?.(tab.id)}
             className={cn(
-              "flex h-12 w-[75px] cursor-pointer flex-col items-center justify-center gap-1 bg-transparent",
+              "flex h-12 w-[75px] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg bg-transparent",
               "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg",
+              // Пять главных дверей продукта, и все пять молчали под пальцем.
+              // Наведения на телефоне нет, поэтому нажатие берёт вторую
+              // ступень сразу — как строка выдачи в `.row-tap`.
+              "transition-colors duration-120 active:bg-warm-hover",
               active ? "text-fg" : "text-text-dense",
             )}
           >
@@ -72,7 +90,7 @@ function MobileBottomNav({ activeId, onSelect }: MobileBottomNavProps) {
             <Typography variant={active ? "metaStrong" : "metaText"} tone="current">
               {tab.label}
             </Typography>
-          </button>
+          </Link>
         )
       })}
     </nav>

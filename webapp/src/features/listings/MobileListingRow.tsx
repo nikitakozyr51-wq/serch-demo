@@ -76,6 +76,9 @@ function MobileListingRow({
   return (
     <div
       data-slot="mobile-listing-row"
+      // Адрес атрибутом: по нему проверка пути находит объект, который
+      // человек правда выбрал, а не угадывает его по тексту строки.
+      data-address={address}
       data-blocked={blocked || undefined}
       // Карточка открывается у любого объекта, включая заблокированный:
       // ровно так же, как на компьютере. Раньше здесь стояло `blocked ?

@@ -9,6 +9,7 @@ import { ALL_ROWS } from "@/data/search-rows"
 import { demoPhone, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
 import { ListingPhoto, TitledBlock } from "@/features/listings"
+import { notifyDone, notifyError } from "@/platform/notify"
 import {
   AgeAndPriceBlock,
   ByPhotoBlock,
@@ -304,8 +305,21 @@ export function ObjectCardDisclosedPage() {
 
   /** Чем кончился звонок. Пока не отмечено — ни один чип не выбран. */
   const [result, setResult] = useState<ResultId | null>(null)
-  /** Возврат уже оформлен: второй раз те же 199 ₽ на счёт не вернутся. */
-  const [refunded, setRefunded] = useState(false)
+
+  /** За какие контакты агентство уже платило: у этих строк открытие стоит 0 ₽. */
+  const opened = session?.disclosed ?? []
+
+  /**
+   * Какой объект раскрыт.
+   *
+   * Приходит параметром с нераскрытой карточки. Номер собирается из адреса,
+   * поэтому у каждого объекта он свой — а не один на всю базу, как было.
+   */
+  const { at } = useSearch({ from: "/object/disclosed", shouldThrow: false }) ?? { at: undefined }
+  const [allSimilar, setAllSimilar] = useState(false)
+  const address = at ?? FALLBACK_ADDRESS
+  const row = ALL_ROWS.find((item) => item.address === address)
+  const phone = at ? demoPhone(address) : FALLBACK_PHONE
 
   /**
    * Отметка исхода.
@@ -314,13 +328,26 @@ export function ObjectCardDisclosedPage() {
    * вернутся на баланс агентства», — и они действительно возвращаются,
    * счётчиком в шапке. Обещание, написанное над кнопкой и не выполненное
    * нажатием, — худшее, что может сделать демонстрация.
+   *
+   * **Возврат зовётся один раз, а проверяется не здесь.** Раньше защитой от
+   * второго начисления служила память экрана: человек уходил в выдачу,
+   * возвращался (повторное раскрытие того же адреса бесплатно) и получал
+   * ещё 199 ₽ — и так сколько угодно раз. Память экрана не переживает
+   * перехода, а журнал переживает, поэтому спрашивают теперь журнал.
+   *
+   * И раньше здесь звалось ПОПОЛНЕНИЕ, а не возврат: деньги возвращались,
+   * но в журнал уходила строка «Картой», а список возвратов оставался пустым.
    */
   const choose = (id: ResultId) => {
     setResult(id)
-    if (id === "defect" && !refunded) {
-      setRefunded(true)
-      actions.topUp(199)
-    }
+    if (id !== "defect") return
+
+    const outcome = actions.refund(address, "Ответил не собственник", false)
+    if (outcome === "ok") notifyDone("Вернули 199 ₽ на счёт агентства")
+    else if (outcome === "already") notifyError("За этот контакт возврат уже брали")
+    else if (outcome === "limit")
+      notifyError("Двенадцать спорных возвратов за месяц уже взяты — напишите в поддержку")
+    else notifyError("Возврат оформляется за оплаченное раскрытие")
   }
 
   // Клавиши берутся из того же списка, что и чипы: разъехаться подписи
@@ -339,21 +366,6 @@ export function ObjectCardDisclosedPage() {
   const copyPhone = () => {
     void navigator.clipboard?.writeText(phone)
   }
-
-  /** За какие контакты агентство уже платило: у этих строк открытие стоит 0 ₽. */
-  const opened = session?.disclosed ?? []
-
-  /**
-   * Какой объект раскрыт.
-   *
-   * Приходит параметром с нераскрытой карточки. Номер собирается из адреса,
-   * поэтому у каждого объекта он свой — а не один на всю базу, как было.
-   */
-  const { at } = useSearch({ from: "/object/disclosed", shouldThrow: false }) ?? { at: undefined }
-  const [allSimilar, setAllSimilar] = useState(false)
-  const address = at ?? FALLBACK_ADDRESS
-  const row = ALL_ROWS.find((item) => item.address === address)
-  const phone = at ? demoPhone(address) : FALLBACK_PHONE
 
   return (
     <CardShell position="1 из 247" address={address}>
@@ -530,7 +542,7 @@ export function ObjectCardDisclosedPage() {
             type="button"
             data-action="показать все 8 похожих объектов"
             onClick={() => setAllSimilar((was) => !was)}
-            className="cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+            className="-mx-2 cursor-pointer rounded-sm bg-transparent px-2 py-0.5 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <Typography variant="numericDense" tone="default">
               <>{allSimilar ? "Свернуть" : `Показать все ${SIMILAR.length}`}</>

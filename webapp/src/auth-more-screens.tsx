@@ -5,13 +5,11 @@ import { Button } from "@/components/controls/Button"
 import { Checkbox } from "@/components/controls/Checkbox"
 import { Typography } from "@/components/typography"
 import {
-  acceptInviteRemote,
   AuthField,
   AuthShell,
   useSession,
   useSessionActions,
 } from "@/features/auth"
-import { hasDatabase } from "@/platform/db"
 import { notifyError } from "@/platform/notify"
 
 /**
@@ -209,7 +207,7 @@ export function CheckMailPage() {
  */
 export function InvitePage() {
   const navigate = useNavigate()
-  const { signUp } = useSessionActions()
+  const { acceptInvite } = useSessionActions()
   // Ключ из ссылки. Его нет — принимать нечего, и экран скажет это прямо.
   // Экран открывается и по `/m/invite`, где такого параметра не объявлено,
   // поэтому чтение не должно падать: `shouldThrow: false` и мягкий разбор.
@@ -239,45 +237,40 @@ export function InvitePage() {
    * вписать сюда конкретное название — значит завести человеку агентство,
    * которого он не заводил, и повесить чужую вывеску в шапке кабинета.
    */
+  /**
+   * Принять приглашение — значит попасть в ЧУЖОЕ агентство.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Разница не техническая. Обычная регистрация делает человека
+   * руководителем СВОЕЙ конторы; приглашённого зовут в чужую, на общий
+   * счёт и с чужим дневным лимитом. Раньше без базы экран шёл именно общим
+   * путём: заводил агентство «Моё агентство» с нулём на счету, делал
+   * пришедшего его ВЛАДЕЛЬЦЕМ, а ключ приглашения не читал вовсе.
+   * Руководитель не видел принявшего никогда.
+   *
+   * Теперь обе ветки — с базой и без — делают одно и то же дело, и решение
+   * «куда именно попал человек» принимает слой сеанса, а не экран.
+   */
   const accept = () => {
     if (!ready) return
 
-    /**
-     * С базой приглашение принимается по ключу, а не заводится агентство.
-     *
-     * Разница не техническая. Обычная регистрация делает человека
-     * руководителем СВОЕЙ конторы; приглашённого зовут в чужую, на общий
-     * счёт и с чужим дневным лимитом. Пройди он общим путём — получил бы
-     * пустое агентство, а приглашение осталось бы висеть непринятым.
-     */
-    if (token !== undefined && hasDatabase()) {
-      void acceptInviteRemote({ email: email.trim().toLowerCase(), password, token }).then(
-        (failed) => {
-          if (failed === "confirm-email") {
-            void navigate({ to: "/check-mail" })
-            return
-          }
-          if (failed !== null) {
-            notifyError(
-              failed.includes("истёк")
-                ? "Срок приглашения истёк — попросите руководителя прислать новое"
-                : failed.includes("уже принято")
-                  ? "Это приглашение уже принято"
-                  : `Принять не вышло: ${failed}`,
-            )
-            return
-          }
-          void navigate({ to: "/first-run/employee" })
-        },
-      )
+    if (token === undefined) {
+      notifyError("В ссылке нет ключа приглашения — попросите прислать её заново")
       return
     }
 
-    // Без базы продукт живёт демонстрационным сеансом. Название агентства
-    // уходит пустым: приглашение знает вывеску, но она приходит с сервера,
-    // а вписать её здесь значило бы повесить человеку чужую вывеску.
-    void signUp({ name, email, agency: "" })
-    void navigate({ to: "/first-run/employee" })
+    void acceptInvite(token, { name, email, password }).then((failed) => {
+      if (failed === "confirm-email") {
+        void navigate({ to: "/check-mail" })
+        return
+      }
+      if (failed !== null) {
+        notifyError(failed)
+        return
+      }
+      void navigate({ to: "/first-run/employee" })
+    })
   }
 
   return (

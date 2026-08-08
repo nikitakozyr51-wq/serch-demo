@@ -1,4 +1,5 @@
 import { Button } from "@/components/controls/Button"
+import { Checkbox } from "@/components/controls/Checkbox"
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
 import { MarketDeviation } from "./MarketDeviation"
@@ -76,6 +77,24 @@ type ListingRowProps = {
    * красной её делает только наведение.
    */
   selected?: boolean
+  /**
+   * Слот выбора: чекбокс слева от объекта.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Выключен по умолчанию, и это решение дизайна, а не осторожность.
+   * Выделение — состояние СПИСКА, а не свойство строки: девять существующих
+   * выдач про него не знают и не должны знать. Включает его тот экран,
+   * который умеет показать панель выбранного, — иначе человек отметил бы
+   * объекты и не увидел, что с ними делать.
+   *
+   * Снято с кадра `SUsxy`: колонка выбора 32 × 24, чекбокс 24 внутри неё
+   * со сдвигом 4 слева.
+   */
+  selectable?: boolean
+  /** Отмечен ли объект. Имеет смысл только вместе с `selectable`. */
+  checked?: boolean
+  onCheckedChange?: (checked: boolean) => void
   onOpen?: () => void
   onAction?: () => void
 }
@@ -126,6 +145,9 @@ function ListingRow({
   status,
   action,
   selected = false,
+  selectable = false,
+  checked = false,
+  onCheckedChange,
   onOpen,
   onAction,
 }: ListingRowProps) {
@@ -134,6 +156,9 @@ function ListingRow({
   return (
     <div
       data-slot="listing-row"
+      // Адрес атрибутом: по нему проверка пути находит объект, который
+      // человек правда выбрал, а не угадывает его по тексту строки.
+      data-address={address}
       data-selected={selected || undefined}
       data-blocked={blocked || undefined}
       // Открыть карточку можно у ЛЮБОГО объекта, включая тот, чей собственник
@@ -171,6 +196,23 @@ function ListingRow({
           : cn("border-b border-line-2 last:border-b-0", blocked ? "bg-warm" : "bg-surface"),
       )}
     >
+      {/* Колонка выбора 32 с чекбоксом 24: снято с `SUsxy`. Нажатие на неё
+          не открывает карточку — отметить объект и уйти с экрана это разные
+          намерения, и одно нажатие не может значить оба. */}
+      {selectable ? (
+        <div
+          data-slot="row-select"
+          className="flex w-8 shrink-0 items-center pl-1"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Checkbox
+            checked={checked}
+            onCheckedChange={(next) => onCheckedChange?.(next)}
+            aria-label={`Выбрать ${address}`}
+          />
+        </div>
+      ) : null}
+
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex w-full items-center gap-2">
           {/* Обрезки здесь нет и быть не может: в файле оба текста заданы

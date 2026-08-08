@@ -35,17 +35,39 @@ import { cn } from "@/lib/utils"
  * его — это отмена по умолчанию, и она обязана быть у всего, что нельзя
  * отменить после.
  */
-function DialogScrim({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+function DialogScrim({
+  label,
+  onClose,
+  leaving = false,
+  children,
+}: {
+  label: string
+  onClose: () => void
+  /**
+   * Окно уходит: 120 мс, которые оно ещё стоит на экране после закрытия.
+   *
+   * Решение о жизни узла принимает экран настроек — он держит состояние
+   * «какое окно открыто». Скрим только рисует уход: снять себя с экрана
+   * он не может, его убирают снаружи.
+   */
+  leaving?: boolean
+  children: ReactNode
+}) {
   return (
     <div
       data-slot="dialog-scrim"
       aria-label={label}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1e1e1e59]"
+      // Затемнение идёт быстрее карточки в обе стороны: сначала гаснет фон,
+      // потом приезжает содержимое, и наоборот при уходе.
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center bg-[#1e1e1e59]",
+        leaving ? "scrim-out" : "scrim-in",
+      )}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="motion-in h-fit">{children}</div>
+      <div className={cn("h-fit", leaving ? "motion-out" : "motion-in")}>{children}</div>
     </div>
   )
 }
@@ -105,19 +127,22 @@ function RequisitesDialog({
   legalAddress,
   onSave,
   onClose,
+  leaving = false,
 }: {
   legalName: string
   inn: string
   legalAddress: string
   onSave: (next: { legalName: string; inn: string; legalAddress: string }) => void
   onClose: () => void
+  /** Окно уходит. Держит его на экране лишние 120 мс экран настроек. */
+  leaving?: boolean
 }) {
   const [name, setName] = useState(legalName)
   const [tax, setTax] = useState(inn)
   const [address, setAddress] = useState(legalAddress)
 
   return (
-    <DialogScrim label="Реквизиты агентства" onClose={onClose}>
+    <DialogScrim label="Реквизиты агентства" onClose={onClose} leaving={leaving}>
       <DialogCard rhythm="medium">
         <Typography variant="panelTitle" tone="default" as="h2">
           Реквизиты агентства
@@ -192,17 +217,20 @@ function TransferOwnerDialog({
   people,
   onTransfer,
   onClose,
+  leaving = false,
 }: {
   ownerName: string
   /** Кому можно передать: все, кроме себя. */
   people: { id: string; name: string; note: string }[]
   onTransfer: (personId: string) => void
   onClose: () => void
+  /** Окно уходит. Держит его на экране лишние 120 мс экран настроек. */
+  leaving?: boolean
 }) {
   const [chosen, setChosen] = useState<string | null>(people[0]?.id ?? null)
 
   return (
-    <DialogScrim label="Передать роль" onClose={onClose}>
+    <DialogScrim label="Передать роль" onClose={onClose} leaving={leaving}>
       <DialogCard rhythm="medium">
         <Typography variant="panelTitle" tone="default" as="h2">
           Передать роль ответственного за данные
@@ -292,6 +320,7 @@ function ApplyViewDialog({
   people,
   onApply,
   onClose,
+  leaving = false,
 }: {
   /** Какой вид раскатывается. */
   dense: boolean
@@ -299,6 +328,8 @@ function ApplyViewDialog({
   people: string[]
   onApply: () => void
   onClose: () => void
+  /** Окно уходит. Держит его на экране лишние 120 мс экран настроек. */
+  leaving?: boolean
 }) {
   const word = (count: number) => {
     if (count % 10 === 1 && count % 100 !== 11) return `${count} сотрудника`
@@ -306,7 +337,7 @@ function ApplyViewDialog({
   }
 
   return (
-    <DialogScrim label="Поставить вид всем" onClose={onClose}>
+    <DialogScrim label="Поставить вид всем" onClose={onClose} leaving={leaving}>
       <DialogCard>
         <Typography variant="panelTitle" tone="default" as="h2">
           <>{dense ? "Поставить всем плотный вид?" : "Поставить всем просторный вид?"}</>
@@ -341,13 +372,16 @@ function DeleteAgencyDialog({
   agency,
   onRequest,
   onClose,
+  leaving = false,
 }: {
   agency: string
   onRequest: () => void
   onClose: () => void
+  /** Окно уходит. Держит его на экране лишние 120 мс экран настроек. */
+  leaving?: boolean
 }) {
   return (
-    <DialogScrim label="Удалить агентство" onClose={onClose}>
+    <DialogScrim label="Удалить агентство" onClose={onClose} leaving={leaving}>
       <DialogCard>
         <Typography variant="panelTitle" tone="default" as="h2">
           <>{`Удалить агентство «${agency}»?`}</>

@@ -5,6 +5,7 @@ import { SelectChip } from "@/components/controls/SelectChip"
 import { TextField } from "@/components/controls/TextField"
 import { Typography } from "@/components/typography"
 import { DialogCard } from "@/components/DialogCard"
+import { cn } from "@/lib/utils"
 
 /**
  * СОСТОЯНИЕ · Рядом с адресом (`t2YEw`).
@@ -42,6 +43,7 @@ function NearAddressDialog({
   onApply,
   onClear,
   onClose,
+  leaving = false,
 }: {
   /** Что уже задано. Пусто — ограничения нет. */
   address: string
@@ -50,6 +52,8 @@ function NearAddressDialog({
   onApply: (next: string) => void
   onClear: () => void
   onClose: () => void
+  /** Окно уходит: 120 мс после закрытия. Решение о жизни узла — у выдачи. */
+  leaving?: boolean
 }) {
   const [draft, setDraft] = useState(address)
 
@@ -57,12 +61,15 @@ function NearAddressDialog({
     <div
       data-slot="dialog-scrim"
       aria-label="Рядом с адресом"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1e1e1e59]"
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center bg-[#1e1e1e59]",
+        leaving ? "scrim-out" : "scrim-in",
+      )}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="motion-in h-fit">
+      <div className={cn("h-fit", leaving ? "motion-out" : "motion-in")}>
         <DialogCard rhythm="medium">
           <Typography variant="panelTitle" tone="default" as="h2">
             Рядом с адресом

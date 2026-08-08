@@ -8,6 +8,7 @@ export {
   createCollection,
   currentWorkspace,
   initWorkspace,
+  joinWorkspace,
   openWorkspace,
   recordCall,
   recordDisclosure,
@@ -19,6 +20,7 @@ export {
   renameCollection,
   saveSearch,
   setCollectionLink,
+  setMoney,
   setSearchNotify,
   touchSavedSearch,
   useNow,
@@ -38,6 +40,7 @@ export type {
   Workspace,
 } from './store'
 export {
+  SUBJECTIVE_REFUND_LIMIT,
   callbacksDue,
   disclosedSince,
   disclosureOf,

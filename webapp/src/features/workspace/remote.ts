@@ -240,6 +240,14 @@ async function loadWorkspace(): Promise<Workspace | null> {
       }),
     ),
     stopList: ((stop.data ?? []) as { address: string }[]).map((row) => row.address),
+    /**
+     * Счёт агентства приезжает не отсюда, а вместе с личностью
+     * (`features/auth/remote.ts`): на сервере он лежит в таблице агентств,
+     * а не в журналах. Нули здесь — не «ноль на счету», а «этот запрос про
+     * деньги ничего не знает»; сеанс подставит настоящие сразу после входа.
+     */
+    balance: 0,
+    trial: 0,
   }
 }
 

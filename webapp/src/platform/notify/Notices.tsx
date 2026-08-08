@@ -53,8 +53,11 @@ function Notices() {
           data-slot="notice"
           data-kind={notice.kind}
           className={cn(
-            "motion-in pointer-events-auto flex w-full items-center gap-3 rounded-2xl bg-surface p-4",
+            "pointer-events-auto flex w-full items-center gap-3 rounded-2xl bg-surface p-4",
             "outline-solid outline-1 -outline-offset-1 outline-line-2",
+            // Уходит тем же движением, что приезжало. Прежде сообщение
+            // пропадало за кадр — и по крестику, и само по таймеру.
+            notice.leaving === true ? "motion-out" : "motion-in",
           )}
         >
           <div className={cn("min-w-0 flex-1", notice.kind === "error" ? "text-err-text" : "text-fg")}>
@@ -71,7 +74,10 @@ function Notices() {
                 notice.onAction?.()
                 dismissNotice(notice.id)
               }}
-              className="shrink-0 cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+              // У сообщения свой белый фон, поэтому отклик берёт первую
+              // ступень лестницы на наведении и вторую на нажатии — как всё
+              // остальное на `surface`.
+              className="-mx-2 shrink-0 cursor-pointer rounded-sm bg-transparent px-2 py-0.5 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
             >
               <Typography variant="strongText" tone="default">
                 <>{notice.actionLabel}</>
@@ -86,7 +92,8 @@ function Notices() {
             data-slot="notice-close"
             aria-label="Закрыть сообщение"
             onClick={() => dismissNotice(notice.id)}
-            className="flex size-5 shrink-0 cursor-pointer items-center justify-center bg-transparent text-text-dense outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+            // Единственный способ убрать ошибку — и он не отвечал ни на что.
+            className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-transparent text-text-dense transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <X aria-hidden className="size-4" strokeWidth={2} />
           </button>

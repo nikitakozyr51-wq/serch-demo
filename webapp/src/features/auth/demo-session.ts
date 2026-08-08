@@ -2,15 +2,29 @@ import { useRouterState } from "@tanstack/react-router"
 import { useSyncExternalStore } from "react"
 
 import {
+  SUBJECTIVE_REFUND_LIMIT,
   closeWorkspace,
+  currentWorkspace,
+  disclosureOf,
   initWorkspace,
+  joinWorkspace,
   openWorkspace,
   recordDisclosure,
   recordRefund,
   recordTopUp,
+  setMoney,
+  subjectiveRefunds,
 } from "@/features/workspace"
 import { hasDatabase } from "@/platform/db"
-import { loadIdentity, signInRemote, signOutRemote, signUpRemote } from "./remote"
+import { createInvite, findInvite, markInviteAccepted, type InviteProblem } from "./invites"
+import {
+  acceptInviteRemote,
+  inviteAgent,
+  loadIdentity,
+  signInRemote,
+  signOutRemote,
+  signUpRemote,
+} from "./remote"
 
 /**
  * Сеанс кабинета: кто вошёл.
@@ -36,6 +50,16 @@ import { loadIdentity, signInRemote, signOutRemote, signUpRemote } from "./remot
  */
 
 const KEY = "serch.demo.session"
+
+/**
+ * Цена раскрытого контакта.
+ *
+ * Живёт в слое денег, а не на экранах: до этого «199» стояло копиями
+ * в списании, в возврате и на двух экранах баланса, а выдача про цену не
+ * знала вовсе и поэтому не умела сказать «денег не хватает». Один источник
+ * отвечает и на «сколько списать», и на «остановлено ли раскрытие».
+ */
+export const DISCLOSURE_PRICE = 199
 
 export type DemoSession = {
   /**
@@ -79,6 +103,36 @@ export type DemoSession = {
    * а не двумя совпадающими.
    */
   idleMinutes: number
+  /**
+   * Чьё пространство открывать — почта ВЛАДЕЛЬЦА агентства.
+   *
+   * У того, кто завёл агентство сам, она совпадает с собственной. У того,
+   * кого позвали, — это почта позвавшего, и именно поэтому он видит журналы,
+   * людей, подборки и счёт ЧУЖОГО агентства, а не заводит себе пустое.
+   *
+   * Поле необязательное ради записей, сделанных до его появления: у них
+   * ключом остаётся собственная почта, и кабинет открывается как вчера.
+   */
+  agencyKey?: string
+}
+
+/** Чьё пространство агентства открывает этот сеанс. */
+function agencyKeyOf(session: DemoSession): string {
+  return (session.agencyKey ?? session.email).trim().toLowerCase()
+}
+
+/**
+ * Подтянуть в сеанс деньги агентства.
+ *
+ * Счёт лежит в пространстве агентства — он общий на всех сотрудников, —
+ * а сеанс показывает его зеркалом, чтобы двадцать экранов продолжали читать
+ * `session.balance` и ничего про переезд не знали.
+ */
+function mirrorMoney() {
+  if (!current) return
+  const { balance, trial } = currentWorkspace()
+  if (current.balance === balance && current.trial === trial) return
+  write({ ...current, balance, trial })
 }
 
 /**
@@ -141,7 +195,33 @@ const listeners = new Set<() => void>()
 // Сеанс мог пережить перезагрузку страницы. Тогда пространство агентства
 // обязано открыться вместе с ним, иначе кабинет покажет пустые журналы
 // человеку, который вчера наработал полный.
-if (current) openWorkspace(current.email)
+if (current) {
+  openWorkspace(agencyKeyOf(current))
+  adoptMoney(current)
+}
+
+/**
+ * Перенести деньги старой записи в пространство агентства.
+ *
+ * Записи, сделанные до переезда счёта, держат его в сеансе, а в пространстве
+ * стоит ноль. Без переноса человек, у которого вчера было восемь тысяч,
+ * увидел бы сегодня ноль — то есть правка съела бы его деньги. Перенос
+ * делается один раз: как только в пространстве появились непустые деньги
+ * или хоть одно движение по счёту, оно и есть правда.
+ */
+function adoptMoney(session: DemoSession) {
+  const workspace = currentWorkspace()
+  const untouched =
+    workspace.balance === 0
+    && workspace.trial === 0
+    && workspace.disclosures.length === 0
+    && workspace.topUps.length === 0
+  if (untouched && (session.balance !== 0 || session.trial !== 0)) {
+    setMoney({ balance: session.balance, trial: session.trial })
+    return
+  }
+  mirrorMoney()
+}
 
 function read(): DemoSession | null {
   if (typeof window === "undefined") return null
@@ -239,14 +319,19 @@ export async function signIn(email?: string, password = ""): Promise<string | nu
       idleMinutes: 120,
     })
     openWorkspace(identity.email)
+    // Счёт приехал вместе с личностью: кладём его в пространство агентства,
+    // откуда его читают списание, возврат и плашка нулевого баланса.
+    setMoney({ balance: identity.balance, trial: identity.trial })
     return null
   }
 
   const stored = readAccounts()[key]
   if (!stored) return "Агентство с такой почтой на этом компьютере не заводили"
 
-  write({ ...stored, idleMinutes: stored.idleMinutes ?? 120, kind: "own" })
-  openWorkspace(key)
+  const session = { ...stored, idleMinutes: stored.idleMinutes ?? 120, kind: "own" as const }
+  write(session)
+  openWorkspace(agencyKeyOf(session))
+  adoptMoney(session)
   return null
 }
 
@@ -297,13 +382,116 @@ export async function signUp(input: {
 
     write(session)
     openWorkspace(email)
+    setMoney({ balance: session.balance, trial: session.trial })
     return null
   }
 
   saveAccount(session)
   write(session)
   openWorkspace(email)
-  initWorkspace({ name: session.name, initials: session.initials, email: session.email })
+  initWorkspace(
+    { name: session.name, initials: session.initials, email: session.email },
+    { balance: session.balance, trial: session.trial },
+  )
+  return null
+}
+
+/**
+ * Позвать сотрудника. Возвращает КЛЮЧ приглашения или текст отказа.
+ *
+ * Та же развилка, что у входа и регистрации: есть база — зовём сервер, нет —
+ * заводим приглашение в браузере. До этой правки второй ветки не было вовсе,
+ * и в демонстрации путь приглашения не начинался: кнопка отвечала «База
+ * не настроена», ссылки не появлялось.
+ */
+export async function invite(input: {
+  name: string
+  email: string
+  role: "owner" | "agent"
+  limit: number | null
+}): Promise<{ token: string } | { failed: string }> {
+  if (!current) return { failed: "Сеанс не найден" }
+
+  if (hasDatabase()) return inviteAgent(input.email, input.name, input.limit)
+
+  const created = createInvite({
+    agencyKey: agencyKeyOf(current),
+    agency: current.agency,
+    name: input.name,
+    email: input.email.trim().toLowerCase(),
+    role: input.role,
+    limit: input.limit,
+  })
+  return { token: created.token }
+}
+
+/** Отказ приглашения человеческими словами. */
+const INVITE_PROBLEM: Record<InviteProblem, string> = {
+  "not-found": "Приглашение не найдено. Попросите руководителя прислать новое",
+  expired: "Срок приглашения истёк — попросите руководителя прислать новое",
+  used: "Это приглашение уже принято",
+}
+
+/**
+ * Принять приглашение — попасть в ЧУЖОЕ агентство, а не завести своё.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Разница не техническая, и до этой правки путь был вывернут наизнанку.
+ * Обычная регистрация делает человека руководителем СВОЕЙ конторы; здесь его
+ * зовут в чужую — на общий счёт, с чужой вывеской и своим дневным лимитом.
+ * Без базы код шёл общим путём и заводил приглашённому пустое агентство
+ * «Моё агентство» с нулём на счету, где он оказывался ВЛАДЕЛЬЦЕМ, а ключ
+ * приглашения не читался ни разу. Руководитель при этом не видел его в списке
+ * сотрудников никогда.
+ *
+ * Ключ к чужому агентству — `agencyKey`: по нему открывается пространство
+ * позвавшего, и оттуда же берутся журналы, люди, подборки и счёт.
+ *
+ * Возвращает текст ошибки или `null`, если вошли.
+ */
+export async function acceptInvite(
+  token: string,
+  input: { name: string; email: string; password?: string },
+): Promise<string | null> {
+  const name = input.name.trim() || "Сотрудник"
+  const email = input.email.trim().toLowerCase()
+
+  if (hasDatabase()) {
+    return acceptInviteRemote({ email, password: input.password ?? "", token })
+  }
+
+  const found = findInvite(token)
+  if ("problem" in found) return INVITE_PROBLEM[found.problem]
+
+  const session: DemoSession = {
+    kind: "own",
+    name,
+    initials: initialsOf(name) || "С",
+    email,
+    agency: found.invite.agency,
+    role: found.invite.role,
+    // Деньги общие и лежат в пространстве агентства. Здесь нули — они
+    // подтянутся зеркалом сразу после того, как пространство откроется.
+    balance: 0,
+    trial: 0,
+    disclosed: [],
+    idleMinutes: 120,
+    agencyKey: found.invite.agencyKey,
+  }
+
+  saveAccount(session)
+  write(session)
+  openWorkspace(found.invite.agencyKey)
+  joinWorkspace({
+    name,
+    initials: session.initials,
+    email,
+    role: found.invite.role,
+    limit: found.invite.limit,
+  })
+  markInviteAccepted(token)
+  mirrorMoney()
   return null
 }
 
@@ -325,30 +513,57 @@ export function signOut() {
  */
 export function disclose(address: string): "already" | "trial" | "paid" | "no-money" {
   if (!current) return "no-money"
-  if (current.disclosed.includes(address)) return "already"
+
+  const workspace = currentWorkspace()
+
+  /**
+   * «Уже раскрыт» спрашивается у ЖУРНАЛА АГЕНТСТВА, а не у своего сеанса.
+   *
+   * Правило продукта звучит так: «если номер уже открывал коллега, второй
+   * раз агентство не платит». Пока список раскрытых лежал только в сеансе,
+   * коллега про чужие покупки не знал — и агентство платило за один и тот же
+   * контакт столько раз, сколько у него сотрудников.
+   */
+  if (disclosureOf(workspace, address) !== undefined) {
+    if (!current.disclosed.includes(address)) {
+      write({ ...current, disclosed: [...current.disclosed, address] })
+      saveAccount(current)
+    }
+    return "already"
+  }
 
   // Каждое раскрытие попадает в журнал — с временем, суммой и автором.
   // Без этого экран денег нечем наполнить: голый список адресов не отвечает
   // ни на «когда», ни на «сколько», ни на «кто».
-  if (current.trial > 0) {
-    const next = { ...current, trial: current.trial - 1, disclosed: [...current.disclosed, address] }
-    write(next)
-    saveAccount(next)
+  if (workspace.trial > 0) {
+    setMoney({ balance: workspace.balance, trial: workspace.trial - 1 })
     recordDisclosure({ address, amount: 0, by: current.name, trial: true })
+    remember(address)
     return "trial"
   }
 
-  if (current.balance < 199) return "no-money"
+  if (workspace.balance < DISCLOSURE_PRICE) return "no-money"
 
+  setMoney({ balance: workspace.balance - DISCLOSURE_PRICE, trial: 0 })
+  recordDisclosure({ address, amount: DISCLOSURE_PRICE, by: current.name, trial: false })
+  remember(address)
+  return "paid"
+}
+
+/** Запомнить раскрытие в сеансе и подтянуть новый остаток агентства. */
+function remember(address: string) {
+  if (!current) return
+  const { balance, trial } = currentWorkspace()
   const next = {
     ...current,
-    balance: current.balance - 199,
-    disclosed: [...current.disclosed, address],
+    balance,
+    trial,
+    disclosed: current.disclosed.includes(address)
+      ? current.disclosed
+      : [...current.disclosed, address],
   }
   write(next)
   saveAccount(next)
-  recordDisclosure({ address, amount: 199, by: current.name, trial: false })
-  return "paid"
 }
 
 /**
@@ -396,25 +611,68 @@ export function setName(name: string) {
  */
 export function topUp(amount: number, method = "карта") {
   if (!current) return
-  const next = { ...current, balance: current.balance + amount }
-  write(next)
-  saveAccount(next)
+  const { balance, trial } = currentWorkspace()
+  setMoney({ balance: balance + amount, trial })
   recordTopUp({ amount, method })
+  mirrorMoney()
+  saveAccount(current)
 }
 
 /**
- * Возврат за брак: 199 ₽ возвращаются на счёт.
+ * Чем кончилась попытка вернуть деньги.
  *
- * Раскрытие при этом НЕ стирается — journal обязан помнить, что к номеру
+ * `not-paid` — за этот контакт агентство не платило: раскрытия нет вовсе
+ * или оно ушло из пробного пакета. `already` — возврат по нему уже взяли.
+ * `limit` — исчерпаны двенадцать спорных возвратов за тридцать дней.
+ */
+export type RefundResult = "ok" | "not-paid" | "already" | "limit"
+
+/**
+ * Возврат за брак: 199 ₽ возвращаются на счёт. ЕДИНСТВЕННАЯ ДВЕРЬ.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ПОЧЕМУ ДВЕРЬ ОБЯЗАНА БЫТЬ ОДНА
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Входов в возврат четыре: чип «Брак» в раскрытой карточке, кнопка в панели
+ * прозвона, заявка в разделе денег и отметка на телефоне. До этой правки
+ * работал ровно один из них, и работал неправильно — звал ПОПОЛНЕНИЕ:
+ * деньги возвращались, но в журнал уходила строка «Картой · 199 ₽», в
+ * документы — счёт, которого агентство не оплачивало, а журнал возвратов
+ * оставался пустым навсегда. Касса не сходилась: остаток рос, расход не
+ * уменьшался.
+ *
+ * Двойного начисления при этом не было по единственной причине — три входа
+ * из четырёх были мертвы. Почини их порознь, и человек получил бы 199 ₽
+ * дважды за одно списание. Поэтому проверки живут здесь, а не на экранах:
+ * четыре экрана с четырьмя копиями условия разъедутся на пятом.
+ *
+ * Раскрытие при этом НЕ стирается — журнал обязан помнить, что к номеру
  * обращались, даже если за это в итоге не заплатили. Стереть запись значило
  * бы потерять ответ проверяющему.
  */
-export function refund(address: string, reason: string, objective: boolean) {
-  if (!current) return
-  const next = { ...current, balance: current.balance + 199 }
-  write(next)
-  saveAccount(next)
-  recordRefund({ address, amount: 199, reason, objective, by: current.name })
+export function refund(address: string, reason: string, objective: boolean): RefundResult {
+  if (!current) return "not-paid"
+
+  const workspace = currentWorkspace()
+
+  // Возвращают за КОНКРЕТНОЕ списание, а не «вообще». Пробное раскрытие
+  // ничего не стоило, и возвращать за него нечего.
+  const paid = disclosureOf(workspace, address)
+  if (paid === undefined || paid.trial) return "not-paid"
+  if (paid.refunded === true) return "already"
+
+  // Объективные причины в лимит не считаются: номер не существует, объект
+  // продан, согласие отозвано — тут агентство не виновато.
+  if (!objective && subjectiveRefunds(workspace, Date.now()) >= SUBJECTIVE_REFUND_LIMIT) {
+    return "limit"
+  }
+
+  setMoney({ balance: workspace.balance + paid.amount, trial: workspace.trial })
+  recordRefund({ address, amount: paid.amount, reason, objective, by: current.name })
+  mirrorMoney()
+  saveAccount(current)
+  return "ok"
 }
 
 /**
@@ -490,7 +748,18 @@ export function useOwnAgency(): boolean {
  * заворачивать их в хук памяти незачем — он бы только делал вид, что здесь
  * есть что запоминать.
  */
-const ACTIONS = { signIn, signUp, signOut, disclose, topUp, refund, setIdleMinutes, setName } as const
+const ACTIONS = {
+  signIn,
+  signUp,
+  signOut,
+  disclose,
+  topUp,
+  refund,
+  setIdleMinutes,
+  setName,
+  invite,
+  acceptInvite,
+} as const
 
 export function useSessionActions() {
   return ACTIONS

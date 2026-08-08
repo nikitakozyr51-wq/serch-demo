@@ -18,7 +18,8 @@
     "pencil:coverage": "node ../scripts/pencil-coverage.mjs",
     "ui": "shadcn",
     "ui:add": "shadcn add",
-    "ui:info": "shadcn info"
+    "ui:info": "shadcn info",
+    "journeys:check": "playwright test -c playwright.journeys.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

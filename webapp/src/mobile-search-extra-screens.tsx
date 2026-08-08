@@ -177,6 +177,7 @@ function ListRow({
   const shell = cn(
     "flex h-16 w-full cursor-pointer items-center gap-2.5 rounded-lg bg-surface px-3.5 text-left",
     "shadow-[inset_0_0_0_1px_var(--line-2)]",
+    "transition-colors duration-120 active:bg-warm-hover",
     "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
   )
 
@@ -579,9 +580,10 @@ function ChoicePill({
       className={cn(
         "flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-full px-4",
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+        "transition-colors duration-120",
         selected
-          ? "bg-fg shadow-[inset_0_0_0_1px_var(--fg)]"
-          : "bg-surface shadow-[inset_0_0_0_1px_var(--border-control)]",
+          ? "bg-fg shadow-[inset_0_0_0_1px_var(--fg)] active:bg-fg-press"
+          : "bg-surface shadow-[inset_0_0_0_1px_var(--border-control)] active:bg-warm-hover",
       )}
     >
       <Typography
@@ -612,9 +614,10 @@ function ChoiceRow({
       className={cn(
         "flex h-11 w-full cursor-pointer items-center gap-2.5 rounded-md px-3.5 text-left",
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+        "transition-colors duration-120",
         selected
-          ? "bg-warm shadow-[inset_0_0_0_1px_var(--fg)]"
-          : "bg-surface shadow-[inset_0_0_0_1px_var(--border-control)]",
+          ? "bg-warm shadow-[inset_0_0_0_1px_var(--fg)] active:bg-warm-press"
+          : "bg-surface shadow-[inset_0_0_0_1px_var(--border-control)] active:bg-warm-hover",
       )}
     >
       {/* Метка выбора в файле — сплошной кружок 18 без кольца и без точки

@@ -7,4 +7,5 @@
  * зависимость «выдача знает про кабинет» — связь, которой в продукте нет.
  */
 export { useAnimatedNumber } from './useAnimatedNumber'
+export { useExit, useExitValue } from './useExit'
 export { usePending } from './usePending'

@@ -144,7 +144,7 @@ function CollectionLinkChip({ label }: { label: string }) {
 
 /** Общий вид обоих значков: ссылка и кнопка обязаны выглядеть одинаково. */
 const HEADER_ICON_CLASS =
-  "flex size-6 shrink-0 cursor-pointer items-center justify-center bg-transparent text-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+  "flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md bg-transparent text-fg transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
 
 /** «Плюс»: ведёт на лист «Новая подборка». */
 function HeaderIconLink({
@@ -255,7 +255,7 @@ export function MobileCollectionsPage() {
                 data-slot="mobile-collection-row"
                 // Линия снизу нарисована внутренней тенью, а не рамкой: в файле
                 // обводка идёт внутрь и высоту строки не меняет.
-                className="flex w-full cursor-pointer items-center gap-3 bg-transparent py-4 text-left shadow-[inset_0_-1px_0_var(--line-2)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg"
+                className="row-tap flex w-full cursor-pointer items-center gap-3 bg-transparent py-4 text-left shadow-[inset_0_-1px_0_var(--line-2)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg"
               >
                 {/* Обложка 56 — кадр первого объекта. Кадра может не быть,
                     и это обычное состояние слота, а не сбой. */}
@@ -523,7 +523,11 @@ export function MobileNewCollectionPage() {
                   "flex h-ctl-lg w-full cursor-pointer items-center gap-3 rounded-xl px-4",
                   "outline-solid outline-1 -outline-offset-1 outline-border-control",
                   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
-                  selected ? "bg-warm" : "bg-transparent",
+                  // Действие уже приходит по `pointerdown` (см. выше). Здесь —
+                  // то, что человек при этом видит: без заливки нажатие
+                  // оставалось обещанием в коде, а не откликом на экране.
+                  "transition-colors duration-120",
+                  selected ? "bg-warm active:bg-warm-press" : "bg-transparent active:bg-warm-hover",
                 )}
               >
                 {/* Выбранный кружок в файле залит графитом целиком, без белого

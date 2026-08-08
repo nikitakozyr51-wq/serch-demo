@@ -76,7 +76,10 @@ function FilterBar({
           type="button"
           data-slot="filter-bar-reset"
           onClick={onReset}
-          className="shrink-0 cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          // Подложка появляется под пальцем, отрицательное поле возвращает
+          // подпись на её место в полосе. Форма та же, что у сортировки
+          // над выдачей и у строчной кнопки «Скачать»: 24 · радиус 6 · поле 8.
+          className="-mx-2 shrink-0 cursor-pointer rounded-sm bg-transparent px-2 py-0.5 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
         >
           <Typography variant="numericDense" tone="default">
             Сбросить

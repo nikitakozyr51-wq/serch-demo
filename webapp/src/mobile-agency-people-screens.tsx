@@ -74,7 +74,7 @@ function HeaderAction({ label, to }: { label: string; to: "/m/agency/staff" }) {
     <Link
       to={to}
       data-slot="mobile-header-action"
-      className="flex h-11 shrink-0 cursor-pointer items-center bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      className="-mx-2 flex h-11 shrink-0 cursor-pointer items-center rounded-md bg-transparent px-2 transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
     >
       <Typography variant="strongText" tone="secondary">
         {label}
@@ -348,7 +348,7 @@ export function MobilePersonPage() {
               type="button"
               data-slot="mobile-outline-action"
               data-action="Отключает сотрудника: доступ пропадает, объекты и история остаются агентству"
-              className="flex h-ctl-lg w-full cursor-pointer items-center justify-center rounded-full bg-surface outline-solid outline-1 -outline-offset-1 outline-border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+              className="flex h-ctl-lg w-full cursor-pointer items-center justify-center rounded-full bg-surface transition-colors duration-120 outline-solid outline-1 -outline-offset-1 outline-border-control active:bg-warm-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
             >
               <Typography variant="controlLabelLg" tone="secondary">
                 Отключить
@@ -437,9 +437,10 @@ export function MobileInviteAgentPage() {
                   className={cn(
                     "flex h-11 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-full",
                     "outline-solid outline-1 -outline-offset-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+                    "transition-colors duration-120",
                     selected
-                      ? "bg-fg text-surface outline-fg"
-                      : "bg-surface text-text-2 outline-border-control",
+                      ? "bg-fg text-surface outline-fg active:bg-fg-press"
+                      : "bg-surface text-text-2 outline-border-control active:bg-warm-hover",
                   )}
                 >
                   <Typography variant={selected ? "controlLabel" : "uiText"} tone="current">

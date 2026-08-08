@@ -46,9 +46,13 @@ function SelectChip({ label, hotkey, selected = false, disabled = false, onClick
         "flex h-ctl-chip shrink-0 cursor-pointer items-center gap-2 rounded-full border px-2.5",
         "transition-colors outline-none",
         "focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+        // Ступени те же, что у чипа фильтра, и по той же причине: выбранный
+        // чип молчал на наведение и нажатие, а он стоит в прозвоне под
+        // клавишами 1 · 2 · 3 — то есть его жмут чаще всего остального.
+        // Заливка и граница едут вместе, токены готовые.
         selected
-          ? "border-fg bg-fg text-surface"
-          : "border-border-control bg-surface text-fg hover:bg-warm",
+          ? "border-fg bg-fg text-surface hover:border-fg-hover hover:bg-fg-hover active:border-fg-press active:bg-fg-press"
+          : "border-border-control bg-surface text-fg hover:bg-warm active:bg-warm-hover",
         "disabled:pointer-events-none disabled:border-line-2 disabled:text-text-dense",
       )}
     >

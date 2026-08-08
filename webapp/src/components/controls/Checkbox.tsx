@@ -52,9 +52,19 @@ function Checkbox({
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg",
         "focus-visible:border-transparent",
         "data-[demo=focus]:outline-solid data-[demo=focus]:outline-2 data-[demo=focus]:outline-offset-0 data-[demo=focus]:outline-fg data-[demo=focus]:border-transparent",
+        /*
+          Отмеченный флажок тоже отвечает на палец.
+
+          Пустой флажок наведением темнит ГРАНИЦУ, а не заливку: заливки
+          у него нет вовсе, и темнить нечего — так на доске. Нажатие идёт
+          дальше по тому же свойству, до `fg-press`.
+
+          Отмеченный работает как выбранный чип: `fg → fg-hover → fg-press`,
+          граница едет вместе с заливкой.
+        */
         checked
-          ? "border-fg bg-fg text-surface"
-          : "border-border-control bg-surface hover:border-fg data-[demo=hover]:border-fg",
+          ? "border-fg bg-fg text-surface hover:border-fg-hover hover:bg-fg-hover active:border-fg-press active:bg-fg-press"
+          : "border-border-control bg-surface hover:border-fg active:border-fg-press data-[demo=hover]:border-fg",
         invalid && !disabled ? "border-2 border-err-text hover:border-err-text" : "",
         "disabled:pointer-events-none disabled:border-line-2 disabled:bg-warm disabled:text-text-dense",
       )}

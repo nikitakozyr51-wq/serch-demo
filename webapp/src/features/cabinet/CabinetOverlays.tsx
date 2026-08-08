@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
+import { cn } from "@/lib/utils"
+import { useExit } from "@/platform/motion"
 import { CommandPalette } from "./CommandPalette"
 import { HotkeysDialog } from "./dialogs"
 import { onPaletteRequest, resetOverlays, setOverlayOpen } from "./overlay-state"
@@ -95,18 +97,35 @@ function CabinetOverlays() {
     return () => document.removeEventListener("keydown", onKeyDown)
   }, [])
 
+  /**
+   * Оба окна остаются на экране ещё 120 мс после закрытия — на время ухода.
+   *
+   * Палитру открывают десятки раз за смену, и до этого она пропадала за один
+   * кадр: человек нажимал Esc и получал мгновенную подмену экрана. Появление
+   * при этом у неё было — перекос ровно в ту сторону, которая заметнее.
+   */
+  const palette = useExit(open === "palette")
+  const hotkeys = useExit(open === "hotkeys")
+
   return (
     <>
-      {open === "palette" ? <CommandPalette onClose={() => setOpen("none")} /> : null}
-      {open === "hotkeys" ? (
+      {palette.mounted ? (
+        <CommandPalette leaving={palette.leaving} onClose={() => setOpen("none")} />
+      ) : null}
+      {hotkeys.mounted ? (
         <div
           data-slot="hotkeys-scrim"
-          className="fixed inset-0 z-50 flex justify-center bg-[#1e1e1e59] pt-24"
+          // Затемнение идёт быстрее карточки и в обе стороны: сначала гаснет
+          // фон, потом приезжает содержимое, и наоборот при уходе.
+          className={cn(
+            "fixed inset-0 z-50 flex justify-center bg-[#1e1e1e59] pt-24",
+            hotkeys.leaving ? "scrim-out" : "scrim-in",
+          )}
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) setOpen("none")
           }}
         >
-          <div className="motion-in h-fit">
+          <div className={cn("h-fit", hotkeys.leaving ? "motion-out" : "motion-in")}>
             <HotkeysDialog />
           </div>
         </div>

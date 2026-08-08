@@ -138,6 +138,16 @@ export function funnel(workspace: Workspace, now: number, days: number) {
   }
 }
 
+/**
+ * Сколько возвратов по спорным причинам агентство может взять за 30 дней.
+ *
+ * Число живёт здесь, а не на экране возвратов: до этого «12» стояло двумя
+ * копиями в подписи и в полосе заполнения, а сам лимит не проверялся нигде —
+ * то есть продукт печатал ограничение, которого не исполнял. Теперь на это
+ * число смотрят и надпись, и дверь возврата, и разъехаться им негде.
+ */
+export const SUBJECTIVE_REFUND_LIMIT = 12
+
 /** Возвраты по спорным причинам за 30 дней — те, что считаются в лимит. */
 export function subjectiveRefunds(workspace: Workspace, now: number): number {
   return workspace.refunds.filter((item) => !item.objective && item.at >= now - 30 * DAY).length

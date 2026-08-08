@@ -2,13 +2,19 @@ import { useNavigate, useSearch } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 
 import { Typography } from "@/components/typography"
+import { cn } from "@/lib/utils"
+import { useExit, useExitValue } from "@/platform/motion"
+import { notifyDone, notifyError } from "@/platform/notify"
 
 import { rentalRows } from "@/data/rental-rows"
 import { ALL_ROWS, DISTRICTS, MEASURED_ROWS, type SearchRow } from "@/data/search-rows"
-import { initialsOf, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
+import { DISCLOSURE_PRICE, initialsOf, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import {
   CollectionPicker,
+  csv,
   disclosureOf,
+  download,
+  fileName,
   lastCall,
   saveSearch,
   useNow,
@@ -16,12 +22,13 @@ import {
   type SavedSearch,
   type Workspace,
 } from "@/features/workspace"
-import { CabinetShell, useHotkeys } from "@/features/cabinet"
+import { BalanceStoppedBar, CabinetShell, useHotkeys } from "@/features/cabinet"
 import { useDensity } from "@/platform/density"
 import {
   FilterBar,
   FilterPanel,
   ListingRow,
+  SelectionBar,
   ResultsHeader,
   NearAddressDialog,
   ResultTabs,
@@ -176,7 +183,7 @@ function withAgencyWork(row: SearchRow, workspace: Workspace): SearchRow {
       takenBy: undefined,
       selected: undefined,
       status: "new",
-      action: { kind: "disclose", price: 199 },
+      action: { kind: "disclose", price: DISCLOSURE_PRICE },
     }
   }
 
@@ -478,6 +485,116 @@ function SearchScreenBody({
    * а не защита от двойного нажатия.
    */
   const actions = useSessionActions()
+  const session = useSession()
+
+  /**
+   * Раскрытие правда остановлено.
+   *
+   * Условие снято с самого списания (`disclose` в слое сеанса): пробные
+   * кончились И на счету меньше цены раскрытия. Считать его здесь заново
+   * другим способом значило бы завести второй источник правды о деньгах,
+   * который разъедется с первым при первой же правке цены.
+   */
+  const stopped = session !== null && session.trial === 0 && session.balance < DISCLOSURE_PRICE
+
+  /**
+   * Отмеченные объекты — состояние СПИСКА, а не строки.
+   *
+   * До кадра `SUsxy` выделения в продукте не было вовсе, и три собранных
+   * окна — массовое раскрытие, панель выбранного и выгрузка — лежали
+   * карточками на стенде `/dialogs`, потому что вызвать их было нечем.
+   * Множество адресов, а не индексов: список пересобирается фильтрами,
+   * и индекс третьей строки завтра означает другой объект.
+   */
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
+
+  const togglePicked = (address: string, next: boolean) => {
+    setPicked((current) => {
+      const copy = new Set(current)
+      if (next) copy.add(address)
+      else copy.delete(address)
+      return copy
+    })
+  }
+
+  /**
+   * Выбор живёт только среди видимых строк.
+   *
+   * Сменил человек фильтр — объекты, ушедшие из выдачи, уходят и из выбора:
+   * иначе он нажал бы «Раскрыть 12 контактов», а списалось бы за объекты,
+   * которых он уже не видит.
+   */
+  const pickedVisible = visible.filter((row) => picked.has(row.address))
+  const payable = pickedVisible.filter((row) => row.action.kind === "disclose")
+
+  /** Открыто ли окно «положить выбранное в подборку». */
+  const [bulkCollection, setBulkCollection] = useState(false)
+  const now = useNow()
+
+  /**
+   * Выгрузка выбранного — файлом, а не окном.
+   *
+   * Окно `hS4nq` с выбором XLSX/CSV собрано карточкой на стенде `/dialogs`
+   * и настоящим наложением пока не стало. Отдавать вместо файла картинку
+   * выбора формата значило бы оборвать дело на последнем шаге, поэтому
+   * выгрузка идёт тем же способом, каким уже выгружается журнал доступа.
+   *
+   * **Раскрытых контактов в файле нет** — это условие согласия собственников,
+   * и оно записано прямо в кадре. Телефон в выгрузке был бы утечкой.
+   */
+  const exportPicked = () => {
+    const content = csv(
+      ["Адрес", "Цена", "Отклонение", "Метро", "Комнат", "Площадь", "Статус", "Взял"],
+      pickedVisible.map((row) => [
+        row.address,
+        row.price,
+        `${row.deviation} %`,
+        row.metro,
+        row.rooms,
+        row.area,
+        row.status ?? "новый",
+        row.takenBy ?? "",
+      ]),
+    )
+    download(fileName("выбранные-объекты", now), content)
+    notifyDone(`Выгружено ${pickedVisible.length} в файл`)
+  }
+
+  /**
+   * Раскрыть всё отмеченное разом.
+   *
+   * Идёт по одному через ту же дверь, что и одиночное раскрытие: второй
+   * способ списывать деньги завёл бы второй набор правил — про пробные,
+   * про уже раскрытое, про нехватку счёта — и они разъехались бы.
+   *
+   * Останавливается, как только деньги кончились: списать половину и молча
+   * бросить остальное — худший из возможных исходов для кнопки, на которой
+   * написана сумма.
+   */
+  const disclosePicked = () => {
+    let paid = 0
+    let free = 0
+    for (const row of payable) {
+      const result = actions.disclose(row.address)
+      if (result === "no-money") {
+        notifyError(
+          paid + free === 0
+            ? "На счету агентства не хватает денег"
+            : `Раскрыто ${paid + free}, дальше денег не хватило`,
+        )
+        setPicked(new Set())
+        return
+      }
+      if (result === "trial") free += 1
+      if (result === "paid") paid += 1
+    }
+    notifyDone(
+      free === 0
+        ? `Раскрыто ${paid}, списано ${paid * DISCLOSURE_PRICE} ₽`
+        : `Раскрыто ${paid + free}, из них ${free} пробных`,
+    )
+    setPicked(new Set())
+  }
 
   const disclose = (row: Row) => {
     if (row.action.kind !== "disclose") return
@@ -561,7 +678,16 @@ function SearchScreenBody({
       const row = visible[cursor]
       if (row) setCollecting(row.address)
     },
+    /**
+     * Esc снимает выбор — так написано в самой панели выбранного и в подписи
+     * кадра `aT2KC`. Сначала выбор, потом курсор: пока отмечены объекты,
+     * человек ждёт от Esc именно снятия отметок, а не сброса подсветки.
+     */
     Escape: () => {
+      if (picked.size > 0) {
+        setPicked(new Set())
+        return
+      }
       setCursorAddress(null)
       setTrace(null)
     },
@@ -595,11 +721,31 @@ function SearchScreenBody({
     setActiveTab("all")
   }
 
+  /**
+   * Три слоя выдачи уходят не мгновенно, а за своё время.
+   *
+   * ═════════════════════════════════════════════════════════════════════════
+   *
+   * Колонка фильтров, окно адреса и окно подборки закрывались подменой кадра:
+   * нажал мимо — и слоя нет. Появление у всех трёх было, исчезновения не было
+   * ни у одного. Теперь узел живёт ещё 120 мс (200 у колонки — она проходит
+   * всю свою ширину) и всё это время рисует уход.
+   *
+   * Адрес окно переживает само: `nearAddress` при закрытии не меняется.
+   * А вот подборке нужен адрес объекта, и `collecting` в момент закрытия
+   * уже пуст — для этого случая в `platform/motion` лежит `useExitValue`:
+   * он придерживает последнее непустое значение ровно на время ухода.
+   */
+  const filters = useExit(open, 200)
+  const address = useExit(addressOpen)
+  const picker = useExitValue(collecting)
+
   const panel = (
         <FilterPanel
           mode={mode}
           onChangeMode={onChangeMode}
           overlay={collapsed}
+          leaving={filters.leaving}
           activeCount={activeCount}
           onToggle={(group, id) => {
             if (group === "district") toggleDistrict(id)
@@ -684,7 +830,7 @@ function SearchScreenBody({
             поверх неё. Решает окно, а не человек: см. `useFilterCollapse`. */}
         {collapsed ? null : panel}
 
-        {collapsed && open ? (
+        {collapsed && filters.mounted ? (
           <>
             {/*
               Затемнение накрывает ВСЁ тело, включая сайдбар, — так в кадре
@@ -703,7 +849,13 @@ function SearchScreenBody({
             */}
             <div
               data-slot="filter-scrim"
-              className="fixed top-(--height-header) right-0 bottom-0 left-0 z-30 bg-[#1e1e1e26]"
+              // Затемнение проявляется и гаснет за 120 мс — быстрее колонки.
+              // Прежде оно возникало одним кадром: панель приезжала мягко,
+              // а полэкрана темнело рывком, и рывок перебивал мягкость.
+              className={cn(
+                "fixed top-(--height-header) right-0 bottom-0 left-0 z-30 bg-[#1e1e1e26]",
+                filters.leaving ? "scrim-out" : "scrim-in",
+              )}
               onPointerDown={() => setOpen(false)}
             />
             {panel}
@@ -733,6 +885,22 @@ function SearchScreenBody({
               summary={summary}
               onOpen={() => setOpen(true)}
               onReset={resetFilters}
+            />
+          ) : null}
+
+          {/*
+            Плашка стоит НАД шапкой результатов и появляется ровно тогда,
+            когда раскрытие правда остановилось: пробные кончились и денег
+            меньше цены раскрытия. Условие то же самое, по которому отказывает
+            само списание, — иначе плашка и деньги разъедутся, и человек
+            прочитает «остановлено» там, где всё работает.
+          */}
+          {stopped ? (
+            <BalanceStoppedBar
+              onNotify={() => {
+                notifyDone("Руководителю показано, что деньги кончились")
+                setTrace("руководителю сообщено о нулевом балансе")
+              }}
             />
           ) : null}
 
@@ -798,6 +966,7 @@ function SearchScreenBody({
               когда список кончился: иначе колесо у нижней строки уводит
               весь кабинет.
             */
+            data-slot="results-list"
             className="list-in flex flex-1 flex-col overflow-y-auto overscroll-contain rounded-2xl bg-surface"
           >
             {visible.length === 0 ? (
@@ -814,6 +983,20 @@ function SearchScreenBody({
                 <ListingRow
                   key={row.address}
                   {...row}
+                  /*
+                    Колонка выбора стоит только в ПРОДУКТЕ, не на стенде.
+
+                    Кадр `SUsxy` рисует её включённой, базовый кадр выдачи
+                    `ghwPj` — нет, и оба правы: слот в файле включён ровно
+                    на одном кадре. Стенд обязан совпадать с базовым кадром
+                    до пикселя, а продукту нужен вход в выбор — иначе первую
+                    отметку поставить нечем и три собранных окна остаются
+                    недостижимы. `mode` здесь и означает «это продукт»:
+                    у стенда режима нет.
+                  */
+                  selectable={mode !== undefined}
+                  checked={picked.has(row.address)}
+                  onCheckedChange={(next) => togglePicked(row.address, next)}
                   selected={row.address === cursorAddress}
                   // Первое нажатие ставит курсор, второе — открывает карточку.
                   // Так строка отвечает и на «выбрать», и на «посмотреть», а
@@ -827,27 +1010,60 @@ function SearchScreenBody({
               ))
             )}
           </div>
+
+          {/*
+            Панель выбранного стоит ПОД списком, а не поверх него: список
+            ужимается ровно на её высоту, и выбранные строки остаются видны.
+            Так требует подпись кадра `aT2KC` и так нарисовано в `SUsxy`.
+          */}
+          {pickedVisible.length > 0 ? (
+            <SelectionBar
+              count={pickedVisible.length}
+              payable={payable.length}
+              price={payable.length * DISCLOSURE_PRICE}
+              onClear={() => setPicked(new Set())}
+              onDisclose={disclosePicked}
+              onCollection={() => setBulkCollection(true)}
+              onExport={exportPicked}
+            />
+          ) : null}
         </main>
       {/* Окно выбора подборки: клавиша `B` и кнопка в строке ведут сюда.
           Живёт на уровне экрана, а не строки: строк на экране полсотни,
           и полсотни окон в дереве — это полсотни лишних узлов. */}
-      {addressOpen ? (
+      {address.mounted ? (
         <NearAddressDialog
           address={nearAddress}
           found={visible.length}
           onApply={setNearAddress}
           onClear={() => setNearAddress("")}
           onClose={() => setAddressOpen(false)}
+          leaving={address.leaving}
         />
       ) : null}
 
-      {collecting === null ? null : (
+      {/* Та же дверь, что и для одного объекта: окно одно и умеет оба случая.
+          Второе окно «положить двенадцать» разошлось бы с первым на первой же
+          правке списка подборок. */}
+      {bulkCollection ? (
         <CollectionPicker
-          address={collecting}
+          address={pickedVisible.map((row) => row.address)}
+          by={authorName}
+          onClose={() => {
+            setBulkCollection(false)
+            setPicked(new Set())
+          }}
+        />
+      ) : null}
+
+      {picker.mounted ? (
+        <CollectionPicker
+          address={picker.value ?? ""}
           by={authorName}
           onClose={() => setCollecting(null)}
+          leaving={picker.leaving}
         />
-      )}
+      ) : null}
     </CabinetShell>
   )
 }

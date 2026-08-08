@@ -173,7 +173,7 @@ function MobileAuthAside({
       <button
         type="button"
         data-action={action}
-        className="cursor-pointer bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+        className="-mx-2 cursor-pointer rounded-md bg-transparent px-2 py-1 transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
       >
         <Typography variant="numericDense" tone="default">
           {action}

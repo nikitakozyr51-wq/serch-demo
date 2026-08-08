@@ -77,7 +77,21 @@ const ORDER = new Map(FLAT.map((item, index) => [item.label, index]))
  * при каждом вызове, без сброса в эффекте. Закрытая палитра не существует,
  * а не прячется.
  */
-function CommandPalette({ onClose }: { onClose: () => void }) {
+function CommandPalette({
+  onClose,
+  leaving = false,
+}: {
+  onClose: () => void
+  /**
+   * Окно уходит: 120 мс, которые оно ещё стоит на экране после закрытия.
+   *
+   * Решение о жизни узла принимает не палитра, а тот, кто её открыл, —
+   * `CabinetOverlays`. Палитра только рисует уход, потому что снять себя
+   * с экрана она всё равно не может: `Esc` убирает её из дерева раньше,
+   * чем успела бы отработать анимация.
+   */
+  leaving?: boolean
+}) {
   const navigate = useNavigate()
   const [active, setActive] = useState(0)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -115,7 +129,10 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
     // он вызвал палитру, иначе она читается как отдельная страница.
     <div
       data-slot="palette-scrim"
-      className="fixed inset-0 z-50 flex justify-center bg-[#1e1e1e59] pt-24"
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center bg-[#1e1e1e59] pt-24",
+        leaving ? "scrim-out" : "scrim-in",
+      )}
       onPointerDown={(event) => {
         if (!boxRef.current?.contains(event.target as Node)) onClose()
       }}
@@ -126,7 +143,10 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label="Командная палитра"
         data-slot="command-palette"
-        className="motion-in flex h-fit w-155 flex-col overflow-hidden rounded-2xl border border-line-3 bg-surface"
+        className={cn(
+          "flex h-fit w-155 flex-col overflow-hidden rounded-2xl border border-line-3 bg-surface",
+          leaving ? "motion-out" : "motion-in",
+        )}
       >
         <div className="flex h-13 w-full shrink-0 items-center gap-2.5 border-b border-line-2 px-4">
           <Search aria-hidden className="size-4 shrink-0 text-text-dense" strokeWidth={2} />

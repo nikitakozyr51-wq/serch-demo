@@ -148,7 +148,9 @@ function SectionLabel({ label, onAdd }: { label: string; onAdd?: () => void }) {
           type="button"
           onClick={onAdd}
           aria-label="Добавить поиск"
-          className="cursor-pointer bg-transparent text-text-dense outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          // Значок 14 в цели 22: без подложки нажатие было незаметно вовсе.
+          // Отрицательное поле возвращает значок на его место в строке.
+          className="-m-1 cursor-pointer rounded-sm bg-transparent p-1 text-text-dense transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
         >
           <Plus aria-hidden className="size-3.5" strokeWidth={2} />
         </button>

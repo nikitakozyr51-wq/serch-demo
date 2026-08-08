@@ -81,11 +81,19 @@ export async function resolveE2ePorts(): Promise<PortPlan> {
  * поломка, а там, где расписание. Красное по расписанию хуже отсутствия
  * проверки — ему перестают верить.
  */
-export async function resolveDesignWebPort(slot: 'design' | 'census' = 'design'): Promise<number> {
-  const envName = slot === 'census' ? 'CENSUS_WEB_PORT' : 'DESIGN_WEB_PORT'
+export async function resolveDesignWebPort(
+  slot: 'design' | 'census' | 'journeys' = 'design',
+): Promise<number> {
+  const envName =
+    slot === 'census'
+      ? 'CENSUS_WEB_PORT'
+      : slot === 'journeys'
+        ? 'JOURNEYS_WEB_PORT'
+        : 'DESIGN_WEB_PORT'
+  const offset = slot === 'census' ? 1 : slot === 'journeys' ? 2 : 0
   const port = await resolvePort({
     envName,
-    preferredPort: slot === 'census' ? preferredDesignWebPort + 1 : preferredDesignWebPort,
+    preferredPort: preferredDesignWebPort + offset,
     reservedPorts: new Set<number>(),
   })
   // Конфиг читается и главным процессом, и рабочим. Без закрепления второй

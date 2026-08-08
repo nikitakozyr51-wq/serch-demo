@@ -5,7 +5,7 @@ import type { MouseEvent, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { useSession } from "@/features/auth"
+import { DISCLOSURE_PRICE, useSession } from "@/features/auth"
 import { MobileEmptyState, MobileScreen, MobileSectionHeader, MobileSheet } from "@/features/cabinet"
 import { groupDigits, plural } from "@/features/listings"
 import {
@@ -61,7 +61,6 @@ function pressProps(onPress: () => void) {
  * и занят, что переводит рубли в раскрытия: и остаток, и суммы пополнения
  * человек читает как «на сколько звонков хватит».
  */
-const DISCLOSURE_PRICE = 199
 
 /** Тридцать дней в миллисекундах: окно, за которое считаются деньги наверху. */
 const MONTH = 30 * 24 * 60 * 60 * 1000
@@ -139,7 +138,7 @@ function DocumentsLink() {
     <Link
       to="/m/balance/documents"
       data-slot="balance-documents-link"
-      className="flex h-11 shrink-0 cursor-pointer items-center bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      className="-mx-2 flex h-11 shrink-0 cursor-pointer items-center rounded-md bg-transparent px-2 transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
     >
       <Typography variant="controlLabel" tone="default">
         Документы
@@ -230,9 +229,11 @@ function BalanceSegments({ active }: { active: string }) {
               // не меняет. Рамкой каждая капсула стала бы на 2 px шире.
               "outline-solid outline-1 -outline-offset-1",
               "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+              // Нажатие берёт вторую ступень сразу — наведения на телефоне нет.
+              "transition-colors duration-120",
               on
-                ? "bg-fg text-surface outline-fg"
-                : "bg-surface text-fg outline-border-control",
+                ? "bg-fg text-surface outline-fg active:bg-fg-press"
+                : "bg-surface text-fg outline-border-control active:bg-warm-hover",
             )}
           >
             <Typography variant="uiText" tone="current" wrap="nowrap">
@@ -637,7 +638,10 @@ function DocumentTabs({ active }: { active: string }) {
             className={cn(
               "flex h-11 shrink-0 cursor-pointer items-center justify-center border-b-2 bg-transparent",
               "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg",
-              on ? "border-fg" : "border-transparent",
+              // Вкладка отвечает подчёркиванием, а не заливкой: заливка
+              // превратила бы её в кнопку. Ступени те же, что у вкладок выдачи.
+              "transition-colors duration-120",
+              on ? "border-fg active:border-fg-press" : "border-transparent active:border-line-3",
             )}
           >
             <Typography
@@ -702,7 +706,7 @@ function DocumentRow({
       data-action="скачать документ"
       data-slot="balance-document"
       aria-label={`Скачать: ${title}`}
-      className="flex h-16 w-full cursor-pointer items-center gap-2.5 rounded-lg border border-line-2 bg-surface px-3.5 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      className="flex h-16 w-full cursor-pointer items-center gap-2.5 rounded-lg border border-line-2 bg-surface px-3.5 transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
     >
       <FileText aria-hidden className="size-4.5 shrink-0 text-text-dense" strokeWidth={2} />
       <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
@@ -812,7 +816,12 @@ function AmountRow({
       className={cn(
         "flex h-14 w-full cursor-pointer items-center gap-2.5 rounded-lg border px-3.5",
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
-        selected ? "border-fg bg-warm" : "border-border-control bg-surface",
+        // Выбранная сумма уже тёплая, поэтому нажатие уходит на `warm-press`;
+        // невыбранная белая — на `warm-hover`. Одна лестница, разные точки входа.
+        "transition-colors duration-120",
+        selected
+          ? "border-fg bg-warm active:bg-warm-press"
+          : "border-border-control bg-surface active:bg-warm-hover",
       )}
       {...pressProps(onPress)}
     >
@@ -853,9 +862,10 @@ function MethodChip({
       className={cn(
         "flex h-11 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-full border",
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+        "transition-colors duration-120",
         selected
-          ? "border-fg bg-fg text-surface"
-          : "border-border-control bg-surface text-text-2",
+          ? "border-fg bg-fg text-surface active:border-fg-press active:bg-fg-press"
+          : "border-border-control bg-surface text-text-2 active:bg-warm-hover",
       )}
       {...pressProps(onPress)}
     >
@@ -990,7 +1000,8 @@ function ReasonRow({
       className={cn(
         "flex h-12 w-full cursor-pointer items-center gap-3 rounded-xl border border-border-control px-4",
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
-        selected ? "bg-warm" : "bg-transparent",
+        "transition-colors duration-120",
+        selected ? "bg-warm active:bg-warm-press" : "bg-transparent active:bg-warm-hover",
       )}
       {...pressProps(onPress)}
     >
@@ -1024,7 +1035,7 @@ function SheetQuietPill({ to, children }: { to: string; children: ReactNode }) {
     <Link
       to={to}
       data-slot="sheet-quiet-pill"
-      className="flex h-12 w-full cursor-pointer items-center justify-center rounded-full bg-warm px-6 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      className="flex h-12 w-full cursor-pointer items-center justify-center rounded-full bg-warm px-6 transition-colors duration-120 outline-none active:bg-warm-press focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
     >
       <Typography variant="controlLabelLg" tone="default">
         {children}

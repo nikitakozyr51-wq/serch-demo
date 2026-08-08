@@ -29,6 +29,7 @@ import {
 } from "@/features/agency"
 import { notifyDone, notifyError } from "@/platform/notify"
 import { useDensity } from "@/platform/density"
+import { useExitValue } from "@/platform/motion"
 
 /**
  * АГЕНТСТВО · Настройки агентства.
@@ -87,6 +88,17 @@ export function AgencySettingsPage() {
   const workspace = useWorkspace()
   const [dense] = useDensity()
   const [open, setOpen] = useState<OpenDialog>("none")
+
+  /**
+   * Окна руководителя уходят, а не пропадают.
+   *
+   * Все четыре живут на одном состоянии, поэтому и держатся одним хуком.
+   * Какое именно окно уходит, `open` в момент закрытия уже не знает — он стал
+   * «none», — и последнее открытое придерживает `useExitValue` ровно на те
+   * 120 мс, что идёт уход.
+   */
+  const dialog = useExitValue(open === "none" ? null : open)
+  const shown = dialog.value
 
   /**
    * Реквизиты живут в базе, а до неё — нигде.
@@ -346,8 +358,9 @@ export function AgencySettingsPage() {
         </div>
       </div>
 
-      {open === "requisites" ? (
+      {dialog.mounted && shown === "requisites" ? (
         <RequisitesDialog
+          leaving={dialog.leaving}
           legalName={requisites.legalName || (session?.agency ?? "")}
           inn={requisites.inn}
           legalAddress={requisites.legalAddress}
@@ -359,8 +372,9 @@ export function AgencySettingsPage() {
         />
       ) : null}
 
-      {open === "transfer" ? (
+      {dialog.mounted && shown === "transfer" ? (
         <TransferOwnerDialog
+          leaving={dialog.leaving}
           ownerName={session?.name ?? ""}
           people={colleagues.map((person) => ({
             id: person.id,
@@ -374,8 +388,9 @@ export function AgencySettingsPage() {
         />
       ) : null}
 
-      {open === "view" ? (
+      {dialog.mounted && shown === "view" ? (
         <ApplyViewDialog
+          leaving={dialog.leaving}
           dense={dense}
           people={colleagues.map((person) => person.name)}
           onClose={() => setOpen("none")}
@@ -387,8 +402,9 @@ export function AgencySettingsPage() {
         />
       ) : null}
 
-      {open === "delete" ? (
+      {dialog.mounted && shown === "delete" ? (
         <DeleteAgencyDialog
+          leaving={dialog.leaving}
           agency={session?.agency ?? ""}
           onClose={() => setOpen("none")}
           onRequest={() =>

@@ -166,7 +166,10 @@ function AuthField({
  */
 function AuthLink({ to, children }: { to?: string; children: ReactNode }) {
   const className =
-    "w-fit cursor-pointer bg-transparent text-left outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+    // Поле гасится отрицательным на ту же величину: подпись стоит там, где
+    // в файле, а под пальцем появляется подложка. Без неё ссылка входа была
+    // единственным контролом экрана, который не отвечал ни на что.
+    "-mx-2 w-fit cursor-pointer rounded-md bg-transparent px-2 py-1 text-left transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
 
   // С адресом — настоящая ссылка: её открывают в новой вкладке и возвращаются
   // назад кнопкой браузера. Без адреса остаётся подписью: экрана для действия

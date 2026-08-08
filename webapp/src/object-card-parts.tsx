@@ -149,7 +149,7 @@ function CardShell({
                 то же самое с клавиатуры. */}
             <Link
               to="/search"
-              className="flex cursor-pointer items-center gap-2 text-text-2 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+              className="-mx-2 flex cursor-pointer items-center gap-2 rounded-sm px-2 py-0.5 text-text-2 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
             >
               <ArrowLeft aria-hidden className="size-4" strokeWidth={2} />
               <Typography variant="numericDense" tone="current">
@@ -175,7 +175,9 @@ function CardShell({
                   data-slot="step-button"
                   aria-label={position === 0 ? "Предыдущий объект" : "Следующий объект"}
                   onPointerDown={() => step(position === 0 ? -1 : 1)}
-                  className="flex size-7 cursor-pointer items-center justify-center rounded-md border border-line-2 bg-transparent text-text-2 outline-none hover:bg-warm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg"
+                  // Переход обязателен: без него подсветка щёлкает, и кнопка
+                  // читается как перерисованная, а не как ответившая.
+                  className="flex size-7 cursor-pointer items-center justify-center rounded-md border border-line-2 bg-transparent text-text-2 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-fg"
                 >
                   <Icon aria-hidden className="size-3.5" strokeWidth={2} />
                 </button>

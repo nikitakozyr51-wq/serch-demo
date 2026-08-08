@@ -1,4 +1,5 @@
 export {
+  DISCLOSURE_PRICE,
   demoPhone,
   disclose,
   hasAccounts,

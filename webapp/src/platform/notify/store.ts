@@ -42,10 +42,28 @@ type Notice = {
   /** Подпись действия. Её наличие продлевает показ с 4000 до 6000. */
   actionLabel?: string
   onAction?: () => void
+  /**
+   * Сообщение уходит: последние 120 мс его жизни.
+   *
+   * Флаг живёт в хранилище, а не в полке, ровно потому, что уйти сообщение
+   * может двумя путями — по крестику и само по таймеру. Держи полка свой
+   * счётчик, автоскрытие уходило бы рывком, а закрытие рукой мягко.
+   */
+  leaving?: boolean
 }
 
 const PLAIN_MS = 4000
 const WITH_ACTION_MS = 6000
+
+/**
+ * Сколько сообщение ещё стоит на экране после того, как его сняли.
+ *
+ * Зеркалит появление (`.motion-in`, 120 мс) и совпадает с длительностью
+ * класса `.motion-out` в `index.css`. Числа обязаны совпадать: узел, снятый
+ * раньше конца анимации, обрывает её на середине — то есть исчезает рывком,
+ * ради устранения которого всё и делается.
+ */
+const EXIT_MS = 120
 
 let notices: Notice[] = []
 let nextId = 1
@@ -63,11 +81,35 @@ function subscribe(listener: () => void) {
   }
 }
 
-function dismissNotice(id: number) {
+function remove(id: number) {
   const next = notices.filter((notice) => notice.id !== id)
   if (next.length === notices.length) return
   notices = next
   emit()
+}
+
+/**
+ * Снять сообщение.
+ *
+ * Снятие двухходовое: сначала сообщение помечается уходящим и рисует уход,
+ * через 120 мс уходит из списка. Повторное снятие уже уходящего ничего
+ * не делает — иначе крестик, нажатый дважды, ставил бы второй таймер.
+ *
+ * При отключённом движении сообщение снимается сразу: ждать 120 мс невидимой
+ * анимации — задержка без причины.
+ */
+function dismissNotice(id: number) {
+  const target = notices.find((notice) => notice.id === id)
+  if (target === undefined || target.leaving === true) return
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    remove(id)
+    return
+  }
+
+  notices = notices.map((notice) => (notice.id === id ? { ...notice, leaving: true } : notice))
+  emit()
+  window.setTimeout(() => remove(id), EXIT_MS)
 }
 
 /**

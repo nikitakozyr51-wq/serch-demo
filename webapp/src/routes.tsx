@@ -179,9 +179,12 @@ const statesScreenRoute = createRoute({
 const mobileSearchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/screen/mobile',
+  // Стенд показывает три замеренные строки и только их: снимок для сверки
+  // обязан быть одинаковым сегодня и через месяц. Продуктовый `/m/search`
+  // показывает всю базу.
   component: lazyRouteComponent(
-    () => import('./mobile-search-screen'),
-    'MobileSearchScreenPage',
+    () => import('./mobile-search-stand'),
+    'MobileSearchStandPage',
   ),
 })
 
@@ -580,7 +583,16 @@ const authProductRoutes = [
  */
 const mobileRoutes = [
   productRoute('/m/today', () => import('./mobile-today-screens'), 'MobileTodayPage'),
-  productRoute('/m/record', () => import('./mobile-today-screens'), 'MobileRecordPage'),
+  /**
+   * Запись исхода на телефоне знает, о каком объекте речь.
+   *
+   * Без параметра экран записывал бы звонок «вообще»: адрес — это ключ
+   * записи в журнале, и без него исход некуда положить.
+   */
+  productRoute('/m/record', () => import('./mobile-today-screens'), 'MobileRecordPage', {
+    validateSearch: (search: Record<string, unknown>): { at?: string } =>
+      typeof search.at === 'string' ? { at: search.at } : {},
+  }),
   productRoute('/m/list-loading', () => import('./mobile-today-screens'), 'MobileListLoadingPage'),
   productRoute('/m/results-loading', () => import('./mobile-today-screens'), 'MobileResultsLoadingPage'),
   productRoute('/m/filters', () => import('./mobile-today-screens'), 'MobileFiltersSheetPage'),
@@ -634,8 +646,21 @@ const mobileRoutes = [
       'MobileSearchScreenPage',
     ),
   }),
-  productRoute('/m/object', () => import('./mobile-object-screens'), 'MobileObjectPage'),
-  productRoute('/m/object/before', () => import('./mobile-object-screens'), 'MobileObjectBeforePage'),
+  /**
+   * Карточка объекта на телефоне — того, на который нажали.
+   *
+   * Параметр тот же, что у компьютерной карточки, и по той же причине:
+   * без него все строки выдачи вели в одну и ту же квартиру. На телефоне
+   * это стоило дороже — там в одну квартиру вёл ещё и прозвон.
+   */
+  productRoute('/m/object', () => import('./mobile-object-screens'), 'MobileObjectPage', {
+    validateSearch: (search: Record<string, unknown>): { at?: string } =>
+      typeof search.at === 'string' ? { at: search.at } : {},
+  }),
+  productRoute('/m/object/before', () => import('./mobile-object-screens'), 'MobileObjectBeforePage', {
+    validateSearch: (search: Record<string, unknown>): { at?: string } =>
+      typeof search.at === 'string' ? { at: search.at } : {},
+  }),
   productRoute('/m/object/similar', () => import('./mobile-object-screens'), 'MobileObjectSimilarPage'),
   productRoute('/m/similar', () => import('./mobile-object-screens'), 'MobileSimilarListPage'),
   productRoute('/m/taken', () => import('./mobile-object-screens'), 'MobileTakenByColleaguesPage'),

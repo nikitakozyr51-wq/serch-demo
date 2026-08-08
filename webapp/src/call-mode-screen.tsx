@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/controls/Checkbox"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
-import { demoPhone, useSession } from "@/features/auth"
+import { demoPhone, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
 import { notifyDone, notifyError } from "@/platform/notify"
 import {
@@ -195,6 +195,7 @@ export function CallModeScreenPage() {
   const workspace = useWorkspace()
   const now = useNow()
   const session = useSession()
+  const actions = useSessionActions()
 
   const queue = useMemo(() => {
     const due = callbacksDue(workspace, now).map((item) => item.address)
@@ -250,6 +251,35 @@ export function CallModeScreenPage() {
   }
 
   /**
+   * Сохранить то, что выбрано чипом «РЕЗУЛЬТАТ», и уйти к следующему.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Это главная кнопка экрана, и до этой правки она НЕ ЗАПИСЫВАЛА ЗВОНОК —
+   * только перелистывала объект. Выглядело как сохранение: панель очистилась,
+   * объект сменился. В журнале при этом не появлялось ничего, «Сегодня»
+   * оставалось пустым, а объект продолжал висеть в «взяты в работу,
+   * не прозвонены». Комментарий рядом уверял, что «хранилища за демонстрацией
+   * нет», хотя журнал звонков к тому времени уже был написан и клавиши 2 и 3
+   * им пользовались.
+   *
+   * **Исход берётся из чипа, а не из нажатой клавиши.** Иначе появлялось бы
+   * два разных способа записать один звонок, дающих разные исходы: человек
+   * выбирает «Отказ» мышью, жмёт большую кнопку — и в журнал уходит «в работе».
+   */
+  const OUTCOMES: Record<string, CallOutcome> = {
+    "В работе": "в работе",
+    Прозвонен: "дозвонился",
+    Отказ: "отказ",
+  }
+
+  function saveAndNext() {
+    const label = result ?? "В работе"
+    save(OUTCOMES[label] ?? "в работе", label)
+    goNext()
+  }
+
+  /**
    * К следующему объекту с чистой панелью.
    *
    * Панель обнуляется не «для порядка»: следующий звонок — другой человек,
@@ -289,11 +319,16 @@ export function CallModeScreenPage() {
      * о нём. `goNext()` для того и написан, но эти два обработчика его
      * не звали.
      */
+    // Клавиша двигает и чип тоже: чип — единственный источник исхода для
+    // большой кнопки, и разойтись им нельзя. Иначе человек жмёт «3», видит
+    // выбранным «В работе» и не понимает, что записалось.
     "2": () => {
+      setResult("Прозвонен")
       save("дозвонился", "Прозвонен")
       goNext()
     },
     "3": () => {
+      setResult("Отказ")
       save("отказ", "Отказ")
       goNext()
     },
@@ -334,7 +369,7 @@ export function CallModeScreenPage() {
         focused.click()
         return
       }
-      goNext()
+      saveAndNext()
     },
     /**
      * `H` — «Отложить»: объект уходит на потом, и агент идёт дальше.
@@ -376,7 +411,7 @@ export function CallModeScreenPage() {
         <Link
           to="/search"
           data-slot="call-exit"
-          className="flex cursor-pointer items-center gap-2 bg-transparent text-text-2 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          className="-mx-2 flex cursor-pointer items-center gap-2 rounded-sm bg-transparent px-2 py-0.5 text-text-2 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
         >
           <X aria-hidden className="size-4" strokeWidth={2} />
           <Typography variant="numericDense" tone="current">
@@ -749,33 +784,49 @@ export function CallModeScreenPage() {
             Поэтому действие названо и не рисует ничего.
           */}
           {/*
-            Ведёт в журнал возвратов, где заявка и оформляется.
+            Возврат оформляется НЕ УХОДЯ из разговора.
 
-            Отдельного окна для четырёх причин в файле нет, а выдумывать его
-            здесь нельзя вдвойне: экран возврата уже существует, и вторая
-            форма для того же означала бы два разных способа вернуть деньги.
+            Раньше кнопка уводила в журнал возвратов — а тот встречал человека
+            надписью «возврат отмечается кнопкой в панели фиксации звонка», то
+            есть отправлял ровно туда, откуда он пришёл. Кольцо замыкалось, а
+            заметка, исход и «кто ответил» стирались: это память экрана, и уход
+            с него её убивает.
+
+            Причина здесь одна и объективная — «ответил не собственник»: она
+            в лимит спорных возвратов не считается, и выбирать её незачем.
+            Окно с четырьмя причинами в файле нарисовано, но места его вызова
+            из прозвона в кадрах нет, и придумывать это место я не стал.
           */}
           <button
             type="button"
-            data-action="возврат за брак, четыре причины"
-            onClick={() => void navigate({ to: "/balance/refunds" })}
-            className="flex w-full cursor-pointer items-center gap-2 bg-transparent outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+            onClick={() => {
+              const outcome = actions.refund(address, "Ответил не собственник", true)
+              if (outcome === "ok") notifyDone("Вернули 199 ₽ на счёт агентства")
+              else if (outcome === "already") notifyError("За этот контакт возврат уже брали")
+              else notifyError("Возврат оформляется за оплаченное раскрытие")
+            }}
+            // Возврат денег — действие, а не подпись, и оно молчало.
+            // Заливка занимает ровно ширину строки: своего поля у контрола
+            // нет, а добавлять его значило бы сдвинуть подпись с её места.
+            className="flex w-full cursor-pointer items-center gap-2 rounded-sm bg-transparent transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <Typography variant="numericDense" tone="secondary">
               Брак, вернуть 199 ₽
             </Typography>
             <Typography variant="metaText" tone="dense">
-              четыре причины
+              ответил не собственник
             </Typography>
           </button>
 
           <div className="flex-1" />
 
           {/*
-            Обе кнопки внизу делают одно видимое дело — переводят к следующему
-            объекту с чистой панелью. Разница между «сохранить» и «отложить»
-            в том, останется ли запись о звонке, а хранилища за демонстрацией
-            нет: невидимая половина названа через `data-action`, видимая работает.
+            Обе кнопки внизу записывают звонок и переводят к следующему объекту
+            с чистой панелью. Разница в исходе: «сохранить» пишет то, что
+            выбрано чипом, «отложить» — «отложен», иначе отложенный объект
+            остался бы в журнале «в работе», хотя человек его сознательно
+            пропустил.
+
             Отклик на прижатие, а не на отпускание: подсветка нажатия у кнопки
             есть, и отставать от неё действие не должно.
           */}
@@ -785,8 +836,7 @@ export function CallModeScreenPage() {
                 variant="primary"
                 size="lg"
                 block
-                data-action="фиксация звонка сохранена"
-                onPointerDown={goNext}
+                onPointerDown={saveAndNext}
                 iconRight={
                   <span className="opacity-70">
                     <Typography variant="metaText" tone="current">
@@ -801,8 +851,10 @@ export function CallModeScreenPage() {
             <Button
               variant="quiet"
               size="lg"
-              data-action="объект отложен"
-              onPointerDown={goNext}
+              onPointerDown={() => {
+                save("отложен", "Отложен")
+                goNext()
+              }}
               iconRight={
                 <Typography variant="metaText" tone="dense">
                   H

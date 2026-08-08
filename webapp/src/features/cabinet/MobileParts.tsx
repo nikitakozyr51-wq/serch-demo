@@ -213,7 +213,13 @@ function MobileSheet({
   return (
     <div
       data-slot="mobile-sheet-scrim"
-      className="motion-in flex h-svh w-full flex-col justify-end bg-[#1e1e1e59]"
+      // Затемнение только проявляется, без сдвига.
+      //
+      // Стоял `.motion-in`, а он поднимает узел на 8 px — и слой во всю
+      // высоту экрана 120 мс держал у края незатемнённую полоску, заодно
+      // сдвигая лист внутри себя вторым, лишним движением. Приезжать
+      // здесь положено листу, а фону — гаснуть.
+      className="scrim-in flex h-svh w-full flex-col justify-end bg-[#1e1e1e59]"
     >
       <div
         role="dialog"

@@ -81,7 +81,13 @@ function CabinetHeader({ balance, trial, initials, onTopUp, onSearch }: CabinetH
         type="button"
         data-slot="global-search"
         onClick={onSearch}
-        className="flex h-ctl-md w-65 shrink-0 cursor-pointer items-center gap-2 rounded-none border-0 bg-transparent text-left outline-none focus-visible:border focus-visible:border-solid focus-visible:border-fg"
+        // Поиск в шапке открывают десятки раз за смену, и он не отвечал
+        // ни на наведение, ни на нажатие — только кольцо фокуса. Своей
+        // заливки у него нет, поэтому отклик красит фон: `warm → warm-hover`.
+        // Заливка занимает ровно тот же прямоугольник, что рамка фокуса,
+        // и ни на пиксель больше: полоса 240…500 замерена с макета, и поле
+        // ради красоты подсветки сдвинуло бы всю шапку.
+        className="flex h-ctl-md w-65 shrink-0 cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent text-left transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:border focus-visible:border-solid focus-visible:border-fg"
       >
         <Search aria-hidden className="size-4 shrink-0 text-text-dense" strokeWidth={2} />
         <div className="min-w-0 flex-1">

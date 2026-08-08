@@ -112,7 +112,10 @@ function AvatarMenu({ initials }: { initials: string }) {
         aria-expanded={open}
         aria-label="Меню профиля"
         onClick={() => setOpen((was) => !was)}
-        className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+        // Аватар залит графитом, поэтому отклик идёт по той же лестнице,
+        // что у главной кнопки: `fg → fg-hover → fg-press`. Прежде он молчал,
+        // а это единственная дверь в профиль и выход из аккаунта.
+        className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-fg transition-colors duration-120 outline-none hover:bg-fg-hover active:bg-fg-press focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
       >
         <Typography variant="metaStrong" tone="inverse">
           {initials}
