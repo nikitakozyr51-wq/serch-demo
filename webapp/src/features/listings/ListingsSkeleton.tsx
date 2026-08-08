@@ -66,8 +66,14 @@ function ListingsSkeleton({
           <div
             key={index}
             data-slot="skeleton-row"
-            className="flex h-row-obj w-full shrink-0 items-center gap-8 border-b border-line-2 px-4"
+            className="flex h-row-obj w-full shrink-0 items-center gap-8 border-b border-line-2 px-cell"
           >
+            {/* Кадр объекта: та же клетка 84 × 56, что и в настоящей строке.
+                Скелет обязан повторять КОЛОНКИ, а не намекать на них: иначе
+                при появлении данных список дёргается, и человек видит не
+                загрузку, а перестройку. */}
+            <Plate className="h-14 w-21 shrink-0 rounded-xl" />
+
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <Plate className="h-4 w-50 rounded-sm" />
               <Plate className="h-3 w-70 rounded-sm" />

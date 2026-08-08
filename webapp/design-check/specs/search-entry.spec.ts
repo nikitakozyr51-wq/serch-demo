@@ -68,50 +68,55 @@ test('первый вход: готовые наборы вместо пусто
   expect(after, 'после первого поиска помощь обязана уйти').toEqual({ rows: 1, explainer: 0 })
 })
 
-test('фильтры сворачиваются по ширине окна и не прячут условия', async ({ page }) => {
+test('фильтры открываются кнопкой на любой ширине и не прячут условия', async ({ page }) => {
   await seedSession(page)
+
+  /**
+   * Модель одна на все ширины — решение владельца от 9 августа.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Прежде их было две: при 1360 и шире колонка 260 стояла в раскладке,
+   * уже — сворачивалась в полоску. Модель выбирало окно, и продукт вёл себя
+   * по-разному на ноутбуке и на мониторе. Эта проверка тогда закрепляла
+   * обе модели; теперь она закрепляет то, что второй модели НЕТ.
+   *
+   * Кадры `aoguG` (1440) и `C4zkJ` (1280) рисуют одну и ту же механику,
+   * и проверка обязана убедиться в этом на обеих ширинах, а не на одной.
+   */
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 1024 })
+    await page.goto('/search')
+    await page.waitForSelector('[data-slot="listing-row"]')
+
+    const closed = await page.evaluate(() => {
+      const bar = document.querySelector('[data-slot="filter-bar"]')
+      return {
+        panel: document.querySelectorAll('[data-slot="filter-panel"]').length,
+        bar: bar === null ? 0 : 1,
+        barHeight: Math.round(bar?.getBoundingClientRect().height ?? 0),
+        results: Math.round(
+          document.querySelector('[data-slot="results"]')?.getBoundingClientRect().width ?? 0,
+        ),
+        // Условия перечислены прямо в полоске. Спрятать их было бы хуже,
+        // чем занять место: человек забудет, почему выдача такая.
+        summary: (bar?.textContent ?? '').includes('Красногвардейский'),
+      }
+    })
+
+    expect(closed, `на ${width} колонки в раскладке нет, есть полоска`).toEqual({
+      panel: 0,
+      bar: 1,
+      barHeight: 44,
+      // Вся ширина за вычетом сайдбара 240 достаётся выдаче.
+      results: width - 240,
+      summary: true,
+    })
+  }
 
   await page.setViewportSize({ width: 1440, height: 1024 })
   await page.goto('/search')
   await page.waitForSelector('[data-slot="listing-row"]')
-
-  const wide = await page.evaluate(() => ({
-    panel: document.querySelectorAll('[data-slot="filter-panel"]').length,
-    bar: document.querySelectorAll('[data-slot="filter-bar"]').length,
-    results: Math.round(
-      document.querySelector('[data-slot="results"]')?.getBoundingClientRect().width ?? 0,
-    ),
-  }))
-
-  expect(wide, 'на 1440 колонка стоит в раскладке, полоски нет').toEqual({
-    panel: 1,
-    bar: 0,
-    results: 940,
-  })
-
-  await page.setViewportSize({ width: 1280, height: 1024 })
-  await page.waitForSelector('[data-slot="filter-bar"]')
-
-  const narrow = await page.evaluate(() => {
-    const bar = document.querySelector('[data-slot="filter-bar"]')
-    return {
-      panel: document.querySelectorAll('[data-slot="filter-panel"]').length,
-      results: Math.round(
-        document.querySelector('[data-slot="results"]')?.getBoundingClientRect().width ?? 0,
-      ),
-      barHeight: Math.round(bar?.getBoundingClientRect().height ?? 0),
-      // Условия перечислены прямо в полоске. Спрятать их было бы хуже, чем
-      // занять место: человек забудет, почему выдача такая.
-      summary: (bar?.textContent ?? '').includes('Красногвардейский'),
-    }
-  })
-
-  expect(narrow, 'на 1280 колонка уходит в полоску, выдача получает её 100 px').toEqual({
-    panel: 0,
-    results: 1040,
-    barHeight: 44,
-    summary: true,
-  })
 
   await page.click('[data-slot="filter-bar-open"]')
   await page.waitForSelector('[data-slot="filter-panel"][data-overlay]')

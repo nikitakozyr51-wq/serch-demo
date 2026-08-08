@@ -35,7 +35,7 @@ import {
   NearAddressDialog,
   ResultTabs,
   groupDigits,
-  useFilterCollapse,
+  photoFor,
   type SearchMode,
 } from "@/features/listings"
 
@@ -523,18 +523,7 @@ function SearchScreenBody({
     ],
   ]
 
-  const collapsed = useFilterCollapse()
   const [open, setOpen] = useState(false)
-
-  // Правка состояния прямо в рендере, а не эффектом: эффект здесь дал бы
-  // лишний проход отрисовки, и правило `react-hooks` запрещает его прямо.
-  // Это тот самый случай, для которого React такую правку и разрешает —
-  // состояние зависит от изменившегося входного значения.
-  const [wasCollapsed, setWasCollapsed] = useState(collapsed)
-  if (wasCollapsed !== collapsed) {
-    setWasCollapsed(collapsed)
-    setOpen(false)
-  }
 
   /**
    * Escape закрывает панель фильтров.
@@ -612,6 +601,45 @@ function SearchScreenBody({
         row.address.toLowerCase().includes(nearAddress.toLowerCase()),
     )
     .sort(SORTS[sort].compare)
+
+  /**
+   * Сколько объектов в каждом табе — числом, а не на глаз.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * В кадре `ZOB5K` у каждого таба стоит счётчик: 12 · 31 · 18 · 9 · 5.
+   * Продукт их не рисовал вовсе — сверка геометрии нашла это как расхождение
+   * позиций на 18–71 пиксель, но дело было не в позициях: таб без счётчика
+   * не отвечает на вопрос, ради которого на него смотрят, — «а там вообще
+   * что-нибудь есть».
+   *
+   * Считается ПО ТЕМ ЖЕ условиям, что и выдача, но без таба: иначе «Новые»
+   * обещали бы двенадцать объектов, а по нажатию показывали два — остальные
+   * десять отсекал бы район, выбранный в фильтрах. Счётчик, который врёт
+   * после нажатия, хуже отсутствующего.
+   *
+   * У «Все» счётчика нет: он повторил бы число из строки результата выше.
+   */
+  const withoutTab = rows
+    .filter((row) => districts.length === 0 || districts.includes(row.district))
+    .filter((row) => priceCap === 0 || row.priceValue <= priceCap * PRICE_UNIT[mode ?? "sale"])
+    .filter((row) => rooms.length === 0 || rooms.includes(row.rooms))
+    .filter((row) => conditions.priceFrom === undefined || row.priceValue >= conditions.priceFrom)
+    .filter((row) => conditions.priceTo === undefined || row.priceValue <= conditions.priceTo)
+    .filter((row) => conditions.areaFrom === undefined || row.area >= conditions.areaFrom)
+    .filter((row) => conditions.areaTo === undefined || row.area <= conditions.areaTo)
+    .filter((row) => !floor.includes("not-first") || row.floor > 1)
+    .filter((row) => !floor.includes("not-last") || row.floor < row.floors)
+    .filter((row) => metro.length === 0 || metro.includes(row.metro))
+    .filter((row) => walk === undefined || row.metroMinutes <= walk)
+    .filter(
+      (row) =>
+        nearAddress === "" ||
+        row.address.toLowerCase().includes(nearAddress.toLowerCase()),
+    )
+
+  const tabCount = (id: string) =>
+    withoutTab.filter((row) => (TAB_FILTER[id] ?? TAB_FILTER.all!)(row)).length
 
   /**
    * Курсор по умолчанию — первая видимая строка, за которую ещё не платили.
@@ -943,7 +971,7 @@ function SearchScreenBody({
         <FilterPanel
           mode={mode}
           onChangeMode={onChangeMode}
-          overlay={collapsed}
+          overlay
           leaving={filters.leaving}
           activeCount={activeCount}
           onToggle={(group, id) => {
@@ -1063,12 +1091,20 @@ function SearchScreenBody({
 
   return (
     <CabinetShell activeId="search">
-        {/* На широком окне колонка стоит в раскладке и всегда видна.
-            На узком — уходит в полоску над выдачей и открывается наложением
-            поверх неё. Решает окно, а не человек: см. `useFilterCollapse`. */}
-        {collapsed ? null : panel}
+        {/*
+          Колонки фильтров нет ни на одной ширине — решение владельца
+          от 9 августа, кадры `aoguG`, `C4zkJ`, `E5kwP`.
 
-        {collapsed && filters.mounted ? (
+          Прежде их было две модели: при 1360 и шире колонка 260 стояла
+          в раскладке, уже — сворачивалась в полоску. Модель выбирало окно,
+          и продукт вёл себя по-разному на ноутбуке и на мониторе. Теперь
+          модель одна: полоска над списком, панель наложением по нажатию.
+
+          Выдача от этого выросла с 940 до 1200, а строка — с 916 до 1176.
+          Именно на эти 260 пикселей и встала фотография объекта: платить
+          за неё ничем не пришлось.
+        */}
+        {filters.mounted ? (
           <>
             {/*
               Затемнение накрывает ВСЁ тело, включая сайдбар, — так в кадре
@@ -1091,7 +1127,7 @@ function SearchScreenBody({
               // Прежде оно возникало одним кадром: панель приезжала мягко,
               // а полэкрана темнело рывком, и рывок перебивал мягкость.
               className={cn(
-                "fixed top-(--height-header) right-0 bottom-0 left-0 z-30 bg-[#1e1e1e26]",
+                "fixed top-(--height-header) right-0 bottom-0 left-0 z-30 bg-[#1e1e1e59]",
                 filters.leaving ? "scrim-out" : "scrim-in",
               )}
               onPointerDown={() => setOpen(false)}
@@ -1117,14 +1153,12 @@ function SearchScreenBody({
             шапка обещала бы 892 объявления там, где показано двенадцать строк,
             и первый же внимательный человек поймал бы продукт на вранье.
           */}
-          {collapsed ? (
-            <FilterBar
-              activeCount={activeCount}
-              summary={summary}
-              onOpen={() => setOpen(true)}
-              onReset={resetFilters}
-            />
-          ) : null}
+          <FilterBar
+            activeCount={activeCount}
+            summary={summary}
+            onOpen={() => setOpen(true)}
+            onReset={resetFilters}
+          />
 
           {/*
             Плашка стоит НАД шапкой результатов и появляется ровно тогда,
@@ -1153,11 +1187,11 @@ function SearchScreenBody({
           <ResultTabs
             tabs={[
               { id: "all", label: "Все" },
-              { id: "new", label: "Новые, 24 ч" },
-              { id: "not-called", label: "Не прозвонены" },
-              { id: "taken", label: "Взяли коллеги" },
-              { id: "mine", label: "Мои в работе" },
-              { id: "cheaper", label: "Снизили цену" },
+              { id: "new", label: "Новые, 24 ч", count: tabCount("new") },
+              { id: "not-called", label: "Не прозвонены", count: tabCount("not-called") },
+              { id: "taken", label: "Взяли коллеги", count: tabCount("taken") },
+              { id: "mine", label: "Мои в работе", count: tabCount("mine") },
+              { id: "cheaper", label: "Снизили цену", count: tabCount("cheaper") },
             ]}
             activeId={activeTab}
             onSelect={setActiveTab}
@@ -1240,6 +1274,7 @@ function SearchScreenBody({
               visible.map((row, order) => (
                 <ListingRow
                   key={row.address}
+                  photo={photoFor(row.address)}
                   {...row}
                   // Номер задаёт очередь появления. Он есть только в продукте:
                   // стенды сверки строку показывают неподвижной, чтобы снимок

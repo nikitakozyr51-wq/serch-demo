@@ -643,27 +643,51 @@ test('скелет повторяет колонки настоящей стро
   await seedSession(page)
   await page.setViewportSize({ width: 1440, height: 1024 })
 
+  /**
+   * Сравниваются НЕ абсолютные смещения, и это исправление.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Прежде проверка брала левый край каждой колонки и требовала совпадения
+   * числом. Это работало, пока обе строки были шириной 908. После того как
+   * колонка фильтров ушла, выдача выросла до 1200, а стенд состояний остался
+   * прежним — и проверка упала на трёх правых колонках, хотя скелет
+   * по-прежнему повторял строку правильно.
+   *
+   * Раскладка гарантирует другое: колонка «Объект» тянется, всё до неё
+   * прижато влево, всё после — вправо. Значит сравнивать надо левый край
+   * у ведущих колонок и ПРАВЫЙ край у замыкающих. Тогда проверка
+   * не зависит от ширины и ловит именно то, ради чего заведена, —
+   * расхождение колонок.
+   */
+  const columns = async (slot: string) =>
+    page.evaluate((selector) => {
+      const row = document.querySelector(selector)!
+      const box = row.getBoundingClientRect()
+      const children = [...row.children].map((child) => child.getBoundingClientRect())
+      // Тянется та колонка, что шире всех: остальные закреплены числом.
+      const flexing = children.reduce(
+        (best, rect, index) => (rect.width > children[best]!.width ? index : best),
+        0,
+      )
+      return {
+        count: children.length,
+        flexing,
+        before: children.slice(0, flexing).map((rect) => Math.round(rect.left - box.left)),
+        after: children.slice(flexing + 1).map((rect) => Math.round(box.right - rect.right)),
+        widths: children
+          .filter((_, index) => index !== flexing)
+          .map((rect) => Math.round(rect.width)),
+      }
+    }, slot)
+
   await page.goto('/screen/search')
   await page.waitForSelector('[data-slot="listing-row"]')
-  const real = await page.evaluate(() => {
-    const row = document.querySelector('[data-slot="listing-row"]')!
-    const left = row.getBoundingClientRect().left
-    return [...row.children].map((child) =>
-      Math.round(child.getBoundingClientRect().left - left),
-    )
-  })
+  const real = await columns('[data-slot="listing-row"]')
 
   await page.goto('/screen/states')
   await page.waitForSelector('[data-slot="skeleton-row"]')
-  const skeleton = await page.evaluate(() => {
-    const row = document.querySelector('[data-slot="skeleton-row"]')!
-    const left = row.getBoundingClientRect().left
-    return [...row.children].map((child) =>
-      Math.round(child.getBoundingClientRect().left - left),
-    )
-  })
+  const skeleton = await columns('[data-slot="skeleton-row"]')
 
-  // Кадры разной ширины — 908 у выдачи и 908 у стенда, — поэтому сравниваются
-  // смещения от левого края строки, а не абсолютные координаты.
   expect(skeleton, 'колонки скелета разошлись с колонками строки выдачи').toEqual(real)
 })

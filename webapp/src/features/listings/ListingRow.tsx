@@ -1,6 +1,7 @@
 import { motion } from "motion/react"
 
 import { Button } from "@/components/controls/Button"
+import { ListingPhoto } from "./ListingPhoto"
 import { Checkbox } from "@/components/controls/Checkbox"
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
@@ -95,6 +96,15 @@ type ListingRowProps = {
    * со сдвигом 4 слева.
    */
   selectable?: boolean
+  /**
+   * Кадр объекта. Нет ссылки — слот показывает заглушку и НЕ схлопывается.
+   *
+   * Приходит снаружи, а не считается внутри: фотография это свойство
+   * объявления, а не строки. Пока настоящих ссылок нет, вызывающий берёт
+   * тестовый кадр из `photoFor`; появится выгрузка — поменяется источник,
+   * а не строка.
+   */
+  photo?: string
   /** Отмечен ли объект. Имеет смысл только вместе с `selectable`. */
   checked?: boolean
   onCheckedChange?: (checked: boolean) => void
@@ -164,6 +174,7 @@ function ListingRow({
   action,
   selected = false,
   selectable = false,
+  photo,
   checked = false,
   onCheckedChange,
   onOpen,
@@ -259,6 +270,35 @@ function ListingRow({
           />
         </div>
       ) : null}
+
+      {/*
+        Кадр объекта: 84 × 56, радиус 12. Снято со слота `Фото`
+        в компоненте `jsW77`, спецификация — доска `e3qhy`.
+
+        **Стоит вторым, между флажком и адресом.** Снимок принадлежит
+        адресу и держится вплотную к нему; флажок — селектор строки,
+        и его место у самого края.
+
+        **Размер один в обеих плотностях.** Обрезать кадр в плотном
+        значило бы показать два разных куска одной комнаты на двух
+        экранах — то есть две правды об одном объекте. В строке 64
+        от кадра остаётся по 4 пикселя воздуха сверху и снизу, и это
+        осознанная теснота, а не просчёт.
+
+        **Слот не схлопывается, когда снимка нет.** Внутри заглушка
+        со значком; исчезни она — соседние строки поехали бы, и список
+        перестал читаться столбиком. Ширина 84 берёт мелкую ступень
+        заглушки: подпись в неё не влезает, и значка достаточно.
+
+        Пропорция три к двум — одна на весь продукт, кроме обложки
+        подборки: там кадр не показывает объект, а обозначает сущность.
+      */}
+      <div
+        data-slot="row-photo"
+        className="h-14 w-21 shrink-0 overflow-hidden rounded-xl bg-warm"
+      >
+        <ListingPhoto src={photo} alt={address} size="small" reason="no-photos" />
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex w-full items-center gap-2">

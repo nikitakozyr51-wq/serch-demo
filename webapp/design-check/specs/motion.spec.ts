@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { seedSession } from '../lib/session'
 
 /**
@@ -125,6 +125,25 @@ const RESPONSIVE = [
   { name: 'переключатель вида', selector: '[data-slot="density-toggle"]', property: 'background' },
 ] as const
 
+/**
+ * Открыть панель фильтров.
+ *
+ * Чипы фильтра живут внутри неё, а не на выдаче: с 9 августа колонки
+ * в раскладке нет ни на одной ширине, панель приходит наложением
+ * по нажатию (кадры `aoguG`, `C4zkJ`). Проверка, ищущая чип прямо
+ * на выдаче, до этой правки просто не находила узел.
+ *
+ * Ждём конца выезда: панель едет 200 мс, и нажатие на середине пути
+ * попадает в движущуюся мишень.
+ */
+async function openFilters(page: Page) {
+  await page.click('[data-slot="filter-bar-open"]')
+  await page.waitForSelector('[data-slot="filter-panel"]')
+  await page
+    .locator('[data-slot="filter-panel"]')
+    .evaluate((node) => Promise.all(node.getAnimations().map((a) => a.finished)))
+}
+
 test('под пальцем отвечает всё, что нажимается', async ({ page }) => {
   await seedSession(page)
 
@@ -142,6 +161,10 @@ test('под пальцем отвечает всё, что нажимается
      */
     await page.goto('/search')
     await page.waitForSelector('[data-slot="listing-row"]')
+    // Панель открывается ТОЛЬКО ради чипов: они живут внутри неё. Открывать
+    // её для строки или вкладки нельзя — затемнение накроет их, и навести
+    // будет не на что.
+    if (control.selector.includes('filter-chip')) await openFilters(page)
 
     // Переходы выключаются на время замера: сравниваются конечные состояния,
     // а не кадры анимации. Тот же приём, что в проверке честности полигона.
@@ -288,9 +311,16 @@ test('список выдачи собирается волной, а не по�
   await page.goto('/search')
   await page.waitForSelector('[data-slot="listing-row"]')
 
-  // Волна на первой загрузке уже доиграла, поэтому список пересобирается
-  // нажатием чипа — тем самым событием, ради которого движение и заведено.
-  await page.locator('[data-slot="filter-chip"]:not([data-selected])').first().click()
+  /*
+    Волна на первой загрузке уже доиграла, поэтому список пересобирается
+    сменой условий — тем самым событием, ради которого движение и заведено.
+
+    Условия меняются ВКЛАДКОЙ, а не чипом фильтра. Чипы с 9 августа живут
+    внутри панели наложением, и чтобы нажать чип, надо сначала открыть
+    панель — а она закрывает список затемнением ровно в тот момент, когда
+    его надо мерить. Вкладка меняет ту же величину и стоит на виду.
+  */
+  await page.locator('[data-slot="result-tab"]:not([data-active])').first().click()
 
   const sample = await page.evaluate(async () => {
     const read = () => {
