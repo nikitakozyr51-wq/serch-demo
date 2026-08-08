@@ -9,7 +9,7 @@ import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { demoPhone, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
-import { ListingPhoto, TitledBlock, groupDigits } from "@/features/listings"
+import { ListingPhoto, TitledBlock, groupDigits, photosFor } from "@/features/listings"
 import { notifyDone, notifyError } from "@/platform/notify"
 import { Reveal, SPRING } from "@/platform/motion"
 import { disclosureOf, formatMoment, useWorkspace, type Workspace } from "@/features/workspace"
@@ -279,14 +279,28 @@ function SimilarRow({
       // а не таблица выдачи.
       className="flex h-[114px] w-full items-center gap-5 border-t border-line-1 py-5 first:border-t-0"
     >
-      <div className="flex w-42 shrink-0 flex-col gap-1.5">
+      {/*
+        Пара кадров «этот и похожий» — 84 × 56 каждый.
+
+        Стояли 81 × 52: отношение 1,56 вместо трёх к двум. Это был размер
+        самой заглушки `KuC1Q`, и он разъезжался с правилом продукта —
+        снимок объекта всегда три к двум. Разъезд мелкий на глаз и крупный
+        по сути: блок сравнивает два объекта, и показывал их в пропорции,
+        отличной от той, в какой они же показаны строкой выше.
+      */}
+      <div className="flex w-44 shrink-0 flex-col gap-1.5">
         <Typography variant="columnHeader" tone="dense">
           {item.compared}
         </Typography>
-        <div className="flex w-full gap-1.5">
+        <div className="flex w-full gap-1">
           {[0, 1].map((index) => (
-            <div key={index} className="h-13 w-[81px] shrink-0 overflow-hidden rounded-sm">
-              <ListingPhoto alt={item.address} size="small" reason="no-photos" />
+            <div key={index} className="h-14 w-21 shrink-0 overflow-hidden rounded-sm">
+              <ListingPhoto
+                src={photosFor(item.address)[index]}
+                alt={item.address}
+                size="small"
+                reason="no-photos"
+              />
             </div>
           ))}
         </div>
