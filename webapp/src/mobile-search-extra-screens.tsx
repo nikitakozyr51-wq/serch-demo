@@ -13,7 +13,7 @@ import {
   MobileHeader,
   PhoneFrame,
 } from "@/features/cabinet"
-import { countQuery, MobileListingRow } from "@/features/listings"
+import { countQuery, MobileListingRow, photoFor } from "@/features/listings"
 import { touchSavedSearch, useWorkspace, type SavedSearch } from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
@@ -541,7 +541,7 @@ function SearchUnderlay() {
 
         <div className="flex w-full flex-col gap-2">
           {UNDERLAY_ROWS.map((row) => (
-            <MobileListingRow key={row.address} {...row} />
+            <MobileListingRow key={row.address} {...row} photo={photoFor(row.address)} />
           ))}
         </div>
       </div>

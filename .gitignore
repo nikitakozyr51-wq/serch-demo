@@ -106,6 +106,9 @@ backend/.prisma-generate.lock
 
 /serch
 /serch.pen
+# Картинки, сгенерированные в Pencil: принадлежат дизайн-файлу, а он тоже
+# не в репозитории. В продукт уходят сжатыми — webapp/public/demo-photos.
+/images/
 /prototype/
 /cabinet/
 /design-research/

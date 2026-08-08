@@ -7,7 +7,7 @@ import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { useSession } from "@/features/auth"
 import { MobileEmptyState, MobileScreen, MobileSectionHeader, MobileSheet } from "@/features/cabinet"
-import { ListingPhoto, plural } from "@/features/listings"
+import { ListingPhoto, photoFor, plural } from "@/features/listings"
 import {
   createCollection,
   formatDay,
@@ -260,7 +260,7 @@ export function MobileCollectionsPage() {
                 {/* Обложка 56 — кадр первого объекта. Кадра может не быть,
                     и это обычное состояние слота, а не сбой. */}
                 <div className="size-14 shrink-0 overflow-hidden rounded-md">
-                  <ListingPhoto alt={collection.name} size="small" reason="no-photos" />
+                  <ListingPhoto src={photoFor(collection.name)} alt={collection.name} size="small" reason="no-photos" />
                 </div>
 
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -371,7 +371,7 @@ export function MobileCollectionInsidePage() {
                   )}
                 >
                   <div className="size-14 shrink-0 overflow-hidden rounded-md">
-                    <ListingPhoto alt={object.address} size="small" reason="no-photos" />
+                    <ListingPhoto src={photoFor(object.address)} alt={object.address} size="small" reason="no-photos" />
                   </div>
 
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -672,7 +672,7 @@ export function MobileClientCollectionPage() {
                 className="flex w-full flex-col gap-3"
               >
                 <div className="h-60 w-full overflow-hidden rounded-2xl">
-                  <ListingPhoto alt={object.address} size="large" reason="no-photos" />
+                  <ListingPhoto src={photoFor(object.address)} alt={object.address} size="large" reason="no-photos" />
                 </div>
 
                 <div className="flex w-full flex-col gap-1">

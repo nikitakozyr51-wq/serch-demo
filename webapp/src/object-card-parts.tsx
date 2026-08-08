@@ -14,6 +14,7 @@ import {
   FactChip,
   FillBar,
   ListingPhoto,
+  photosFor,
   MarketDeviation,
   MiniTable,
   OwnerSignal,
@@ -276,7 +277,27 @@ function CardShell({
  * кадры не хранит: они живут ссылкой на площадку и исчезают вместе
  * с объявлением. Пока ссылок нет, слот показывает честную заглушку.
  */
-function CardMedia({ more }: { more: string }) {
+/**
+ * Кадр объекта и четыре миниатюры под ним.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * `more` НЕОБЯЗАТЕЛЕН, и это исправление. Плашка «ещё 12 фото» стояла всегда,
+ * поверх четвёртой миниатюры, — при том что фотографий у объекта нет ни одной
+ * и крупный кадр прямо говорит «Собственник не приложил фотографий». Экран
+ * утверждал два взаимоисключающих факта разом, а сама плашка была обычной
+ * надписью: ни кнопки, ни ссылки, `cursor: auto`.
+ *
+ * Плашка появится вместе с настоящими снимками: она осмысленна ровно тогда,
+ * когда за ней есть что открыть.
+ */
+function CardMedia({ address, more }: { address: string; more?: string }) {
+  // Пачка кадров считается из адреса, а не берётся случайно: у объекта
+  // обязан быть один и тот же набор в выдаче, в карточке и после
+  // перезагрузки. Первый совпадает с тем, что показан в строке выдачи, —
+  // иначе нажавший на строку попадает будто на другой объект.
+  const shots = photosFor(address)
+
   return (
     // Кадр приходит с приближением, а не снизу: это единственный на экране
     // предмет, а не текст. Масштаб на тексте заметно мылит буквы, на снимке —
@@ -284,7 +305,7 @@ function CardMedia({ more }: { more: string }) {
     // лишний узел между рядом и колонкой 564 сломал бы её ширину.
     <motion.div variants={ZOOM} className="flex w-[564px] shrink-0 flex-col gap-2">
       <div className="h-[376px] w-full overflow-hidden rounded-2xl">
-        <ListingPhoto alt="Кадр объекта" size="large" reason="no-photos" />
+        <ListingPhoto src={shots[0]} alt={`Кадр объекта ${address}`} size="large" reason="no-photos" />
       </div>
       <div className="flex w-full gap-2">
         {[0, 1, 2, 3].map((index) => (
@@ -293,8 +314,8 @@ function CardMedia({ more }: { more: string }) {
             data-slot="card-thumb"
             className="relative h-[90px] w-[135px] shrink-0 overflow-hidden rounded-2xl"
           >
-            <ListingPhoto alt="Кадр объекта" size="medium" reason="no-photos" />
-            {index === 3 ? (
+            <ListingPhoto src={shots[index]} alt={`Кадр объекта ${address}`} size="medium" reason="no-photos" />
+            {index === 3 && more !== undefined ? (
               <>
                 <span aria-hidden className="absolute inset-0 bg-fg/65" />
                 <span className="absolute right-2.5 bottom-2.5 flex h-6 items-center rounded-sm bg-fg/80 px-2 text-surface">

@@ -10,6 +10,8 @@ import { useSession, useSessionActions } from "@/features/auth"
 import { MobileBottomNav, MobileHeader, PhoneFrame } from "@/features/cabinet"
 import {
   ListingPhoto,
+  photoFor,
+  photosFor,
   MarketDeviation,
   StatusChip,
   type ListingStatus,
@@ -176,7 +178,7 @@ function StatusButton({ address }: { address: string }) {
 function ObjectPhoto({ address }: { address: string }) {
   return (
     <div className="relative h-55 w-full shrink-0">
-      <ListingPhoto alt={address} size="large" reason="no-photos" />
+      <ListingPhoto src={photoFor(address)} alt={address} size="large" reason="no-photos" />
       <span
         data-slot="mobile-photo-counter"
         className="absolute top-45 left-[318px] flex items-center rounded-sm bg-fg/80 px-2.5 py-1 text-surface"
@@ -301,10 +303,10 @@ function ComparedPair({
       </Typography>
       <div className="flex w-full gap-1">
         <div className={cn("min-w-0 flex-1", photoHeight)}>
-          <ListingPhoto alt="Кадр этого объекта" size="small" reason="no-photos" />
+          <ListingPhoto src={photosFor(address)[1]} alt="Кадр этого объекта" size="small" reason="no-photos" />
         </div>
         <div className={cn("min-w-0 flex-1", photoHeight)}>
-          <ListingPhoto alt={`Кадр объекта ${address}`} size="small" reason="no-photos" />
+          <ListingPhoto src={photosFor(address)[2]} alt={`Кадр объекта ${address}`} size="small" reason="no-photos" />
         </div>
       </div>
     </div>

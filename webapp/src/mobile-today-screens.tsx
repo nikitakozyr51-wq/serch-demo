@@ -17,7 +17,7 @@ import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { useSession, useSessionActions } from "@/features/auth"
 import { MobileBottomNav, MobileEmptyState, MobileHeader, MobileSectionHeader, PhoneFrame } from "@/features/cabinet"
-import { ListingPhoto, MarketDeviation, plural } from "@/features/listings"
+import { ListingPhoto, MarketDeviation, photoFor, plural } from "@/features/listings"
 import { notifyDone, notifyError } from "@/platform/notify"
 import {
   callbacksDue,
@@ -276,7 +276,7 @@ function TodayCardRow({ card }: { card: TodayCard }) {
           и слот честно показывает, что фотографии нет, — это обычное
           состояние объекта, а не сбой загрузки. */}
       <div className="size-18 shrink-0 overflow-hidden rounded-lg outline-solid outline-1 -outline-offset-1 outline-line-2">
-        <ListingPhoto alt={card.address} size="small" reason="no-photos" />
+        <ListingPhoto src={photoFor(card.address)} alt={card.address} size="small" reason="no-photos" />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">

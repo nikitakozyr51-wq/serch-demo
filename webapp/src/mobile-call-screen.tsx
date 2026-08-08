@@ -7,7 +7,7 @@ import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { demoPhone } from "@/features/auth"
 import { PhoneFrame } from "@/features/cabinet"
-import { ListingPhoto } from "@/features/listings"
+import { ListingPhoto, photoFor } from "@/features/listings"
 import { callbacksDue, takenNotCalled, useNow, useWorkspace } from "@/features/workspace"
 
 /**
@@ -106,7 +106,7 @@ export function MobileCallScreenPage() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
         <div className="h-58 w-full shrink-0 overflow-hidden rounded-2xl">
-          <ListingPhoto alt={address} size="large" reason="no-photos" />
+          <ListingPhoto src={photoFor(address)} alt={address} size="large" reason="no-photos" />
         </div>
 
         <div className="flex w-full shrink-0 items-center gap-3">

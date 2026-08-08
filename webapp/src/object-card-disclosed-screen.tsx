@@ -411,7 +411,9 @@ export function ObjectCardDisclosedPage() {
   return (
     <CardShell position="1 из 247" address={address}>
       <div className="flex w-full gap-6">
-        <CardMedia more="ещё 12 фото" />
+        {/* Плашка «ещё N фото» не передаётся: снимков у объекта нет,
+            и обещать их нечем. Вернётся вместе с настоящими фотографиями. */}
+        <CardMedia address={address} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <CardHeading

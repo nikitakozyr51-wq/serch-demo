@@ -5,7 +5,7 @@ import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { DISCLOSURE_PRICE, useSession } from "@/features/auth"
 import { MobileBottomNav, MobileHeader, PhoneFrame } from "@/features/cabinet"
-import { MobileListingRow, plural } from "@/features/listings"
+import { MobileListingRow, plural, photoFor } from "@/features/listings"
 import { useWorkspace } from "@/features/workspace"
 
 /**
@@ -127,6 +127,7 @@ export function MobileSearchScreenPage({
             <MobileListingRow
               key={row.address}
               {...row}
+              photo={photoFor(row.address)}
               // Карточка открывается у любого объекта, включая объект из
               // стоп-листа: она и объясняет, почему по нему нельзя работать.
               onOpen={() =>

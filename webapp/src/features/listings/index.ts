@@ -6,6 +6,7 @@ export { NearAddressDialog } from './NearAddressDialog'
 export { FilterPanel } from './FilterPanel'
 export { OPEN_FROM, useFilterCollapse } from './useFilterCollapse'
 export type { ChipOption, FilterPanelProps } from './FilterPanel'
+export { photoFor, photosFor } from './demo-photos'
 export { ListingPhoto } from './ListingPhoto'
 export { ListingsEmptyState } from './ListingsEmptyState'
 export type {
