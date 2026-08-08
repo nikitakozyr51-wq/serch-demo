@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { ArrowLeft } from "lucide-react"
-import { useState } from "react"
+import { Fragment, useState } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
@@ -330,12 +330,16 @@ export function AgencyInvitePage() {
               "Отключение обратимо не всё",
               "Сеансы завершатся сразу, раскрытые контакты и история звонков останутся у агентства.",
             ],
+          // Ключ стоит на ОБЁРТКЕ, а не на её детях: React считает списком
+          // то, что вернул `map`, — то есть фрагмент. Ключи внутри фрагмента
+          // ему не видны, и он писал в консоль «Each child in a list should
+          // have a unique key prop» на каждой отрисовке экрана.
           ].map(([title, text], index) => (
-            <>
+            <Fragment key={title}>
               {index === 0 ? null : (
-                <span key={`d${index}`} aria-hidden className="mx-6 h-13 w-px shrink-0 bg-line-1" />
+                <span aria-hidden className="mx-6 h-13 w-px shrink-0 bg-line-1" />
               )}
-              <div key={title} className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <Typography variant="numericDense" tone="default">
                   <>{title}</>
                 </Typography>
@@ -343,7 +347,7 @@ export function AgencyInvitePage() {
                   <>{text}</>
                 </Typography>
               </div>
-            </>
+            </Fragment>
           ))}
         </div>
       </div>

@@ -147,13 +147,32 @@ export type SavedSearch = {
   notify: SearchNotify
   /** Когда поиск открывали в последний раз. `undefined` — ни разу. */
   lastOpenedAt?: number
-  /** Условия в том виде, в каком их читает экран выдачи. */
+  /**
+   * Условия в том виде, в каком их читает экран выдачи.
+   *
+   * Поля повторяют `ListingQuery` из `features/listings`, и это осознанно:
+   * выдача не должна зависеть от журнала работы ради одного описания полей
+   * (причина записана в шапке `features/listings/query.ts`). Правится в двух
+   * местах — зато ни один из двух контекстов не тянет за собой другой.
+   *
+   * Всё, кроме первых пяти полей, необязательно: записи, заведённые до того,
+   * как цена, площадь, этаж и метро заработали, лежат в браузерах людей без
+   * них. Отсутствие поля означает «условие не задано» — старый поиск
+   * открывается тем же списком, что открывался вчера.
+   */
   query: {
     districts: string[]
     rooms: number[]
     priceCap: number
     tab: string
     sort: string
+    priceFrom?: number
+    priceTo?: number
+    areaFrom?: number
+    areaTo?: number
+    floor?: ("not-first" | "not-last")[]
+    metro?: string[]
+    walk?: number
   }
 }
 
@@ -560,20 +579,30 @@ export function setCollectionLink(id: string, linked: boolean) {
  * он приносил новое сам, и выключенный по умолчанию он был бы просто закладкой.
  * Выключить можно на главном экране одним нажатием.
  */
+/**
+ * Возвращает идентификатор заведённого поиска.
+ *
+ * Нужен тому, кто заводит поиск и сразу его открывает, — готовым наборам
+ * первого входа. Без него набор сохранялся и уводил на выдачу БЕЗ своих
+ * условий: человек нажимал «Петроградский 2-к до 15 млн» и получал весь
+ * список, а условия оставались лежать в журнале непримененными.
+ */
 export function saveSearch(
   name: string,
   query: SavedSearch["query"],
   by: string,
   shared = false,
-) {
+): string {
+  const id = nextId("s")
   write({
     ...current,
     savedSearches: [
-      { id: nextId("s"), name, createdAt: stamp(), by, shared, notify: "instant", query },
+      { id, name, createdAt: stamp(), by, shared, notify: "instant", query },
       ...current.savedSearches,
     ],
   })
   push("Сохранение поиска", () => remote.search(current.savedSearches[0]!))
+  return id
 }
 
 export function removeSavedSearch(id: string) {

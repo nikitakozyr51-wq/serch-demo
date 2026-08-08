@@ -32,6 +32,7 @@ import {
   ResultsHeader,
   NearAddressDialog,
   ResultTabs,
+  groupDigits,
   useFilterCollapse,
   type SearchMode,
 } from "@/features/listings"
@@ -332,6 +333,47 @@ function SearchScreenBody({
   const [districts, setDistricts] = useState<string[]>(
     opened?.query.districts ?? ["krasnogvardeisky", "nevsky", "kalininsky"],
   )
+
+  /**
+   * Условия, которые до этого были нарисованы и не работали.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * «Этаж» и «Метро» уходили в колонку с `selected: true` КОНСТАНТОЙ, а их
+   * группы не были подключены к `onToggle` вовсе. Итог человек видел такой:
+   * три условия стоят применёнными, снять их нельзя, нажатие по остальным
+   * не меняет ни строки, а «Сбросить 4» оставляет их тёмными.
+   *
+   * Диапазоны цены и площади живут ДВУМЯ значениями: текстом, который человек
+   * печатает, и числом, по которому идёт отбор. Одного не хватает: пока
+   * в поле «6 00», числа ещё нет, а текст уже есть, и превращать его в ноль
+   * на каждом нажатии значило бы обнулять выдачу посреди ввода.
+   */
+  const [ranges, setRanges] = useState({
+    priceFrom: opened?.query.priceFrom === undefined ? "" : String(opened.query.priceFrom),
+    priceTo: opened?.query.priceTo === undefined ? "" : String(opened.query.priceTo),
+    areaFrom: opened?.query.areaFrom === undefined ? "" : String(opened.query.areaFrom),
+    areaTo: opened?.query.areaTo === undefined ? "" : String(opened.query.areaTo),
+  })
+  const [floor, setFloor] = useState<("not-first" | "not-last")[]>(opened?.query.floor ?? [])
+  const [metro, setMetro] = useState<string[]>(opened?.query.metro ?? [])
+  const [walk, setWalk] = useState<number | undefined>(opened?.query.walk)
+
+  /** Число из напечатанного. Пусто и мусор — «условие не задано». */
+  const numberOf = (text: string) => {
+    const digits = text.replace(/\D/g, "")
+    return digits === "" ? undefined : Number(digits)
+  }
+
+  const conditions = {
+    priceFrom: numberOf(ranges.priceFrom),
+    priceTo: numberOf(ranges.priceTo),
+    areaFrom: numberOf(ranges.areaFrom),
+    areaTo: numberOf(ranges.areaTo),
+    ...(floor.length > 0 ? { floor } : {}),
+    ...(metro.length > 0 ? { metro } : {}),
+    ...(walk === undefined ? {} : { walk }),
+  }
   /**
    * Строка под курсором.
    *
@@ -440,6 +482,16 @@ function SearchScreenBody({
     .filter((row) => districts.length === 0 || districts.includes(row.district))
     .filter((row) => priceCap === 0 || row.priceValue <= priceCap * PRICE_UNIT[mode ?? "sale"])
     .filter((row) => rooms.length === 0 || rooms.includes(row.rooms))
+    // Цена, площадь, этаж и метро. До этой правки четыре поля и семь чипов
+    // колонки не участвовали в отборе вовсе: список не менялся ни на строку.
+    .filter((row) => conditions.priceFrom === undefined || row.priceValue >= conditions.priceFrom)
+    .filter((row) => conditions.priceTo === undefined || row.priceValue <= conditions.priceTo)
+    .filter((row) => conditions.areaFrom === undefined || row.area >= conditions.areaFrom)
+    .filter((row) => conditions.areaTo === undefined || row.area <= conditions.areaTo)
+    .filter((row) => !floor.includes("not-first") || row.floor > 1)
+    .filter((row) => !floor.includes("not-last") || row.floor < row.floors)
+    .filter((row) => metro.length === 0 || metro.includes(row.metro))
+    .filter((row) => walk === undefined || row.metroMinutes <= walk)
     .filter(
       (row) =>
         nearAddress === "" ||
@@ -706,19 +758,51 @@ function SearchScreenBody({
       : districts.map((id) => DISTRICTS.find((item) => item.id === id)?.label ?? id).join(" · "),
     ...rooms.map((room) => `${room}-к`),
     priceCap === 0 ? null : capLabel(mode ?? "sale", priceCap),
+    conditions.priceFrom === undefined ? null : `от ${groupDigits(conditions.priceFrom)} ₽`,
+    conditions.priceTo === undefined ? null : `до ${groupDigits(conditions.priceTo)} ₽`,
+    conditions.areaFrom === undefined ? null : `от ${conditions.areaFrom} м²`,
+    conditions.areaTo === undefined ? null : `до ${conditions.areaTo} м²`,
+    ...floor.map((item) => (item === "not-first" ? "не первый" : "не последний")),
+    ...metro,
+    walk === undefined ? null : `до ${walk} мин`,
     activeTab === "all" ? null : "вкладка сужена",
   ]
     .filter((part): part is string => part !== null)
     .join(" · ")
 
+  /**
+   * Сколько условий сейчас сужают выдачу.
+   *
+   * Считает ВСЕ условия, а не четыре из одиннадцати. До этого тёмных чипов
+   * в колонке было семь, а кнопка говорила «Сбросить 4»: три чипа рисовались
+   * выбранными константой и в счёт не попадали, потому что их не было
+   * в состоянии вовсе.
+   */
   const activeCount =
-    districts.length + rooms.length + (priceCap === 0 ? 0 : 1) + (activeTab === "all" ? 0 : 1)
+    districts.length
+    + rooms.length
+    + (priceCap === 0 ? 0 : 1)
+    + [conditions.priceFrom, conditions.priceTo, conditions.areaFrom, conditions.areaTo].filter(
+      (value) => value !== undefined,
+    ).length
+    + floor.length
+    + metro.length
+    + (walk === undefined ? 0 : 1)
+    + (activeTab === "all" ? 0 : 1)
 
   const resetFilters = () => {
     setDistricts([])
     setRooms([])
     setPriceCap(0)
     setActiveTab("all")
+    // Сброс обязан снимать ВСЁ, что показано применённым. Раньше три условия
+    // оставались тёмными после «Сбросить», потому что жили константой,
+    // а не состоянием: колонка утверждала «не первый · Лиговский проспект ·
+    // до 10 мин» при выдаче из всей базы.
+    setRanges({ priceFrom: "", priceTo: "", areaFrom: "", areaTo: "" })
+    setFloor([])
+    setMetro([])
+    setWalk(undefined)
   }
 
   /**
@@ -760,6 +844,40 @@ function SearchScreenBody({
                 )
               }
             }
+            // Две группы, которых в этом обработчике не было вовсе, — из-за
+            // чего семь чипов колонки нажимались и не делали ничего.
+            if (group === "floor") {
+              const rule = id as "not-first" | "not-last"
+              setFloor((current) =>
+                current.includes(rule)
+                  ? current.filter((item) => item !== rule)
+                  : [...current, rule],
+              )
+            }
+            if (group === "metro") {
+              // Пешая доступность — одно значение, а не набор: «до 10 мин»
+              // и «до 20 мин» вместе означали бы «до 20», то есть первое
+              // условие молча пропадало бы.
+              const minutes = id.startsWith("walk-") ? Number(id.slice(5)) : undefined
+              if (minutes !== undefined) {
+                setWalk((current) => (current === minutes ? undefined : minutes))
+                return
+              }
+              setMetro((current) =>
+                current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+              )
+            }
+          }}
+          onChangeRange={(edge, value) => {
+            const key =
+              edge === "price-from"
+                ? "priceFrom"
+                : edge === "price-to"
+                  ? "priceTo"
+                  : edge === "area-from"
+                    ? "areaFrom"
+                    : "areaTo"
+            setRanges((current) => ({ ...current, [key]: value }))
           }}
           onReset={resetFilters}
           onChangeAddress={() => setAddressOpen(true)}
@@ -780,26 +898,42 @@ function SearchScreenBody({
               selected: districts.includes(item.id),
             })),
           ]}
-          price={[
-            mode === "rent" ? "от 40 000" : "6 000 000",
-            capLabel(mode ?? "sale", priceCap),
-          ]}
-          area={["от 40", "до 80"]}
+          price={[ranges.priceFrom, ranges.priceTo]}
+          area={[ranges.areaFrom, ranges.areaTo]}
           floor={[
             [
-              { id: "not-first", label: "не первый", selected: true },
-              { id: "not-last", label: "не последний" },
+              { id: "not-first", label: "не первый", selected: floor.includes("not-first") },
+              { id: "not-last", label: "не последний", selected: floor.includes("not-last") },
             ],
           ]}
+          // Станции названы так, как они лежат в базе: чип «Лиговский
+          // проспект» отбирает объекты у Лиговского проспекта, а не
+          // подсвечивается сам по себе. Разбивка по рядам — из кадра `I55fb`.
+          //
+          // «+ станция» осталась подсказкой и НЕ работает: выбора станции
+          // в файле не нарисовано ни одним кадром, и придумывать его здесь
+          // я не стал. Она выключена, чтобы не выглядеть нажимаемой, — это
+          // единственное расхождение с кадром в этой группе, и оно названо.
           metro={[
-            [{ id: "ligovsky", label: "Лиговский проспект", selected: true }],
             [
-              { id: "obvodny", label: "Обводный канал", muted: true },
-              { id: "add-station", label: "+ станция", muted: true },
+              {
+                id: "Лиговский проспект",
+                label: "Лиговский проспект",
+                selected: metro.includes("Лиговский проспект"),
+              },
             ],
             [
-              { id: "walk-10", label: "до 10 мин", selected: true },
-              { id: "walk-20", label: "до 20 мин" },
+              {
+                id: "Обводный канал",
+                label: "Обводный канал",
+                selected: metro.includes("Обводный канал"),
+                muted: true,
+              },
+              { id: "add-station", label: "+ станция", muted: true, disabled: true },
+            ],
+            [
+              { id: "walk-10", label: "до 10 мин", selected: walk === 10 },
+              { id: "walk-20", label: "до 20 мин", selected: walk === 20 },
             ],
           ]}
           nearAddress={nearAddress === "" ? undefined : nearAddress}
@@ -817,7 +951,13 @@ function SearchScreenBody({
           ]}
           onSaveSearch={() => {
             const name = summary === "" ? "Новый поиск" : summary
-            saveSearch(name, { districts, rooms, priceCap, tab: activeTab, sort }, authorName)
+            // Новые условия уносятся вместе с остальными: сохранить поиск
+            // и потерять половину условий хуже, чем не сохранить.
+            saveSearch(
+              name,
+              { districts, rooms, priceCap, tab: activeTab, sort, ...conditions },
+              authorName,
+            )
             void navigate({ to: "/searches" })
           }}
         />
@@ -953,7 +1093,10 @@ function SearchScreenBody({
             фильтра в представление, а агент делает это по сто раз за смену.
           */}
           <div
-            key={`${activeTab}|${sort}|${districts.join()}|${rooms.join()}|${priceCap}|${nearAddress}|${mode}`}
+            // Ключ перечисляет ВСЕ условия: список обязан переигрывать
+            // появление на каждую смену условий, а не только на четыре
+            // из одиннадцати.
+            key={`${activeTab}|${sort}|${districts.join()}|${rooms.join()}|${priceCap}|${nearAddress}|${mode}|${ranges.priceFrom}|${ranges.priceTo}|${ranges.areaFrom}|${ranges.areaTo}|${floor.join()}|${metro.join()}|${walk ?? ""}`}
             /*
               Список прокручивается сам, а не режет содержимое.
 

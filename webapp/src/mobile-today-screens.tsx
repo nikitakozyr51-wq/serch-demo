@@ -14,11 +14,21 @@ import {
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { useOwnAgency, useSession, useSessionActions } from "@/features/auth"
+import { ALL_ROWS } from "@/data/search-rows"
+import { useSession, useSessionActions } from "@/features/auth"
 import { MobileBottomNav, MobileEmptyState, MobileHeader, MobileSectionHeader, PhoneFrame } from "@/features/cabinet"
-import { ListingPhoto, MarketDeviation } from "@/features/listings"
+import { ListingPhoto, MarketDeviation, plural } from "@/features/listings"
 import { notifyDone, notifyError } from "@/platform/notify"
-import { recordCall, useNow, type CallOutcome } from "@/features/workspace"
+import {
+  callbacksDue,
+  formatDay,
+  recordCall,
+  takenNotCalled,
+  useNow,
+  useWorkspace,
+  type CallOutcome,
+  type Workspace,
+} from "@/features/workspace"
 import { cn } from "@/lib/utils"
 
 /**
@@ -174,46 +184,86 @@ type TodayCard = {
   reason?: string
 }
 
-const TODAY_CARDS: TodayCard[] = [
-  {
-    price: "8,6 млн ₽",
-    deviation: -12,
-    address: "Ленская ул., 10",
-    meta: "Ладожская · 6 мин · 2-комн 58 м²",
-    touch: "Вы раскрыли в 14:12, дважды без ответа",
-    due: "Сегодня, 16:00",
-    dueTone: "default",
-  },
-  {
-    price: "12,8 млн ₽",
-    deviation: -12,
-    address: "Гражданский пр., 114",
-    meta: "Академическая · 8 мин · 3-комн 71 м²",
-    touch: "Анна Т. вчера в 18:40: ждёт звонка после 17:00",
-    due: "Сегодня, 17:00",
-    dueTone: "default",
-  },
-  {
-    price: "12,4 млн ₽",
-    deviation: 0,
-    address: "Стахановцев ул., 14",
-    meta: "Новочеркасская · 5 мин · 3-комн 74 м²",
-    touch: "Собственник просил не звонить · 12 июля",
-    due: "стоп-лист",
-    dueTone: "secondary",
-    blocked: true,
-    reason: "Собственник просил не звонить — стоп-лист агентства",
-  },
-  {
-    price: "6,3 млн ₽",
-    deviation: -9,
-    address: "Дальневосточный пр., 68",
-    meta: "Пр. Большевиков · 9 мин · 1-комн 36 м²",
-    touch: "Максим Л. взял 22.07, звонков нет",
-    due: "2 дня без звонка",
-    dueTone: "warn",
-  },
-]
+/**
+ * Карточки дня — ИЗ ЖУРНАЛА АГЕНТСТВА.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Здесь лежали четыре вписанные карточки, и достать их в продукте было
+ * нельзя: ветка с ними выбиралась по `useOwnAgency()`, а он у вошедшего
+ * всегда истинен. То есть на телефоне «Сегодня» показывало «Смена не начата»
+ * ВСЕГДА — при трёх раскрытых контактах и назначенном перезвоне тоже, —
+ * пока компьютер на том же агентстве честно рисовал две строки работы.
+ * Экран, ради которого агент достаёт телефон в разъездах, не показывал
+ * ничего никогда.
+ *
+ * Состав и порядок те же, что на компьютере (`/today`): сперва назначенные
+ * на сегодня перезвоны, потом раскрытые и не прозвоненные. Иначе два экрана
+ * одного дела считали бы день по-разному.
+ */
+function buildCards(workspace: Workspace, now: number, mine: string): TodayCard[] {
+  const due = callbacksDue(workspace, now)
+  const taken = takenNotCalled(workspace).filter(
+    (item) => !due.some((call) => call.address === item.address),
+  )
+
+  const cardFor = (address: string, touch: string, due: string, tone: TodayCard["dueTone"]) => {
+    const row = ALL_ROWS.find((item) => item.address === address)
+    const blocked = workspace.stopList.includes(address)
+    return {
+      price: row?.price ?? "—",
+      deviation: row?.deviation ?? 0,
+      address,
+      // Мета собирается из полей строки, а не из её продажной `meta`:
+      // на 390 в неё не влезают ни свежесть, ни площадка.
+      meta: row ? `${row.metro} · ${row.rooms}-к · ${row.area} м²` : "",
+      touch: blocked ? "Собственник просил не звонить" : touch,
+      due: blocked ? "стоп-лист" : due,
+      dueTone: blocked ? ("secondary" as const) : tone,
+      ...(blocked
+        ? {
+            blocked: true,
+            reason: "Собственник просил не звонить — стоп-лист агентства",
+          }
+        : {}),
+    }
+  }
+
+  return [
+    ...due.map((call) => {
+      const who = call.by === mine ? "Вы" : call.by
+      const when = call.remindAt === undefined ? "" : `Сегодня, ${hhmm(call.remindAt)}`
+      // Просрочен — время перезвона прошло. Тот же смысл и тот же тон,
+      // что в строке дня на компьютере.
+      const late = call.remindAt !== undefined && call.remindAt < now
+      return cardFor(
+        call.address,
+        `${who} ${formatDay(call.at, now)}: ${call.outcome}`,
+        late ? "перезвон просрочен" : when,
+        late ? "warn" : "default",
+      )
+    }),
+    ...taken.map((item) => {
+      const who = item.by === mine ? "Вы раскрыли" : `${item.by} раскрыл`
+      const days = Math.floor((now - item.at) / (24 * 60 * 60 * 1000))
+      return cardFor(
+        item.address,
+        `${who} ${formatDay(item.at, now)}, звонков нет`,
+        days === 0
+          ? "звонка ещё не было"
+          : `${days} ${plural(days, "день", "дня", "дней")} без звонка`,
+        days === 0 ? "default" : "warn",
+      )
+    }),
+  ]
+}
+
+/** Часы и минуты: «16:00». */
+function hhmm(at: number): string {
+  const date = new Date(at)
+  const two = (value: number) => String(value).padStart(2, "0")
+  return `${two(date.getHours())}:${two(date.getMinutes())}`
+}
 
 function TodayCardRow({ card }: { card: TodayCard }) {
   return (
@@ -275,6 +325,10 @@ function TodayCardRow({ card }: { card: TodayCard }) {
             // подряд в списке ссылок ничего не различают.
             <Link
               to="/m/call"
+              // Адрес уезжает параметром: без него прозвон открывался
+              // на объекте по умолчанию, то есть агент, нажавший «Позвонить»
+              // на четвёртой карточке, звонил по первой.
+              search={{ at: card.address }}
               aria-label={`Позвонить: ${card.address}`}
               data-slot="today-call"
               className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-md bg-fg px-4 text-surface transition-colors duration-120 outline-none active:bg-fg-press focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
@@ -301,9 +355,15 @@ export function MobileTodayPage() {
   // раскрытие контакта списывает деньги, которых человек нигде не видит,
   // и продукт выглядит нарисованным. Без сеанса остаются числа стенда.
   const session = useSession()
-  // Свой первый день пуст: чужие перезвоны и чужие взятые в работу объекты
-  // в новое агентство не переходят.
-  const own = useOwnAgency()
+  const workspace = useWorkspace()
+  const now = useNow()
+  /**
+   * День собирается из журнала, а не выбирается флагом «своё ли агентство».
+   *
+   * Пусто — значит в журнале действительно нечего делать, а не «этому
+   * человеку показываем пустоту».
+   */
+  const cards = buildCards(workspace, now, session?.name ?? "")
 
   return (
     <PhoneStand slot="mobile-today">
@@ -321,11 +381,13 @@ export function MobileTodayPage() {
           </Typography>
           <div className="h-px flex-1" />
           <Typography variant="denseText" tone="dense">
-            {own ? "смена не начата" : "4 объекта на сегодня"}
+            {cards.length === 0
+              ? "смена не начата"
+              : `${cards.length} ${plural(cards.length, "объект", "объекта", "объектов")} на сегодня`}
           </Typography>
         </div>
 
-        {own ? (
+        {cards.length === 0 ? (
           <MobileEmptyState
             icon={Sun}
             title="Смена не начата"
@@ -333,7 +395,7 @@ export function MobileTodayPage() {
           />
         ) : (
           <div className="flex w-full flex-col gap-2">
-            {TODAY_CARDS.map((card) => (
+            {cards.map((card) => (
               <TodayCardRow key={card.address} card={card} />
             ))}
           </div>

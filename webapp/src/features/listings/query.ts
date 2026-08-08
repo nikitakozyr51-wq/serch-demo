@@ -23,6 +23,35 @@ type ListingQuery = {
   priceCap: number
   tab: string
   sort: string
+  /**
+   * Условия, которые в колонке были НАРИСОВАНЫ, но не применялись.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Поля «Цена, ₽» и «Площадь, м²» стояли в колонке рамками с текстом внутри:
+   * ни ввода, ни фокуса, ни курсора. Чипы «Этаж» и «Метро» нажимались
+   * и не делали ничего — пятьдесят три строки до нажатия, пятьдесят три
+   * после, — причём три из них («не первый», «Лиговский проспект»,
+   * «до 10 мин») были нарисованы выбранными константой: агент видел три
+   * условия, которых не ставил и не мог снять.
+   *
+   * Все поля необязательные, и это важно для СОХРАНЁННЫХ ПОИСКОВ: записи,
+   * заведённые до этой правки, лежат в браузере людей без них. Отсутствие
+   * поля означает «условие не задано», то есть ничего не сужает, — и старый
+   * поиск открывается тем же списком, что открывался вчера.
+   */
+  /** Цена от и до, в рублях. */
+  priceFrom?: number
+  priceTo?: number
+  /** Площадь от и до, в м². */
+  areaFrom?: number
+  areaTo?: number
+  /** Какие этажи исключить. Оба условия могут стоять вместе. */
+  floor?: ("not-first" | "not-last")[]
+  /** Станции метро по названию, как они лежат в базе. */
+  metro?: string[]
+  /** Потолок пешей доступности в минутах. */
+  walk?: number
 }
 
 /**
@@ -48,6 +77,22 @@ function matchesQuery(row: SearchRow, query: ListingQuery): boolean {
   if (query.districts.length > 0 && !query.districts.includes(row.district)) return false
   if (query.priceCap !== 0 && row.priceValue > query.priceCap * 1_000_000) return false
   if (query.rooms.length > 0 && !query.rooms.includes(row.rooms)) return false
+
+  if (query.priceFrom !== undefined && row.priceValue < query.priceFrom) return false
+  if (query.priceTo !== undefined && row.priceValue > query.priceTo) return false
+  if (query.areaFrom !== undefined && row.area < query.areaFrom) return false
+  if (query.areaTo !== undefined && row.area > query.areaTo) return false
+
+  // «Не первый» и «не последний» — про этаж, а не про число: у пятиэтажки
+  // последний пятый, у двадцатипятиэтажной двадцать пятый.
+  if (query.floor?.includes("not-first") === true && row.floor <= 1) return false
+  if (query.floor?.includes("not-last") === true && row.floor >= row.floors) return false
+
+  if (query.metro !== undefined && query.metro.length > 0 && !query.metro.includes(row.metro)) {
+    return false
+  }
+  if (query.walk !== undefined && row.metroMinutes > query.walk) return false
+
   return true
 }
 

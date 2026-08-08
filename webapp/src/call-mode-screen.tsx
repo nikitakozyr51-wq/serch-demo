@@ -7,19 +7,21 @@ import { Checkbox } from "@/components/controls/Checkbox"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
-import { demoPhone, useSession, useSessionActions } from "@/features/auth"
+import { demoPhone, initialsOf, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
 import { notifyDone, notifyError } from "@/platform/notify"
 import {
   addToStopList,
   callQueue,
+  disclosureOf,
+  formatMoment,
   recordCall,
   todayTally,
   useNow,
   useWorkspace,
   type CallOutcome,
 } from "@/features/workspace"
-import { MarketDeviation, OwnerAvatar, plural } from "@/features/listings"
+import { MarketDeviation, OwnerAvatar, ownerStrengthWord, plural } from "@/features/listings"
 
 /**
  * КАБИНЕТ · Режим «Прозвон».
@@ -162,6 +164,49 @@ const OBJECT_ADDRESS = "Ленская ул., 10"
 
 const PHONE = "+7 900 000-99-87"
 
+/** Часы и минуты записи: «14:20». */
+function atTime(at: number): string {
+  const date = new Date(at)
+  const two = (value: number) => String(value).padStart(2, "0")
+  return `${two(date.getHours())}:${two(date.getMinutes())}`
+}
+
+/**
+ * Заголовок плашки касаний: сколько раз звонили и чем это кончилось.
+ *
+ * Один звонок называется исходом, несколько — числом попыток: агенту перед
+ * набором важно «уже пробовали или нет», а подробности лежат строкой ниже.
+ */
+function touchTitle(touches: { outcome: string; by: string }[]): string {
+  if (touches.length === 1) {
+    const only = touches[0]!
+    return `${only.by} · ${only.outcome}`
+  }
+
+  const answered = touches.filter((item) => item.outcome === "дозвонился").length
+  const tail = answered === 0 ? ", все без ответа" : `, дозвонов ${answered}`
+  return `Попыток дозвона: ${touches.length}${tail}`
+}
+
+/** Подробности плашки: во сколько звонили, назначен ли перезвон, спишут ли снова. */
+function touchDetail(
+  touches: { at: number; remindAt?: number }[],
+  paid: boolean,
+): string {
+  const times = touches.map((item) => atTime(item.at)).join(" и ")
+  const remind = touches.find((item) => item.remindAt !== undefined)?.remindAt
+  return [
+    times,
+    remind === undefined ? undefined : `перезвон назначен на ${atTime(remind)}`,
+    // Правило продукта, а не свойство записи: повторное раскрытие уже
+    // оплаченного контакта денег не стоит. Говорится только там, где
+    // за контакт действительно заплачено.
+    paid ? "повторное списание невозможно" : undefined,
+  ]
+    .filter((part) => part !== undefined)
+    .join(" · ")
+}
+
 export function CallModeScreenPage() {
   const navigate = useNavigate()
   const [result, setResult] = useState<string | null>("В работе")
@@ -201,6 +246,7 @@ export function CallModeScreenPage() {
   // решает, жива ли кнопка «Прозвон». Две копии разъехались бы на первой
   // правке, и кнопка вела бы в пустой режим.
   const queue = useMemo(() => callQueue(workspace, now), [workspace, now])
+  const tally = todayTally(workspace, now)
 
   /**
    * Позиция прижимается к длине очереди на каждой отрисовке.
@@ -212,6 +258,18 @@ export function CallModeScreenPage() {
   const address = queue[position] ?? OBJECT_ADDRESS
   const listing = ALL_ROWS.find((item) => item.address === address)
   const phone = queue.length === 0 ? PHONE : demoPhone(address)
+  /** Запись о списании по этому объекту: дата, сумма и кто раскрыл. */
+  const paid = disclosureOf(workspace, address)
+  /**
+   * Касания по этому объекту — от старого к новому.
+   *
+   * Журнал хранит записи новыми вперёд, а плашка перечисляет попытки в том
+   * порядке, в котором они происходили: «14:20 и 15:05», а не наоборот.
+   */
+  const touches = useMemo(
+    () => workspace.calls.filter((item) => item.address === address).slice().reverse(),
+    [workspace.calls, address],
+  )
   /**
    * Что записано по последнему звонку.
    *
@@ -425,22 +483,49 @@ export function CallModeScreenPage() {
         <Typography variant="controlLabel" tone="default">
           Прозвон
         </Typography>
+        {/*
+          Откуда взялся список.
+
+          Стояло «Красногвардейский · 2-к · 6–15 млн» — то есть подпись
+          обещала, что прозвон идёт по условиям фильтра. Он идёт не по ним:
+          очередь собирается из раскрытых и не прозвоненных контактов
+          и назначенных перезвонов (`callQueue`). Подпись теперь называет
+          настоящий источник — иначе агент ищет в списке объекты, которых
+          там нет по устройству.
+        */}
         <Typography variant="denseText" tone="dense">
-          Красногвардейский · 2-к · 6–15 млн
+          раскрытые контакты и назначенные перезвоны
         </Typography>
 
-        <CallProgress done={index} total={24} />
+        {/*
+          Полоса и подпись считают ОДНУ И ТУ ЖЕ очередь.
+          Здесь стояло `total={24}` константой, и в двух сантиметрах друг
+          от друга экран говорил «1 из 1» и рисовал полосу на четыре процента.
+        */}
+        <CallProgress done={position} total={queue.length} />
         <Typography variant="numericDense" tone="default">
           {queue.length === 0 ? "нечего прозванивать" : `${position + 1} из ${queue.length}`}
         </Typography>
 
         <div className="h-px flex-1" />
 
+        {/*
+          Счёт дня — из журнала, а не из трёх вписанных чисел.
+
+          Стояло «9 звонков · 2 диалога · 1 встреча» константой: агент за смену
+          сделал один звонок, а режим поздравлял его с девятью. «Встреч» здесь
+          больше нет вовсе — продукт фиксирует разговор, а не сделку, и исхода
+          «встреча» в панели не существует, поэтому число было нулевым
+          по устройству и врало по написанию.
+        */}
         <div className="flex items-center gap-4">
           {[
-            ["9", "звонков"],
-            ["2", "диалога"],
-            ["1", "встреча"],
+            [String(tally.calls), plural(tally.calls, "звонок", "звонка", "звонков")],
+            [String(tally.dialogs), plural(tally.dialogs, "диалог", "диалога", "диалогов")],
+            [
+              String(tally.disclosures),
+              plural(tally.disclosures, "раскрытие", "раскрытия", "раскрытий"),
+            ],
           ].map(([value, label]) => (
             <div key={label} className="flex items-baseline gap-1.5">
               <Typography variant="numericDense" tone="default">
@@ -459,47 +544,101 @@ export function CallModeScreenPage() {
         <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-7">
           <div className="h-76 w-full shrink-0 rounded-2xl bg-line-1" />
 
+          {/*
+            Объект слева — ТОТ, ПО КОТОРОМУ ЗВОНЯТ.
+
+            Здесь стояли цена, отклонение, метро, район и признаки
+            собственника константами одного объекта. Очередь при этом
+            настоящая, поэтому агент, дошедший до второй строки, видел
+            цену и метро от первой — и говорил их в трубку.
+
+            Всё, у чего есть источник, взято из строки базы. Двум фактам
+            источника нет нигде в продукте — «срок в выдаче» и «медиана
+            аналогов»: их не считает ни выдача, ни карточка объекта, и там
+            они тоже стоят числом из кадра. Придумывать им вывод здесь
+            значило бы завести четвёртую неправду вместо трёх; факты
+            оставлены как были, и это названо, а не спрятано.
+          */}
           <div className="flex w-full flex-col gap-1.5">
             <div className="flex w-full items-center gap-3">
               <Typography variant="cardPrice" tone="default">
-                8,6 млн ₽
+                {listing?.price ?? "—"}
               </Typography>
-              <MarketDeviation percent={-12} />
+              <MarketDeviation
+                percent={listing?.deviation ?? 0}
+                comparables={listing?.comparables}
+              />
               <Typography variant="denseText" tone="dense">
-                148 тыс ₽/м² · медиана 24 аналогов в радиусе 700 м: 9,8 млн ₽
+                {listing
+                  ? `${Math.round(listing.priceValue / listing.area / 1000)} тыс ₽/м² · медиана аналогов в радиусе 700 м`
+                  : "медиана аналогов в радиусе 700 м"}
               </Typography>
             </div>
             <Typography variant="rowPrice" tone="default">
-              {listing ? `${listing.address}${listing.meta}` : `${address} · 2-комн · 58 м² · 4/9 эт`}
+              {listing ? `${listing.address}${listing.meta}` : address}
             </Typography>
             <Typography variant="denseText" tone="dense">
-              Ладожская · 6 мин пешком · Красногвардейский район
+              {listing ? `${listing.metro} · ${listing.districtName} район` : "—"}
             </Typography>
           </div>
 
           <div className="flex h-10 w-full shrink-0 items-center gap-6">
             <Fact value="42 дня" label="в выдаче, медиана по СПб 112" />
             <span aria-hidden className="h-7.5 w-px shrink-0 bg-line-2" />
-            <Fact value="3 · 2 · 1" label="публикации, площадки, номер" />
+            <Fact
+              value={
+                listing
+                  ? `${listing.publications} · ${listing.platforms} · ${listing.phones}`
+                  : "—"
+              }
+              label="публикации, площадки, номер"
+            />
             <span aria-hidden className="h-7.5 w-px shrink-0 bg-line-2" />
-            <Fact value="Средние" label="признаки собственника" />
+            <Fact
+              value={listing ? ownerStrengthWord(listing.strength) : "—"}
+              label="признаки собственника"
+            />
             <span aria-hidden className="h-7.5 w-px shrink-0 bg-line-2" />
-            <Fact value="24.07, 14:12" label="контакт раскрыт тобой, 199 ₽" />
+            {/* Дата и сумма списания — из журнала раскрытий, а не из кадра:
+                «24.07, 14:12 · 199 ₽» стояло на объекте, за который агентство
+                могло не платить вовсе. */}
+            <Fact
+              value={paid ? formatMoment(paid.at) : "—"}
+              label={
+                paid
+                  ? `контакт раскрыт ${paid.by === session?.name ? "тобой" : paid.by}, ${paid.amount} ₽`
+                  : "контакт ещё не раскрыт"
+              }
+            />
           </div>
 
-          {/* Кто уже касался: две попытки сегодня и почему второй раз
-              деньги не спишутся. */}
-          <div className="flex w-full shrink-0 items-center gap-2.5 rounded-lg bg-warm px-3.5 py-3">
-            <OwnerAvatar initials="ИС" />
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <Typography variant="numericDense" tone="default">
-                Две попытки дозвона сегодня, обе без ответа
-              </Typography>
-              <Typography variant="metaText" tone="dense">
-                14:20 и 15:05 · перезвон назначен на 16:00 · повторное списание невозможно
-              </Typography>
+          {/*
+            Кто уже касался объекта — ИЗ ЖУРНАЛА ЗВОНКОВ.
+
+            Стояло «Две попытки дозвона сегодня, обе без ответа · 14:20
+            и 15:05 · перезвон назначен на 16:00» вписанной строкой. Плашка
+            существует затем, чтобы агент не набирал номер, по которому
+            коллега говорил десять минут назад, — и именно она врала громче
+            всех: два несуществующих звонка и назначенный перезвон
+            у объекта, к которому никто не прикасался.
+
+            Когда касаний нет, плашки нет вовсе. Пустая плашка «звонков не
+            было» заняла бы место и ничего не сказала: отсутствие касаний —
+            это состояние по умолчанию, и сообщать о нём нечего.
+          */}
+          {touches.length === 0 ? null : (
+            <div className="flex w-full shrink-0 items-center gap-2.5 rounded-lg bg-warm px-3.5 py-3">
+              <OwnerAvatar initials={initialsOf(touches[0]!.by)} />
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <Typography variant="numericDense" tone="default">
+                  {touchTitle(touches)}
+                </Typography>
+                <Typography variant="metaText" tone="dense">
+                  {touchDetail(touches, paid !== undefined)}
+                </Typography>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex w-full shrink-0 items-center gap-4">
             <Typography variant="cardPrice" tone="default">
@@ -563,9 +702,21 @@ export function CallModeScreenPage() {
             </Button>
           </div>
 
+          {/*
+            Правовая рамка называет ТОТ объект, по которому звонят.
+
+            Стояло «Звони по объекту на Ленской, 10» вписанной строкой. Слева
+            при этом мог стоять любой объект очереди — то есть агенту прямым
+            текстом разрешали разговор не про то, что он видит.
+
+            Адрес идёт именительным падежом через двоеточие, а не «на Ленской,
+            10», как в кадре. Это расхождение с кадром, и оно вынужденное:
+            кадр рисовал один объект, а в базе их 247, и склонять названия
+            улиц кодом нельзя — «на Партизанская ул., 15» хуже двоеточия.
+          */}
           <div className="w-140 shrink-0">
             <Typography variant="metaText" tone="dense">
-              Звони по объекту на Ленской, 10. Разговор о других услугах агентства
+              Звони по объекту: {address}. Разговор о других услугах агентства
               без согласия собственника, нарушение ст. 15 152-ФЗ
             </Typography>
           </div>
@@ -578,7 +729,7 @@ export function CallModeScreenPage() {
               {[
                 [
                   "Первая фраза",
-                  "«Здравствуйте, я по вашему объявлению на Ленской, 10. Звоню только по этому объекту.»",
+                  `«Здравствуйте, я по вашему объявлению — ${address}. Звоню только по этому объекту.»`,
                 ],
                 [
                   "Мотивация",

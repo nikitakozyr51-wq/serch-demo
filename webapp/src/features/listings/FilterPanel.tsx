@@ -83,16 +83,50 @@ function FilterGroup({
  * кегль не помещается. Заполненное поле графитом, пустое — приглушённым;
  * в макете цена заполнена, а площадь стоит подсказкой.
  */
-function RangeField({ value, empty }: { value: string; empty?: boolean }) {
+function RangeField({
+  value,
+  placeholder,
+  label,
+  onChange,
+}: {
+  value: string
+  /** Что стоит в пустом поле: «от 40», «до 80» — подсказка, а не значение. */
+  placeholder: string
+  /** Имя для читалки: четыре поля «от/до» подряд без него не различить. */
+  label: string
+  onChange: (next: string) => void
+}) {
   return (
-    <div
+    // Кегль и насыщенность приходят из `Typography`, а не классами: ступени
+    // текста живут в одном месте, и полю ввода тоже нельзя иметь своё.
+    <Typography asChild variant="denseText" tone="default">
+    <input
       data-slot="range-field"
-      className="flex h-ctl-sm min-w-0 flex-1 items-center rounded-md border border-border-control bg-surface px-2.5"
-    >
-      <Typography variant="denseText" tone={empty ? "dense" : "default"}>
-        {value}
-      </Typography>
-    </div>
+      type="text"
+      inputMode="numeric"
+      value={value}
+      placeholder={placeholder}
+      aria-label={label}
+      onChange={(event) => onChange(event.target.value)}
+      /*
+        ЛИНИЯ СНИЗУ, А НЕ КОРОБКА — и это расхождение с кадром.
+
+        Кадр `I55fb` рисует поля диапазона рамкой по кругу с радиусом 8,
+        и прежняя нерабочая рамка была собрана ровно по нему. Но решение
+        от 05.08 говорит прямо: «поле ввода — линия снизу, коробки нет»,
+        и его держит проверка `control-geometry`. Как только рамка стала
+        настоящим полем, правило её и назвало.
+
+        Решение проекта старше кадра, поэтому здесь оно и выигрывает. Форма
+        та же, что у всех остальных полей продукта, — иначе в одной колонке
+        стояли бы поля двух разных пород.
+
+        Высота 32, а не 40: это ячейка колонки 232, а не поле формы. Кегль 13
+        приходит вариантом `denseText`: в 232 четырнадцатый не помещается.
+      */
+      className="h-ctl-sm min-w-0 flex-1 border-0 border-b border-solid border-border-control bg-transparent text-fg transition-colors outline-none placeholder:text-text-dense hover:border-text-2 focus-visible:border-b-2 focus-visible:border-fg focus-visible:outline-none active:border-b-2 active:border-fg"
+      />
+    </Typography>
   )
 }
 
@@ -102,6 +136,14 @@ type ChipOption = {
   selected?: boolean
   /** Подсказка, а не условие: граница светлее. Так набраны станции метро. */
   muted?: boolean
+  /**
+   * Условия за этим чипом нет и не будет до отдельного кадра.
+   *
+   * Единственный такой чип — «+ станция»: выбора станции в файле не
+   * нарисовано, и чип существует как приглашение к экрану, которого нет.
+   * Выключённым он честно говорит «пока нечем», а не молчит под нажатием.
+   */
+  disabled?: boolean
 }
 
 /** Ряды чипов. Разбивка снята с файла, а не отдана автопереносу. */
@@ -120,6 +162,14 @@ type FilterPanelProps = {
   more: ChipRows
   onReset?: () => void
   onToggle?: (group: string, optionId: string) => void
+  /**
+   * Ввод в поля диапазонов. Строка, а не число: человек печатает «6 00»
+   * по пути к «6 000 000», и превращать это в ноль на каждом нажатии нельзя.
+   */
+  onChangeRange?: (
+    edge: "price-from" | "price-to" | "area-from" | "area-to",
+    value: string,
+  ) => void
   onChangeAddress?: () => void
   onSaveSearch?: () => void
   /**
@@ -160,6 +210,7 @@ function FilterPanel({
   more,
   onReset,
   onToggle,
+  onChangeRange,
   onChangeAddress,
   onSaveSearch,
   overlay = false,
@@ -175,6 +226,7 @@ function FilterPanel({
           label={option.label}
           selected={option.selected}
           muted={option.muted}
+          disabled={option.disabled}
           onClick={() => onToggle?.(group, option.id)}
         />
       )),
@@ -276,16 +328,36 @@ function FilterPanel({
             повторяется на экране два десятка раз и перестаёт читаться. */}
         <GroupLabel>{mode === "rent" ? "Цена, ₽/мес" : "Цена, ₽"}</GroupLabel>
         <div className="flex w-full gap-2">
-          <RangeField value={price[0]} />
-          <RangeField value={price[1]} />
+          <RangeField
+            value={price[0]}
+            placeholder={mode === "rent" ? "от 40 000" : "от 6 000 000"}
+            label="Цена от"
+            onChange={(next) => onChangeRange?.("price-from", next)}
+          />
+          <RangeField
+            value={price[1]}
+            placeholder={mode === "rent" ? "до 120 000" : "до 15 000 000"}
+            label="Цена до"
+            onChange={(next) => onChangeRange?.("price-to", next)}
+          />
         </div>
       </div>
 
       <div className="flex w-full flex-col gap-4">
         <GroupLabel>Площадь, м²</GroupLabel>
         <div className="flex w-full gap-2">
-          <RangeField value={area[0]} empty />
-          <RangeField value={area[1]} empty />
+          <RangeField
+            value={area[0]}
+            placeholder="от 40"
+            label="Площадь от"
+            onChange={(next) => onChangeRange?.("area-from", next)}
+          />
+          <RangeField
+            value={area[1]}
+            placeholder="до 80"
+            label="Площадь до"
+            onChange={(next) => onChangeRange?.("area-to", next)}
+          />
         </div>
       </div>
 

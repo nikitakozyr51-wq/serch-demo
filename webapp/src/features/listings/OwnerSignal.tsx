@@ -20,14 +20,10 @@ import { cn } from "@/lib/utils"
  *
  * Шкала нейтральная, не зелёная: семантика декоративно не применяется.
  */
-type OwnerStrength = "strong" | "medium" | "weak"
-
-const FILLED: Record<OwnerStrength, number> = { strong: 3, medium: 2, weak: 1 }
-const WORD: Record<OwnerStrength, string> = {
-  strong: "Сильные",
-  medium: "Средние",
-  weak: "Слабые",
-}
+// Шкала, слова и тип живут рядом друг с другом в `owner-strength.ts`:
+// файл с компонентом не может отдавать ещё и функции — быстрая перезагрузка
+// перестаёт работать на всём файле.
+import { FILLED, WORD, type OwnerStrength } from "./owner-strength"
 
 type OwnerSignalProps = {
   strength: OwnerStrength

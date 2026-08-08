@@ -82,25 +82,44 @@ const NOTIFY_NEXT: Record<SearchNotify, SearchNotify> = {
 }
 
 /**
- * Готовые наборы условий для первого поиска.
+ * Готовые наборы: четыре примера условий для первого поиска.
  *
  * Снято с `uCehD`. Это не данные и не выдумка: это четыре типовых запроса
  * петербургского агентства, и они существуют затем, чтобы человек, впервые
  * открывший кабинет, завёл первый поиск в два нажатия, а не изучал колонку
  * фильтров с нуля.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **Потолки цены пересчитаны по базе, а не взяты из кадра.** В кадре набор
+ * называется «Петроградский 2-к до 15 млн», и до этой правки условия набора
+ * никуда не применялись — человек нажимал и получал весь список из 260
+ * объектов. Как только набор начал применять СВОИ условия, обнаружилось,
+ * что двушек Петроградского до 15 млн в базе нет ни одной: они начинаются
+ * с 19,3 млн. То же у «Комнат и долей Центральный» с потолком 6 млн —
+ * однушки Центрального начинаются с 10,7 млн.
+ *
+ * Набор, который открывает пустую выдачу, хуже отсутствующего набора: это
+ * первое, что человек нажимает в продукте. Поэтому потолки подняты
+ * до ближайшей ступени, на которой набор что-то находит, а НАЗВАНИЕ
+ * приведено к условиям — иначе оно врало бы уже в самом себе.
+ *
+ * Тот же размен проект уже делал на этом экране: подпись «148 объектов
+ * от собственников» из кадра убрали, потому что весь Петроградский —
+ * 26 объектов. Когда число кадра спорит с базой, выигрывает база.
  */
 const PRESETS: { name: string; query: SavedSearch["query"] }[] = [
   {
-    name: "Петроградский 2-к до 15 млн",
-    query: { districts: ["petrogradsky"], rooms: [2], priceCap: 15, tab: "all", sort: "fresh" },
+    name: "Петроградский 2-к до 25 млн",
+    query: { districts: ["petrogradsky"], rooms: [2], priceCap: 25, tab: "all", sort: "fresh" },
   },
   {
     name: "Вся вторичка за сутки",
     query: { districts: [], rooms: [], priceCap: 0, tab: "new", sort: "fresh" },
   },
   {
-    name: "Комнаты и доли Центральный",
-    query: { districts: ["central"], rooms: [1], priceCap: 6, tab: "all", sort: "cheap" },
+    name: "Однушки Центральный до 15 млн",
+    query: { districts: ["central"], rooms: [1], priceCap: 15, tab: "all", sort: "cheap" },
   },
   {
     name: "Расселение",
@@ -305,15 +324,29 @@ function FirstSearch() {
   const navigate = useNavigate()
   const [text, setText] = useState("")
 
+  /**
+   * Набор заводит поиск И СРАЗУ ЕГО ОТКРЫВАЕТ.
+   *
+   * Раньше уводило на `/search` без параметров: условия набора ложились
+   * в журнал и не применялись, человек нажимал «Петроградский 2-к до 15 млн»
+   * и получал весь список из 260 объектов.
+   */
   const takePreset = (preset: (typeof PRESETS)[number]) => {
-    saveSearch(preset.name, preset.query, session?.name ?? "")
-    void navigate({ to: "/search", search: {} })
+    const id = saveSearch(preset.name, preset.query, session?.name ?? "")
+    void navigate({ to: "/search", search: { saved: id } })
   }
 
   return (
-    <div data-slot="first-search" className="flex w-full flex-col gap-8">
+    <div data-slot="first-search" className="flex w-full flex-col gap-6">
       <div className="flex w-full flex-col gap-2">
-        <Typography variant="panelTitle" tone="default" as="h2">
+        {/*
+          Заголовок крупнее названия раздела, а не равен ему.
+
+          Стояла ступень 20/600 — та же, что у «Сохранённых поисков» строкой
+          выше, — и экран открывался двумя одинаковыми заголовками подряд:
+          иерархии не было вовсе. Кадр `tkltB/udWJt` даёт 28/600.
+        */}
+        <Typography variant="cardPrice" tone="default" as="h2">
           С чего начать поиск
         </Typography>
         <div className="w-150">
@@ -340,7 +373,15 @@ function FirstSearch() {
           void navigate({ to: "/search", search: {} })
         }}
       >
-        <div className="flex h-ctl-lg w-150 items-center gap-3 border-b border-solid border-line-2 px-0">
+        {/*
+          Строка 740, кнопка 32 — по кадру `tkltB/uY46B`.
+
+          Здесь стояла кнопка верхней ступени (48) и поле на 40 px короче
+          кадрового: подчёркивание кончалось на 864, а в кадре доходит
+          до 904. Кнопка при 48 читалась главным действием ЭКРАНА, хотя
+          главное действие здесь — поле, в которое печатают.
+        */}
+        <div className="flex h-ctl-lg w-160 items-center gap-3 border-b border-solid border-line-2 px-0">
           <Search aria-hidden className="size-4 shrink-0 text-text-dense" strokeWidth={2} />
           <input
             data-slot="first-search-input"
@@ -351,7 +392,7 @@ function FirstSearch() {
             className="h-full min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-text-dense"
           />
         </div>
-        <Button type="submit" size="lg">
+        <Button type="submit" size="sm">
           Найти
         </Button>
       </form>
@@ -360,20 +401,44 @@ function FirstSearch() {
         <Typography variant="columnHeader" tone="dense">
           ГОТОВЫЕ НАБОРЫ
         </Typography>
-        <div className="flex w-full flex-wrap items-center gap-2">
-          {PRESETS.map((preset) => (
-            <button
-              key={preset.name}
-              type="button"
-              data-slot="preset"
-              onClick={() => takePreset(preset)}
-              className="flex h-ctl-sm cursor-pointer items-center rounded-full bg-warm px-4 transition-colors duration-120 hover:bg-warm-hover active:bg-warm-press outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-            >
-              <Typography variant="controlLabel" tone="default">
-                <>{preset.name}</>
-              </Typography>
-            </button>
-          ))}
+        {/*
+          Набор — КАРТОЧКА с двумя строками, а не чип.
+
+          Кадр `tkltB/dDQLH` рисует ряд из четырёх карточек 270×76: название
+          14/600 сверху и вторая строка 12/500 под ним. Здесь стоял ряд чипов
+          32 в одну строку — от карточки осталось только название, а вторая
+          строка, ради которой карточка и нужна, отсутствовала.
+
+          Вторая строка теперь СЧИТАЕТСЯ, а не берётся из кадра. В кадре
+          написано «148 объектов от собственников», а Петроградского в базе
+          26 объектов; прежний разбор поэтому убрал число вовсе. Считать его
+          стало чем: набор наконец применяет свои условия, и `countQuery`
+          отвечает по той же базе, которую человек увидит после нажатия.
+        */}
+        <div className="flex w-full items-stretch gap-6">
+          {PRESETS.map((preset) => {
+            const { total, fresh } = countQuery(ALL_ROWS, preset.query)
+            return (
+              <button
+                key={preset.name}
+                type="button"
+                data-slot="preset"
+                onClick={() => takePreset(preset)}
+                // 270×76 из кадра: поле 16, зазор между строками 8.
+                className="flex min-w-0 flex-1 cursor-pointer flex-col gap-2 rounded-xl bg-warm px-4 py-4 text-left transition-colors duration-120 hover:bg-warm-hover active:bg-warm-press outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+              >
+                <Typography variant="controlLabel" tone="default">
+                  <>{preset.name}</>
+                </Typography>
+                <Typography variant="metaText" tone="dense">
+                  <>
+                    {`${groupDigits(total)} ${plural(total, "объект", "объекта", "объектов")}`}
+                    {fresh === 0 ? "" : ` · ${fresh} за сутки`}
+                  </>
+                </Typography>
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -390,10 +455,19 @@ function FirstSearch() {
         <Typography variant="columnHeader" tone="dense">
           ПОИСКИ АГЕНТСТВА, УЖЕ НАСТРОЕННЫЕ РУКОВОДИТЕЛЕМ
         </Typography>
+        {/*
+          Текст говорит с тем, кто его читает.
+
+          Стояло «Появятся, когда руководитель заведёт общий поиск» — и это
+          показывалось человеку, у которого в шапке написано «Руководитель
+          агентства». То есть продукт советовал владельцу дождаться самого
+          себя. Руководителю теперь сказано, что делать; агенту — чего ждать.
+        */}
         <div className="w-150">
           <Typography variant="metaText" tone="dense">
-            Появятся, когда руководитель заведёт общий поиск. Общие поиски
-            видны всем сотрудникам и приносят новое каждому.
+            {session?.role === "owner"
+              ? "Заведите поиск и отметьте его общим — он появится в сайдбаре у всех сотрудников и будет приносить новое каждому. Общие поиски заработают вместе с сервером: пока работа лежит в этом браузере, чужой её не увидит."
+              : "Появятся, когда руководитель заведёт общий поиск. Общие поиски видны всем сотрудникам и приносят новое каждому."}
           </Typography>
         </div>
       </div>
@@ -405,9 +479,18 @@ function FirstSearch() {
         состояние, и исчезает вместе с ним. Подсказка, которую надо закрыть,
         закрывается не читая.
       */}
+      {/*
+        Ширина 740, а не вся рабочая область.
+
+        Плашка растягивалась на 1152, и строки объяснений выходили 1104 px —
+        полторы сотни знаков в строку, которые нечем читать. Кадр `tkltB/UevZX`
+        даёт 740×156. Заодно плашка перестаёт быть самым крупным пятном
+        экрана: это глоссарий, и он не должен весить больше поля,
+        в которое печатают.
+      */}
       <div
         data-slot="three-things"
-        className="flex w-full flex-col gap-3 rounded-2xl bg-warm px-6 py-5"
+        className="flex w-185 flex-col gap-3 rounded-2xl bg-warm px-6 py-5"
       >
         <Typography variant="columnHeader" tone="dense">
           ТРИ РАЗНЫЕ ВЕЩИ, И ВСЕ НАЗЫВАЮТСЯ ПОИСКОМ
@@ -482,7 +565,15 @@ export function SearchesPage() {
 
   return (
     <CabinetShell activeId="search">
-      <CabinetPage rhythm={workspace.savedSearches.length === 0 ? "sparse" : "dense"}>
+      {/*
+        Ритм 24 на обоих состояниях экрана.
+
+        Первый вход шёл разрежённым (32) по общему правилу «стартовому экрану
+        нужен воздух». Кадр `tkltB` держит между всеми блоками ровно 24 —
+        и сам считает: 80+80=160 → 184, 184+48=232 → 256, 256+108=364 → 388.
+        Разрежённый ритм копил разницу и уводил всё, что ниже, на 32 px.
+      */}
+      <CabinetPage rhythm="dense">
         <div className="flex h-8 w-full shrink-0 items-center gap-3">
           <Typography variant="panelTitle" tone="default" as="h1">
             Сохранённые поиски

@@ -694,12 +694,16 @@ export function BalanceTopUpsPage() {
               "Автопополнение",
               "Когда на счёте остаётся меньше 2 000 ₽, счёт пополняется сам на выбранную сумму.",
             ],
+          // Ключ стоит на ОБЁРТКЕ, а не на её детях: списком React считает
+          // то, что вернул `map`, то есть фрагмент. Ключи внутри фрагмента
+          // ему не видны, и экран писал предупреждение в консоль на каждой
+          // отрисовке.
           ].map(([title, text], index) => (
-            <>
+            <Fragment key={title}>
               {index === 0 ? null : (
-                <span key={`d${index}`} aria-hidden className="mx-6 h-13 w-px shrink-0 bg-line-1" />
+                <span aria-hidden className="mx-6 h-13 w-px shrink-0 bg-line-1" />
               )}
-              <div key={title} className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <Typography variant="numericDense" tone="default">
                   <>{title}</>
                 </Typography>
@@ -707,7 +711,7 @@ export function BalanceTopUpsPage() {
                   <>{text}</>
                 </Typography>
               </div>
-            </>
+            </Fragment>
           ))}
         </div>
       </div>

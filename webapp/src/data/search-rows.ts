@@ -43,6 +43,18 @@ export type SearchRow = {
   priceValue: number
   freshnessMinutes: number
   /**
+   * Этаж и этажность — для группы фильтров «Этаж».
+   *
+   * До этого они существовали ТОЛЬКО внутри строки `meta` («4/9»), то есть
+   * как текст для глаза. Из-за этого чипы «не первый» и «не последний»
+   * нечем было применить, и они висели в колонке нажимаемыми и мёртвыми:
+   * пятьдесят три строки до нажатия, пятьдесят три после.
+   */
+  floor: number
+  floors: number
+  /** Минут пешком до метро — для группы «Метро». Та же причина. */
+  metroMinutes: number
+  /**
    * Сколько сопоставимых объектов дали медиану, от которой считается
    * отклонение.
    *
@@ -85,6 +97,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 2,
     area: 58,
     priceValue: 8_600_000,
+    floor: 4,
+    floors: 9,
+    metroMinutes: 6,
     freshnessMinutes: 14,
   },
   {
@@ -106,6 +121,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 3,
     area: 71,
     priceValue: 12_800_000,
+    floor: 6,
+    floors: 9,
+    metroMinutes: 8,
     freshnessMinutes: 38,
   },
   {
@@ -126,6 +144,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 3,
     area: 74,
     priceValue: 12_400_000,
+    floor: 2,
+    floors: 5,
+    metroMinutes: 8,
     freshnessMinutes: 60,
   },
   {
@@ -147,6 +168,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 2,
     area: 61,
     priceValue: 9_900_000,
+    floor: 7,
+    floors: 9,
+    metroMinutes: 6,
     freshnessMinutes: 120,
   },
   {
@@ -168,6 +192,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 1,
     area: 36,
     priceValue: 6_300_000,
+    floor: 3,
+    floors: 12,
+    metroMinutes: 9,
     freshnessMinutes: 180,
   },
   {
@@ -188,6 +215,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 3,
     area: 68,
     priceValue: 11_200_000,
+    floor: 5,
+    floors: 9,
+    metroMinutes: 7,
     freshnessMinutes: 240,
   },
   {
@@ -209,6 +239,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 2,
     area: 59,
     priceValue: 9_800_000,
+    floor: 7,
+    floors: 9,
+    metroMinutes: 9,
     freshnessMinutes: 300,
   },
   {
@@ -229,6 +262,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 2,
     area: 56,
     priceValue: 10_100_000,
+    floor: 3,
+    floors: 12,
+    metroMinutes: 10,
     freshnessMinutes: 360,
   },
   {
@@ -249,6 +285,9 @@ export const MEASURED_ROWS: SearchRow[] = [
     rooms: 2,
     area: 57,
     priceValue: 8_800_000,
+    floor: 8,
+    floors: 9,
+    metroMinutes: 5,
     freshnessMinutes: 480,
   },
 ]
@@ -308,6 +347,9 @@ function toRow(item: Listing, index: number): SearchRow {
     rooms: item.rooms,
     area: item.area,
     priceValue: item.price,
+    floor: item.floor,
+    floors: item.floors,
+    metroMinutes: item.metroMinutes,
     freshnessMinutes: item.freshnessMinutes,
     ...stateOf(item, index),
   }

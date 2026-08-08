@@ -40,6 +40,14 @@ type NavEntry = {
    * ровно то, на что жаловался владелец: «ничего не нажимается».
    */
   to?: string
+  /**
+   * Что уходит в адрес параметром.
+   *
+   * Нужно сохранённым поискам: без него пункт «Невский, 2-к до 12 млн»
+   * открывал выдачу с чужими условиями, то есть называл одно, а показывал
+   * другое.
+   */
+  search?: Record<string, string>
 }
 
 type CabinetSidebarProps = {
@@ -80,7 +88,7 @@ function NavItem({
   // кнопкой браузера. Кнопка ничего этого не умеет.
   const Element = entry.to ? Link : "button"
   const linkProps = entry.to
-    ? ({ to: entry.to } as const)
+    ? ({ to: entry.to, ...(entry.search ? { search: entry.search } : {}) } as const)
     : ({ type: "button", onClick: () => onSelect?.(entry.id) } as const)
 
   return (

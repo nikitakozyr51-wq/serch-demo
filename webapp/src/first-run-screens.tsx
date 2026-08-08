@@ -365,7 +365,14 @@ export function SecondEmployeePage() {
   // Поиски агентства спрашиваем у сайдбара, а не заводим второй список:
   // разъехавшиеся источники здесь уже стоили владельцу нерабочих строк
   // в меню — см. `useCabinetNav`.
+  /**
+   * `undefined` у поисков агентства означает «раздела нет вовсе» — так
+   * подписан контракт сайдбара. Экран второго сотрудника перечисляет их
+   * фактом, и для него «раздела нет» и «раздел пуст» — одно и то же:
+   * поисков не видно ни в том, ни в другом случае.
+   */
   const { agencySearches } = useCabinetNav()
+  const agencyList = agencySearches ?? []
 
   /**
    * Здороваемся именем в том виде, в каком его ввели.
@@ -426,14 +433,14 @@ export function SecondEmployeePage() {
           <Fact
             label="Поиски агентства"
             value={
-              agencySearches.length === 0
+              agencyList.length === 0
                 ? "Пока нет"
-                : `${agencySearches.length} ${plural(agencySearches.length, "поиск", "поиска", "поисков")}`
+                : `${agencyList.length} ${plural(agencyList.length, "поиск", "поиска", "поисков")}`
             }
             note={
-              agencySearches.length === 0
+              agencyList.length === 0
                 ? "Появятся в левом меню, когда руководитель их настроит."
-                : agencySearches.map((search) => `«${search.label}»`).join(" · ")
+                : agencyList.map((search) => `«${search.label}»`).join(" · ")
             }
           />
           <Fact

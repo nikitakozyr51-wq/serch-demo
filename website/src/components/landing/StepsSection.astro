@@ -92,20 +92,22 @@ const steps = [
             <a
               class="ctl group flex h-12 items-center gap-4 border-t border-hairline"
               href={`#${step.id}`}
+              data-step-link={step.id}
               aria-current={index === 0 ? 'true' : undefined}
             >
               <span
                 class:list={[
-                  'text-13 font-semibold transition-colors duration-150 group-hover:text-fg',
-                  index === 0 ? 'text-fg' : 'text-text-dense',
+                  'text-13 font-semibold text-text-dense transition-colors duration-150',
+                  'group-hover:text-fg group-aria-[current=true]:text-fg',
                 ]}
               >
                 {step.number}
               </span>
               <span
                 class:list={[
-                  'text-17 transition-colors duration-150 group-hover:text-fg',
-                  index === 0 ? 'font-semibold text-fg' : 'font-medium text-text-2',
+                  'text-17 font-medium text-text-2 transition-colors duration-150',
+                  'group-hover:text-fg',
+                  'group-aria-[current=true]:font-semibold group-aria-[current=true]:text-fg',
                 ]}
               >
                 {step.title}
@@ -143,3 +145,61 @@ const steps = [
     </div>
   </div>
 </section>
+
+<script>
+  /**
+   * Метка «где я» едет за прокруткой.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Оглавление липкое и стоит рядом с четырьмя карточками — ровно затем,
+   * чтобы отвечать на вопрос «где я». Отметка при этом висела на первом
+   * пункте НАВСЕГДА: `aria-current` был выставлен по номеру в списке, а не
+   * по прокрутке. На четвёртой карточке подсвечен по-прежнему «01» — то есть
+   * единственная работа этого блока не выполнялась, а экранному диктору
+   * при этом сообщалось неверное.
+   *
+   * Наблюдатель, а не обработчик прокрутки: браузер сам считает пересечения
+   * и не будит страницу на каждый пиксель.
+   *
+   * Полоса `-45% 0px -45%` оставляет чувствительной середину экрана: карточка
+   * становится текущей, когда доехала до центра, а не когда показался её край.
+   * Иначе на границе двух карточек отметка дёргается между пунктами.
+   *
+   * Без JS остаётся то, что нарисовано в кадре: помечен первый пункт. Разметка
+   * от скрипта не зависит, он только переставляет отметку.
+   */
+  const links = new Map<string, HTMLElement>()
+  for (const link of document.querySelectorAll<HTMLElement>('[data-step-link]')) {
+    const id = link.dataset.stepLink
+    if (id !== undefined) links.set(id, link)
+  }
+
+  const cards = [...links.keys()]
+    .map((id) => document.getElementById(id))
+    .filter((card): card is HTMLElement => card !== null)
+
+  if ('IntersectionObserver' in window && cards.length > 0) {
+    const mark = (id: string) => {
+      for (const [key, link] of links) {
+        if (key === id) link.setAttribute('aria-current', 'true')
+        else link.removeAttribute('aria-current')
+      }
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        /* Из нескольких попавших в полосу берётся самая верхняя: читают
+           сверху вниз, и текущая — та, к которой человек только что пришёл. */
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        const first = visible[0]
+        if (first !== undefined) mark(first.target.id)
+      },
+      { rootMargin: '-45% 0px -45% 0px', threshold: 0 },
+    )
+
+    for (const card of cards) observer.observe(card)
+  }
+</script>
