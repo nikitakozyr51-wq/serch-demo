@@ -9,3 +9,5 @@
 export { useAnimatedNumber } from './useAnimatedNumber'
 export { useExit, useExitValue } from './useExit'
 export { usePending } from './usePending'
+export { SPRING, STAGGER, stepOf, RISE, SLIDE, ZOOM, group } from './physics'
+export { Reveal, Stagger } from './Reveal'

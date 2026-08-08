@@ -154,6 +154,26 @@ export function subjectiveRefunds(workspace: Workspace, now: number): number {
 }
 
 /**
+ * Очередь прозвона: что режим «Прозвон» пройдёт подряд.
+ *
+ * Живёт здесь, а не в экране прозвона, потому что ответ нужен ДВУМ экранам.
+ * «Сегодня» решает по ней, жива ли главная кнопка, а прозвон — по чему идти.
+ * Пока правило было записано только внутри `/call`, кнопка на «Сегодня»
+ * гасла по совсем другому условию — «своё ли это агентство», — то есть
+ * всегда, и главное действие экрана не работало ни разу.
+ *
+ * Порядок не случаен: сперва назначенные перезвоны (у них есть время, и оно
+ * проходит), потом взятые в работу и не прозвоненные. Стоп-лист вычитается
+ * последним: по этим номерам звонить нельзя ни одной ролью.
+ */
+export function callQueue(workspace: Workspace, now: number): string[] {
+  const due = callbacksDue(workspace, now).map((item) => item.address)
+  const taken = takenNotCalled(workspace).map((item) => item.address)
+  const all = [...due, ...taken.filter((address) => !due.includes(address))]
+  return all.filter((address) => !workspace.stopList.includes(address))
+}
+
+/**
  * Дата и время для показа: «24.07, 14:12».
  *
  * Формат один на весь кабинет и живёт здесь, а не в каждом экране: восемь
@@ -163,6 +183,24 @@ export function formatMoment(at: number): string {
   const date = new Date(at)
   const two = (value: number) => String(value).padStart(2, "0")
   return `${two(date.getDate())}.${two(date.getMonth() + 1)}, ${two(date.getHours())}:${two(date.getMinutes())}`
+}
+
+/**
+ * «суббота, 8 августа» — подпись сегодняшнего дня.
+ *
+ * Стояла вписанной строкой «пятница, 24 июля» в шапке «Сегодня» и не менялась
+ * никогда: экран, который называется днём, показывал чужой день. Дата в этом
+ * месте — единственная опора человека на вопрос «это точно про сегодня?»,
+ * и врать в ней хуже, чем не показывать вовсе.
+ *
+ * День недели и месяц идут через `Intl`, а не таблицей из двенадцати строк:
+ * падежи месяцев («8 августа», а не «8 август») браузер знает сам, а таблица
+ * их бы потеряла на первом же ноябре.
+ */
+const DAY_FORMAT = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" })
+
+export function formatWeekday(at: number): string {
+  return DAY_FORMAT.format(new Date(at))
 }
 
 /** «сегодня, 09:12» — там, где важнее день, чем дата. */

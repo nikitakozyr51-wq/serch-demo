@@ -6,19 +6,29 @@ import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { AgencyEmpty } from "@/features/agency"
 import { ALL_ROWS } from "@/data/search-rows"
-import { useOwnAgency } from "@/features/auth"
 import {
+  callQueue,
   callbacksDue,
   disclosureOf,
+  formatAgo,
   formatDay,
+  formatWeekday,
   lastCall,
   takenNotCalled,
   todayTally,
+  touchSavedSearch,
   useNow,
   useWorkspace,
+  type SavedSearch,
 } from "@/features/workspace"
 import { CabinetPage, CabinetShell } from "@/features/cabinet"
-import { CountPair, MarketDeviation } from "@/features/listings"
+import {
+  CountPair,
+  MarketDeviation,
+  countQuery,
+  matchesQuery,
+  plural,
+} from "@/features/listings"
 import { cn } from "@/lib/utils"
 
 /**
@@ -188,20 +198,46 @@ function CallRowView({ row, last }: { row: CallRow; last: boolean }) {
 
 
 
-const FRESH = [
-  { id: "s1", label: "Красногвардейский 2-к до 15", note: "12 новых · последнее 14 минут назад" },
-  { id: "s3", label: "Снизили цену за 3 дня", note: "5 новых · последнее 1 час назад" },
-  { id: "s2", label: "Комнаты Центральный", note: "3 новых · последнее 3 часа назад" },
-]
+/**
+ * Что принесли сохранённые поиски: строка на каждый ЗАВЕДЁННЫЙ поиск.
+ *
+ * Здесь стояли три вписанных поиска — «Красногвардейский 2-к до 15»,
+ * «Снизили цену за 3 дня», «Комнаты Центральный». Секция при этом
+ * подписывалась настоящим числом из журнала, поэтому у агентства с одним
+ * своим поиском заголовок говорил «1», а под ним стояли три чужих строки,
+ * и ни одной своей. Счётчик и содержимое спорили в одном блоке.
+ *
+ * Числа считаются тем же правилом, что на «Сохранённых поисках»
+ * (`countQuery`): иначе в сайдбаре «12 новых», а в выдаче девять строк —
+ * расхождение, которое не видно глазом и очень заметно человеку,
+ * рассчитывавшему на эти двенадцать.
+ */
+function freshLine(search: SavedSearch): string {
+  const { fresh } = countQuery(ALL_ROWS, search.query)
+  if (fresh === 0) return "новых нет"
+
+  const newest = ALL_ROWS.filter((row) => matchesQuery(row, search.query)).reduce(
+    (best, row) => Math.min(best, row.freshnessMinutes),
+    Number.POSITIVE_INFINITY,
+  )
+
+  return `${fresh} ${plural(fresh, "новый", "новых", "новых")} · последнее ${formatAgo(newest)} назад`
+}
 
 export function TodayScreenPage() {
   const navigate = useNavigate()
-  // Первый экран после регистрации. Именно он создавал впечатление «зашёл
-  // в чужое готовое агентство»: восемнадцать звонков, четыре перезвона
-  // и три сохранённых поиска у агентства, которому пять минут от роду.
-  const own = useOwnAgency()
   const workspace = useWorkspace()
   const now = useNow()
+  /**
+   * Очередь прозвона — она же ответ на «жива ли главная кнопка экрана».
+   *
+   * Здесь стояло `disabled={own}`, то есть «выключить, если агентство своё».
+   * Своё оно у каждого вошедшего, поэтому кнопка «Прозвон» была выключена
+   * ВСЕГДА — в том числе когда под ней лежали две строки, готовые к звонку.
+   * Комментарий рядом объяснял это тем, что «списка ещё нет», хотя список
+   * ровно тут же и печатался.
+   */
+  const queue = callQueue(workspace, now)
 
   /**
    * «Сегодня» собирается из журналов, а не стоит константой.
@@ -268,7 +304,7 @@ export function TodayScreenPage() {
                 Сегодня
               </Typography>
               <Typography variant="denseText" tone="dense">
-                пятница, 24 июля
+                {formatWeekday(now)}
               </Typography>
             </div>
             <div className="h-px flex-1" />
@@ -277,26 +313,45 @@ export function TodayScreenPage() {
               строку глазами, а идти подряд без возврата сюда. Режим собран
               и открывается по-настоящему; замечание владельца в макете
               касается состава карточки внутри и на дверь не влияет.
+
+              Выключена кнопка ровно тогда, когда прозванивать нечего:
+              выключенная кнопка объясняет состояние, пустой режим за ней —
+              нет. Подсказка называет причину, потому что «серая кнопка
+              без объяснения» — это та же тишина, только вежливая.
             */}
-            {/* Прозвон — это проход по списку контактов подряд. Списка ещё
-                нет, поэтому кнопка выключена, а не ведёт в пустой режим:
-                выключенная кнопка объясняет состояние, пустой экран за ней —
-                нет. */}
             <Button
               variant="primary"
               size="sm"
-              disabled={own}
+              disabled={queue.length === 0}
+              title={queue.length === 0 ? "Прозванивать нечего: раскройте контакт или назначьте перезвон" : undefined}
               onClick={() => void navigate({ to: "/call" })}
             >
               Прозвон
             </Button>
           </div>
 
-          {/* Счёт дня: сделанное, а не показатели эффективности. */}
+          {/*
+            Счёт дня: сделанное, а не показатели эффективности.
+
+            Подписи склоняются по числу. Стояли одной формой на все числа,
+            и день с одним звонком читался «1 звонков · 1 диалогов».
+          */}
           <div className="flex h-6 w-full items-center gap-6">
-            <CountPair value={String(tally.calls)} label="звонков" large />
-            <CountPair value={String(tally.dialogs)} label="диалогов" large />
-            <CountPair value={String(tally.disclosures)} label="раскрытий" large />
+            <CountPair
+              value={String(tally.calls)}
+              label={plural(tally.calls, "звонок", "звонка", "звонков")}
+              large
+            />
+            <CountPair
+              value={String(tally.dialogs)}
+              label={plural(tally.dialogs, "диалог", "диалога", "диалогов")}
+              large
+            />
+            <CountPair
+              value={String(tally.disclosures)}
+              label={plural(tally.disclosures, "раскрытие", "раскрытия", "раскрытий")}
+              large
+            />
             <CountPair value={`${tally.spent} ₽`} label="потрачено" large />
           </div>
         </div>
@@ -332,13 +387,13 @@ export function TodayScreenPage() {
 
         {workspace.savedSearches.length === 0 ? null : (
         <Section label="НОВОЕ ПО МОИМ ПОИСКАМ" count={workspace.savedSearches.length}>
-          {FRESH.map((item, index) => (
+          {workspace.savedSearches.map((item, index) => (
             <div
               key={item.id}
               data-slot="today-search"
               className={cn(
                 "flex h-14 w-full items-center gap-3 px-4",
-                index < FRESH.length - 1 && "border-b border-line-2",
+                index < workspace.savedSearches.length - 1 && "border-b border-line-2",
               )}
             >
               {/* Название и мета стоят в одну строку рядом, а не столбиком:
@@ -346,20 +401,24 @@ export function TodayScreenPage() {
               <ListFilter aria-hidden className="size-4 shrink-0 text-text-dense" strokeWidth={2} />
               <div className="w-48 shrink-0">
                 <Typography variant="controlLabel" tone="default">
-                  {item.label}
+                  {item.name}
                 </Typography>
               </div>
               <div className="min-w-0 flex-1">
                 <Typography variant="denseText" tone="dense">
-                  {item.note}
+                  {freshLine(item)}
                 </Typography>
               </div>
-              {/* Смысл строки — «пришло новое, посмотри». Кнопка ровно туда
-                  и ведёт: в выдачу, где эти находки лежат списком. */}
+              {/* Смысл строки — «пришло новое, посмотри». Кнопка ведёт
+                  в выдачу С УСЛОВИЯМИ ЭТОГО ПОИСКА, а не в выдачу вообще:
+                  иначе строка обещает находки, а открывает чужой список. */}
               <Button
                 variant="quiet"
                 size="sm"
-                onClick={() => void navigate({ to: "/search" })}
+                onClick={() => {
+                  touchSavedSearch(item.id)
+                  void navigate({ to: "/search", search: { saved: item.id } })
+                }}
               >
                 Открыть выдачу
               </Button>

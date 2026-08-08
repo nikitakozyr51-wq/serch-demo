@@ -12,14 +12,14 @@ import { useHotkeys } from "@/features/cabinet"
 import { notifyDone, notifyError } from "@/platform/notify"
 import {
   addToStopList,
-  callbacksDue,
+  callQueue,
   recordCall,
-  takenNotCalled,
+  todayTally,
   useNow,
   useWorkspace,
   type CallOutcome,
 } from "@/features/workspace"
-import { MarketDeviation, OwnerAvatar } from "@/features/listings"
+import { MarketDeviation, OwnerAvatar, plural } from "@/features/listings"
 
 /**
  * КАБИНЕТ · Режим «Прозвон».
@@ -197,12 +197,10 @@ export function CallModeScreenPage() {
   const session = useSession()
   const actions = useSessionActions()
 
-  const queue = useMemo(() => {
-    const due = callbacksDue(workspace, now).map((item) => item.address)
-    const taken = takenNotCalled(workspace).map((item) => item.address)
-    const all = [...due, ...taken.filter((address) => !due.includes(address))]
-    return all.filter((address) => !workspace.stopList.includes(address))
-  }, [workspace, now])
+  // Правило очереди живёт в `features/workspace`: по нему же «Сегодня»
+  // решает, жива ли кнопка «Прозвон». Две копии разъехались бы на первой
+  // правке, и кнопка вела бы в пустой режим.
+  const queue = useMemo(() => callQueue(workspace, now), [workspace, now])
 
   /**
    * Позиция прижимается к длине очереди на каждой отрисовке.

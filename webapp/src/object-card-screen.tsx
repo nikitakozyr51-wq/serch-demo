@@ -5,6 +5,7 @@ import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { useSessionActions } from "@/features/auth"
+import { Reveal } from "@/platform/motion"
 import {
   AgeAndPriceBlock,
   ByPhotoBlock,
@@ -139,7 +140,10 @@ export function ObjectCardScreenPage() {
           />
           <div className="h-6" />
 
-          <div className="flex w-full items-center gap-2.5 rounded-lg bg-warm px-3.5 py-3">
+          {/* Блок «кто уже касался» и кнопка приезжают последними в правой
+              колонке — в том порядке, в каком экран и читают: сперва
+              доказательства, потом решение. */}
+          <Reveal className="flex w-full items-center gap-2.5 rounded-lg bg-warm px-3.5 py-3">
             <Users aria-hidden className="size-4 shrink-0 text-text-2" strokeWidth={2} />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <Typography variant="numericDense" tone="default">
@@ -149,11 +153,11 @@ export function ObjectCardScreenPage() {
                 проверено по пяти сотрудникам, история касаний с 05.07
               </Typography>
             </div>
-          </div>
+          </Reveal>
 
           <div className="h-6" />
 
-          <div className="flex w-full flex-col gap-2">
+          <Reveal className="flex w-full flex-col gap-2">
             {/* Единственная красная кнопка продукта: красный значит «сейчас
                 спишутся деньги». Капсула закреплена за списанием и за главным
                 действием — больше нигде её нет. */}
@@ -165,7 +169,7 @@ export function ObjectCardScreenPage() {
             <Typography variant="metaText" tone="dense">
               Спишем 199 ₽. Вернём в один клик, если это не собственник.
             </Typography>
-          </div>
+          </Reveal>
 
           <div className="flex-1" />
 

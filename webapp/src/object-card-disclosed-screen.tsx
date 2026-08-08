@@ -1,15 +1,18 @@
 import { useNavigate, useSearch } from "@tanstack/react-router"
 import { Check, Copy, Phone } from "lucide-react"
+import { motion } from "motion/react"
 import { useState } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
-import { demoPhone, useSession, useSessionActions } from "@/features/auth"
+import { demoPhone, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
 import { ListingPhoto, TitledBlock } from "@/features/listings"
 import { notifyDone, notifyError } from "@/platform/notify"
+import { Reveal, SPRING } from "@/platform/motion"
+import { disclosureOf, formatMoment, useWorkspace } from "@/features/workspace"
 import {
   AgeAndPriceBlock,
   ByPhotoBlock,
@@ -131,6 +134,19 @@ const SCRIPT = [
  * свой, и это видно, когда открываешь два подряд.
  */
 const FALLBACK_PHONE = "+7 900 000-99-87"
+
+/**
+ * Номер, показанный не полностью: «+7 (9••) •••-••-87».
+ *
+ * Форма взята из кадра `JpcQn` («Контакт отозван собственником»), где маска
+ * уже нарисована. Последние две цифры остаются: по ним агент узнаёт номер
+ * в своей истории звонков, а позвонить по ним нельзя.
+ */
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "")
+  const tail = digits.slice(-2)
+  return `+7 (9••) •••-••-${tail}`
+}
 const FALLBACK_ADDRESS = "Ленская ул., 10"
 
 /**
@@ -319,6 +335,31 @@ export function ObjectCardDisclosedPage() {
   const [allSimilar, setAllSimilar] = useState(false)
   const address = at ?? FALLBACK_ADDRESS
   const row = ALL_ROWS.find((item) => item.address === address)
+
+  /**
+   * НОМЕР ПОКАЗЫВАЕТСЯ ТОЛЬКО ЗА ЗАПИСЬ В ЖУРНАЛЕ.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Экран отдавал телефон собственника любому, кто набрал адрес руками:
+   * агентство с нулём раскрытий и нулём списаний открывало
+   * `/object/disclosed` и получало номер вместе с плашкой «списано 199 ₽».
+   * Вся экономика продукта — 199 ₽ за контакт, — и это был способ обойти её
+   * адресной строкой.
+   *
+   * Сервера за демонстрацией нет, поэтому дыра сегодня не про безопасность,
+   * а про правду показа: экран утверждал списание, которого не было.
+   *
+   * **Стенд сверки исключение, и по той же причине, что у `useOwnAgency`.**
+   * Экраны `/screen/…` обязаны показывать ЗАМЕРЕННУЮ карточку независимо
+   * от того, что наработано, — иначе снимок для сверки с кадром меняется
+   * после каждого раскрытия. `useOwnAgency()` отвечает ровно на вопрос
+   * «это продукт, а не стенд», и второго источника правды тут не нужно.
+   */
+  const workspace = useWorkspace()
+  const inProduct = useOwnAgency()
+  const paid = disclosureOf(workspace, address)
+  const hidden = inProduct && paid === undefined
   const phone = at ? demoPhone(address) : FALLBACK_PHONE
 
   /**
@@ -390,36 +431,83 @@ export function ObjectCardDisclosedPage() {
 
           <div className="h-6" />
 
-          {/* Подтверждение списания: кто раскрыл, когда и сколько списано. */}
-          <div className="flex w-full items-center gap-2.5 rounded-lg bg-warm px-3.5 py-3">
+          {/*
+            Подтверждение списания — ИЗ ЗАПИСИ ЖУРНАЛА.
+
+            Стояло «Раскрыто тобой 24.07 в 14:12 · списано 199 ₽» вписанной
+            строкой, то есть плашка подтверждала списание, которого могло
+            не быть вовсе: агентство с нулём раскрытий видело её слово
+            в слово. Плашка существует ровно затем, чтобы человек знал, за что
+            с него взяли деньги, — и была единственным местом экрана, где
+            эти деньги придумывались.
+          */}
+          <Reveal className="flex w-full items-center gap-2.5 rounded-lg bg-warm px-3.5 py-3">
             <Check aria-hidden className="size-4 shrink-0 text-ok-text" strokeWidth={2} />
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <Typography variant="numericDense" tone="default">
-                Раскрыто тобой 24.07 в 14:12 · списано 199 ₽
+                {hidden
+                  ? "Контакт по этому объекту агентство не раскрывало"
+                  : paid === undefined
+                    ? "Раскрыто тобой 24.07 в 14:12 · списано 199 ₽"
+                    : `Раскрыто ${paid.by === session?.name ? "тобой" : paid.by} ${formatMoment(paid.at)} · списано ${paid.amount} ₽`}
               </Typography>
               <Typography variant="metaText" tone="dense">
-                Коллеги откроют этот контакт бесплатно. Если это оказался посредник,
-                отметьте «Брак, вернуть 199 ₽» — деньги вернутся на баланс агентства.
+                {hidden
+                  ? "Номер показан не полностью. Он откроется целиком после раскрытия: 199 ₽ спишутся со счёта агентства, и запись появится в журнале доступа."
+                  : "Коллеги откроют этот контакт бесплатно. Если это оказался посредник, отметьте «Брак, вернуть 199 ₽» — деньги вернутся на баланс агентства."}
               </Typography>
             </div>
-          </div>
+          </Reveal>
 
           <div className="h-6" />
 
-          <div className="flex w-full flex-col gap-2">
+          {/*
+            Номер собственника — то, ради чего заплатили 199 ₽.
+
+            ═══════════════════════════════════════════════════════════════
+
+            Это главный кадр продукта, и до сих пор он просто возникал вместе
+            со всем остальным. Здесь номер приезжает ПОСЛЕДНИМ и своим
+            движением: чуть крупнее остальных блоков и с бóльшим отскоком —
+            единственное место кабинета, где отскок уместен, потому что
+            это единственное место, где что-то открывается.
+
+            Задержка 0.12 против общего каскада — не «ещё один блок», а точка,
+            в которую экран приходит.
+          */}
+          <Reveal className="flex w-full flex-col gap-2">
             <div className="flex w-full items-center gap-2.5">
-              <Typography variant="cardPrice" tone="default">
-                {phone}
-              </Typography>
-              <div className="h-px flex-1" />
-              <Button
-                variant="quiet"
-                size="sm"
-                onClick={copyPhone}
-                iconLeft={<Copy aria-hidden className="size-3.5" strokeWidth={2} />}
+              <motion.span
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ ...SPRING.enter, bounce: 0.34, delay: 0.12 }}
+                className="origin-left"
               >
-                Скопировать
-              </Button>
+                <Typography variant="cardPrice" tone={hidden ? "dense" : "default"}>
+                  {hidden ? maskPhone(phone) : phone}
+                </Typography>
+              </motion.span>
+              <div className="h-px flex-1" />
+              {hidden ? (
+                // Дверь на месте, а не спрятана: человек попал сюда по адресу,
+                // и ему нужен выход к раскрытию, а не пустое место.
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => void navigate({ to: "/object", search: { at: address } })}
+                >
+                  Раскрыть контакт · 199 ₽
+                </Button>
+              ) : (
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  onClick={copyPhone}
+                  iconLeft={<Copy aria-hidden className="size-3.5" strokeWidth={2} />}
+                >
+                  Скопировать
+                </Button>
+              )}
             </div>
 
             {/* Звонок продукт не совершает: телефонии в «Сёрчи» нет, а номер
@@ -459,10 +547,11 @@ export function ObjectCardDisclosedPage() {
               Звони по объекту на Ленской, 10. Разговор о других услугах агентства
               без согласия собственника, нарушение ст. 15 152-ФЗ
             </Typography>
-          </div>
+          </Reveal>
 
           <div className="h-6" />
 
+          <Reveal className="w-full">
           <TitledBlock title="ЗАФИКСИРОВАТЬ ЗВОНОК" aside="клавиши 1 2 3 4">
             <div className="flex w-full flex-wrap items-center gap-2">
               {RESULTS.map((item) => (
@@ -476,6 +565,7 @@ export function ObjectCardDisclosedPage() {
               ))}
             </div>
           </TitledBlock>
+          </Reveal>
 
           <div className="flex-1" />
 

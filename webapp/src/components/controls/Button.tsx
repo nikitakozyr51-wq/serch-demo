@@ -1,9 +1,11 @@
 import { cva, type VariantProps } from "class-variance-authority"
+import { motion } from "motion/react"
 import { Slot } from "radix-ui"
 import type { ComponentPropsWithoutRef, ReactNode } from "react"
 
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
+import { SPRING } from "@/platform/motion"
 
 /**
  * Кнопка «Сёрчи».
@@ -200,9 +202,27 @@ const buttonVariants = cva(
 
 type ButtonVariants = VariantProps<typeof buttonVariants>
 
+/**
+ * Чего кнопка не принимает.
+ *
+ * `className` и `style` закрыты с самого начала: внешние правки ломали бы
+ * лестницу контролов. К ним добавились обработчики анимации и перетаскивания
+ * — у React и у библиотеки движения они называются одинаково, но значат разное
+ * (`onAnimationStart` React отдаёт событие DOM, библиотека — описание
+ * анимации). Кнопке продукта не нужен ни один из них, и закрыть их честнее,
+ * чем приводить типы силой.
+ */
 type ButtonProps = Omit<
   ComponentPropsWithoutRef<"button">,
-  "className" | "style" | "children"
+  | "className"
+  | "style"
+  | "children"
+  | "onAnimationStart"
+  | "onAnimationEnd"
+  | "onAnimationIteration"
+  | "onDrag"
+  | "onDragStart"
+  | "onDragEnd"
 > &
   ButtonVariants & {
     children: ReactNode
@@ -248,20 +268,74 @@ function Button({
   type = "button",
   ...props
 }: ButtonProps) {
-  const Comp = asChild ? Slot.Root : "button"
   const labelVariant = size === "lg" ? "controlLabelLg" : "controlLabel"
   const resolvedVariant = pending ? "pending" : (variant ?? "secondary")
 
+  /**
+   * Кнопка проседает под пальцем и чуть подаётся навстречу мыши.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Заливка отвечала и раньше — но только цветом, а цвет не имеет веса.
+   * Именно поэтому продукт «ничего не делал неправильно и был мёртвым»:
+   * кнопка меняла тон, но не вела себя как предмет, который можно нажать.
+   *
+   * Числа маленькие сознательно. 0.97 на нажатии — это два-три пикселя
+   * на кнопке 48, ровно столько, чтобы палец почувствовал отклик и ни один
+   * сосед не сдвинулся. Пружина без отскока: кнопка, отпрыгивающая обратно,
+   * читается как игрушка, а этой списывают 199 ₽.
+   *
+   * **Подъём под мышью не даётся кнопке в строке выдачи.** Строк на экране
+   * полсотни, они идут вплотную, и растущая на 2 % кнопка в плотном списке
+   * читается как дрожь, а не как отклик. Там всё говорит цвет — графит
+   * становится акцентом, и это и так самое заметное изменение продукта.
+   *
+   * Масштаб не остаётся в разметке в покое: анимация объявлена только
+   * жестами, поэтому вне наведения и нажатия у кнопки нет ни `transform`,
+   * ни изменённых габаритов — сверка геометрии меряет ровно то же, что мерила.
+   *
+   * При системной настройке «меньше движения» масштаб выбрасывается целиком
+   * — за это отвечает `MotionConfig` в корне, а не оговорка здесь.
+   */
+  const grow = resolvedVariant === "row" ? undefined : { scale: 1.015 }
+  const alive = disabled === true || pending
+
+  /**
+   * `asChild` остаётся обычным слотом.
+   *
+   * Слот отдаёт разметку ребёнку — ссылке или пункту меню, — и надеть на него
+   * жесты нельзя, не забрав у ребёнка его собственные. Такие кнопки в продукте
+   * единичны, а ссылка со своим поведением важнее анимации на ней.
+   */
+  if (asChild) {
+    return (
+      <Slot.Root
+        data-slot="button"
+        data-variant={resolvedVariant}
+        data-size={size ?? "sm"}
+        data-pending={pending || undefined}
+        data-demo={demo}
+        aria-busy={pending || undefined}
+        className={cn(buttonVariants({ variant: resolvedVariant, size }), block && "w-full px-4")}
+        {...props}
+      >
+        {children}
+      </Slot.Root>
+    )
+  }
 
   return (
-    <Comp
+    <motion.button
+      whileHover={alive ? undefined : grow}
+      whileTap={alive ? undefined : { scale: 0.97 }}
+      transition={SPRING.press}
       data-slot="button"
       data-variant={resolvedVariant}
       data-size={size ?? "sm"}
       data-pending={pending || undefined}
       data-demo={demo}
-      type={asChild ? undefined : type}
-      disabled={asChild ? undefined : disabled || pending}
+      type={type}
+      disabled={disabled || pending}
       aria-busy={pending || undefined}
       // Через `cn`, а не напрямую: `block` дописывает ширину поверх набора
       // размера, и конфликты утилит разрешает `cn`, а не порядок в собранном
@@ -278,10 +352,12 @@ function Button({
       )}
       {...props}
     >
-      {iconLeft}
+      {/* Значки через фрагмент: правило типографики не отличает произвольный
+          узел от голого текста, а голый текст в разметке запрещён. */}
+      <>{iconLeft}</>
       <Typography variant={labelVariant}>{children}</Typography>
-      {iconRight}
-    </Comp>
+      <>{iconRight}</>
+    </motion.button>
   )
 }
 

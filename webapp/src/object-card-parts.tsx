@@ -1,11 +1,13 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { ArrowLeft, ChevronDown, ChevronUp } from "lucide-react"
+import { motion } from "motion/react"
 import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { useSession } from "@/features/auth"
 import { CabinetShell, useHotkeys } from "@/features/cabinet"
+import { RISE, SPRING, Stagger, STAGGER, ZOOM } from "@/platform/motion"
 import { CollectionPicker } from "@/features/workspace"
 import {
   CountPair,
@@ -139,8 +141,19 @@ function CardShell({
   return (
     <CabinetShell activeId="search">
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <div
+          {/*
+            Панель приезжает первой и отдельно от тела.
+
+            Она не участвует в каскаде карточки намеренно: это не содержимое
+            объекта, а рабочая полоса, и она обязана быть на месте раньше,
+            чем человек начнёт читать. Появляется сверху вниз — оттуда, где
+            у неё край экрана.
+          */}
+          <motion.div
             data-slot="card-panel"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={SPRING.enter}
             className="flex h-12 w-full shrink-0 items-center gap-4 border-b border-line-2 bg-surface px-6"
           >
             {/* «К выдаче» — ссылка, а не кнопка, и это не мелочь: выдачу
@@ -212,9 +225,34 @@ function CardShell({
                 onAction={openCallPanel}
               />
             </div>
-          </div>
+          </motion.div>
 
-          <div className="flex w-full flex-1 flex-col gap-8 p-6">{children}</div>
+          {/*
+            Тело карточки собирается волной, а не возникает целиком.
+
+            ═══════════════════════════════════════════════════════════════
+
+            Карточка объекта не двигалась вовсе — это и была вторая претензия
+            владельца. Экран из тринадцати блоков, появляющийся разом, читается
+            как перезагрузка страницы: глазу не за что зацепиться, и он ищет
+            начало чтения сам.
+
+            Волна даёт порядок чтения: кадр, цена, признаки собственника,
+            «кто уже звонил», кнопка. Ровно тот порядок, в котором экран
+            и был спроектирован как доказательство «звонить или нет».
+
+            **Ключ — адрес.** Стрелки `←`/`→` листают объекты, не меняя экрана,
+            и без ключа следующий объект въезжал бы в чужую, уже доигранную
+            анимацию, то есть появлялся бы мгновенно. С ключом каждый объект
+            собирается заново — это и есть ответ на нажатие стрелки.
+          */}
+          <Stagger
+            key={address}
+            step={STAGGER.block}
+            className="flex w-full flex-1 flex-col gap-8 p-6"
+          >
+            {children}
+          </Stagger>
         </div>
 
         {collecting ? (
@@ -240,7 +278,11 @@ function CardShell({
  */
 function CardMedia({ more }: { more: string }) {
   return (
-    <div className="flex w-[564px] shrink-0 flex-col gap-2">
+    // Кадр приходит с приближением, а не снизу: это единственный на экране
+    // предмет, а не текст. Масштаб на тексте заметно мылит буквы, на снимке —
+    // читается как «кадр подъехал». Корень сам стал подвижным вместо обёртки:
+    // лишний узел между рядом и колонкой 564 сломал бы её ширину.
+    <motion.div variants={ZOOM} className="flex w-[564px] shrink-0 flex-col gap-2">
       <div className="h-[376px] w-full overflow-hidden rounded-2xl">
         <ListingPhoto alt="Кадр объекта" size="large" reason="no-photos" />
       </div>
@@ -265,7 +307,7 @@ function CardMedia({ more }: { more: string }) {
           </div>
         ))}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -285,7 +327,7 @@ type CardHeadingData = {
  */
 function CardHeading({ data }: { data: CardHeadingData }) {
   return (
-    <div className="flex w-full flex-col gap-2">
+    <motion.div variants={RISE} className="flex w-full flex-col gap-2">
       <div className="flex w-full items-center gap-3">
         <Typography variant="cardPrice" tone="default">
           {data.price}
@@ -305,7 +347,7 @@ function CardHeading({ data }: { data: CardHeadingData }) {
           {data.metro}
         </Typography>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -324,6 +366,7 @@ type OwnerSignalsData = {
  */
 function CardOwnerSignals({ data }: { data: OwnerSignalsData }) {
   return (
+    <motion.div variants={RISE} className="w-full">
     <TitledBlock title="ПРИЗНАКИ СОБСТВЕННИКА">
       <div className="flex w-full items-center gap-6">
         <OwnerSignal
@@ -340,6 +383,7 @@ function CardOwnerSignals({ data }: { data: OwnerSignalsData }) {
         </div>
       </div>
     </TitledBlock>
+    </motion.div>
   )
 }
 
@@ -353,7 +397,8 @@ function CardOwnerSignals({ data }: { data: OwnerSignalsData }) {
  */
 function CardSourceRow() {
   return (
-    <div
+    <motion.div
+      variants={RISE}
       data-action="раскрыть состав полей источника данных"
       className="flex h-10 w-full items-center gap-2.5 rounded-lg border border-line-2 px-3.5"
     >
@@ -365,7 +410,7 @@ function CardSourceRow() {
       </Typography>
       <div className="h-px flex-1" />
       <ChevronDown aria-hidden className="size-4 text-text-dense" strokeWidth={2} />
-    </div>
+    </motion.div>
   )
 }
 
@@ -493,10 +538,17 @@ function ByPhotoBlock({ text }: { text: string }) {
 function CardColumns({ columns }: { columns: ReactNode[] }) {
   return (
     <div className="relative flex w-full gap-6">
+      {/* Три колонки доказательств приезжают по очереди, слева направо —
+          в том же порядке, в каком их и читают. Каждая едет сама, а не вся
+          полоса разом: полоса шириной 1176 сдвигом читается как рывок. */}
       {columns.map((column, index) => (
-        <div key={index} className="flex w-[368px] shrink-0 flex-col gap-6">
+        <motion.div
+          key={index}
+          variants={RISE}
+          className="flex w-[368px] shrink-0 flex-col gap-6"
+        >
           <>{column}</>
-        </div>
+        </motion.div>
       ))}
       <span aria-hidden className="absolute top-0 left-[380px] h-82 w-px bg-line-1" />
       <span aria-hidden className="absolute top-0 left-[772px] h-82 w-px bg-line-1" />

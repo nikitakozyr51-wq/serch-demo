@@ -41,12 +41,14 @@ export type {
 } from './store'
 export {
   SUBJECTIVE_REFUND_LIMIT,
+  callQueue,
   callbacksDue,
   disclosedSince,
   disclosureOf,
   formatAgo,
   formatDay,
   formatMoment,
+  formatWeekday,
   funnel,
   isDisclosed,
   lastCall,
