@@ -163,6 +163,11 @@ async function loadWorkspace(): Promise<Workspace | null> {
 
   return {
     version: 1,
+    // Ручные статусы и назначения на сервере пока не живут: своих таблиц
+    // у них нет. Пустыми они и приходят — это честнее, чем не вернуть поле
+    // вовсе и получить `undefined` там, где экраны ждут словарь.
+    statuses: {},
+    assignments: {},
     people: ((people.data ?? []) as PersonRow[]).map(
       (row): Person => ({
         id: row.id,

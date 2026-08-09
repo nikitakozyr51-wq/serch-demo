@@ -40,6 +40,8 @@ function SelectionBar({
   onDisclose,
   onCollection,
   onExport,
+  onStatus,
+  onAssign,
 }: {
   /** Сколько объектов отмечено. */
   count: number
@@ -51,12 +53,29 @@ function SelectionBar({
   onDisclose: () => void
   onCollection: () => void
   onExport: () => void
+  /** Открыть окно смены статуса у выбранных. */
+  onStatus: () => void
+  /** Открыть окно назначения выбранных агенту. */
+  onAssign: () => void
 }) {
   const alreadyPaid = count - payable
 
   return (
     <div
       data-slot="selection-bar"
+      /*
+        Панель 137, в кадре 128 — и это не промах, а разница мерок.
+
+        Ритм совпадает точно: поля 16, зазоры 10, три ряда. Расходятся
+        высоты текстовых строк. Pencil меряет текст глифовым боксом — 19
+        у шестнадцатого кегля и 16 у тринадцатого; продукт ставит их по
+        закрытой лестнице интерлиньяжа — 24 и 20. Девять пикселей набегают
+        отсюда.
+
+        Подгонять нечем: сжать строку до 19 значит вынуть шестнадцатый
+        кегль из лестницы, по которой набран весь кабинет. Список забирает
+        эти девять сам — он тянется, а не стоит числом.
+      */
       className="flex w-full shrink-0 flex-col gap-2.5 border-t border-line-2 bg-surface py-4"
     >
       <div className="flex w-full items-center gap-3">
@@ -102,10 +121,10 @@ function SelectionBar({
           названо и ничего не рисует: выдумать сюда своё окно значило бы
           завести второй способ менять статус, расходящийся с панелью прозвона.
         */}
-        <Button variant="secondary" size="sm" data-action="массовая смена статуса">
+        <Button variant="secondary" size="sm" onClick={onStatus}>
           Сменить статус
         </Button>
-        <Button variant="secondary" size="sm" data-action="назначить объекты агенту">
+        <Button variant="secondary" size="sm" onClick={onAssign}>
           Назначить агенту
         </Button>
         <Button variant="secondary" size="sm" onClick={onExport}>

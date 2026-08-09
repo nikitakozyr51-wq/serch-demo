@@ -4,6 +4,8 @@ export {
   addPerson,
   addToCollection,
   addToStopList,
+  assignListings,
+  setListingStatus,
   closeWorkspace,
   createCollection,
   currentWorkspace,

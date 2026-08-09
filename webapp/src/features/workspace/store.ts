@@ -221,6 +221,33 @@ export type Workspace = {
   /** Адреса объектов, собственники которых просили не звонить. */
   stopList: string[]
   /**
+   * Статус, поставленный рукой, — по адресу объекта.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Обычно статус СЧИТАЕТСЯ из журналов: раскрыт — «раскрыт», прозвонен —
+   * исход последнего звонка. Считанный статус честнее вписанного, потому
+   * что не может разойтись с работой.
+   *
+   * Но у агентства бывает знание, которого в журналах нет: объект ушёл
+   * с рынка, собственник передумал, коллега договорился по другому каналу.
+   * Тогда статус ставят руками, и он обязан пережить перезагрузку.
+   *
+   * Поставленный руками ПЕРЕБИВАЕТ считанный — человек знает больше
+   * журнала. Но не перебивает факты о собственнике: стоп-лист и отзыв
+   * согласия остаются, что бы ни выбрали в окне. Поэтому стоп-листа нет
+   * и в самом списке статусов.
+   */
+  statuses: Record<string, string>
+  /**
+   * Кому объект назначен — адрес к идентификатору сотрудника.
+   *
+   * Назначение это не статус: объект может быть «в работе» и не назначен
+   * никому, или назначен и ещё не тронут. Поэтому отдельным полем, а не
+   * пятым значением статуса.
+   */
+  assignments: Record<string, string>
+  /**
    * Счёт агентства и остаток пробных раскрытий.
    *
    * ═══════════════════════════════════════════════════════════════════════
@@ -248,6 +275,8 @@ const EMPTY: Workspace = {
   savedSearches: [],
   topUps: [],
   refunds: [],
+  statuses: {},
+  assignments: {},
   stopList: [],
   balance: 0,
   trial: 0,
@@ -500,6 +529,36 @@ export function addToStopList(address: string, by = "") {
   if (current.stopList.includes(address)) return
   write({ ...current, stopList: [...current.stopList, address] })
   push("Отметка «просил не звонить»", () => remote.stop(address, by))
+}
+
+/**
+ * Поставить статус рукой — сразу нескольким объектам.
+ *
+ * Пишется разом, а не по одному: панель выбранного меняет двенадцать
+ * объектов одним нажатием, и двенадцать записей подряд дали бы двенадцать
+ * перерисовок списка и двенадцать отправок на сервер.
+ */
+export function setListingStatus(addresses: string[], status: string) {
+  if (addresses.length === 0) return
+  const next = { ...current.statuses }
+  for (const address of addresses) next[address] = status
+  write({ ...current, statuses: next })
+}
+
+/**
+ * Назначить объекты агенту.
+ *
+ * Пустой `personId` снимает назначение: «ничей» это законное состояние,
+ * а не отсутствие данных.
+ */
+export function assignListings(addresses: string[], personId: string) {
+  if (addresses.length === 0) return
+  const next = { ...current.assignments }
+  for (const address of addresses) {
+    if (personId === "") delete next[address]
+    else next[address] = personId
+  }
+  write({ ...current, assignments: next })
 }
 
 export function createCollection(name: string, by: string): Collection {

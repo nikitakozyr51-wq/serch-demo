@@ -17,7 +17,9 @@ import {
   download,
   fileName,
   lastCall,
+  assignListings,
   saveSearch,
+  setListingStatus,
   useNow,
   useWorkspace,
   type SavedSearch,
@@ -26,6 +28,8 @@ import {
 import { BalanceStoppedBar, CabinetShell, useHotkeys } from "@/features/cabinet"
 import { useDensity } from "@/platform/density"
 import {
+  AssignAgentDialog,
+  BulkStatusDialog,
   ChipPickerDialog,
   FilterBar,
   FilterPanel,
@@ -35,6 +39,7 @@ import {
   NearAddressDialog,
   ResultTabs,
   groupDigits,
+  plural,
   photoFor,
   type SearchMode,
 } from "@/features/listings"
@@ -215,18 +220,39 @@ function withAgencyWork(row: SearchRow, workspace: Workspace): SearchRow {
       ...row,
       takenBy: undefined,
       selected: undefined,
-      status: "new",
+      // Ручной статус работает и до раскрытия: «отказ» ставят по объекту,
+      // за который ещё не платили, и это обычный случай.
+      status: (workspace.statuses[row.address] as SearchRow["status"]) ?? "new",
       action: { kind: "disclose", price: DISCLOSURE_PRICE },
     }
   }
 
+  /*
+    Поставленный рукой статус перебивает считанный.
+
+    Обычно статус считается из журналов, и это честнее вписанного: считанный
+    не может разойтись с работой. Но у агентства бывает знание, которого
+    в журналах нет — объект ушёл с рынка, собственник передумал, коллега
+    договорился по другому каналу. Тогда человек знает больше журнала,
+    и его отметка старше.
+
+    Факты о собственнике этим не перебиваются: они отсечены выше и сюда
+    не доходят.
+  */
+  const manual = workspace.statuses[row.address]
+  const assigned = workspace.assignments[row.address]
+  const person = assigned === undefined
+    ? undefined
+    : workspace.people.find((item) => item.id === assigned)
+
   return {
     ...row,
-    // Инициалы того, кто раскрыл. Пока агентство одно — свои, но поле уже
-    // отвечает на вопрос «кто взял», а не показывает выдуманного коллегу.
-    takenBy: initialsOf(paid.by) || undefined,
+    // Инициалы того, кто раскрыл, — или того, кому объект назначили:
+    // назначение отвечает на тот же вопрос «кто взял» и оно свежее.
+    takenBy: initialsOf(person?.name ?? paid.by) || undefined,
     selected: undefined,
-    status: call ? (OUTCOME_STATUS[call.outcome] ?? "called") : "disclosed",
+    status: (manual as SearchRow["status"]) ??
+      (call ? (OUTCOME_STATUS[call.outcome] ?? "called") : "disclosed"),
     // Второй раз агентство не платит — и кнопка обязана это говорить.
     action: { kind: "open" },
   }
@@ -523,7 +549,11 @@ function SearchScreenBody({
     ],
   ]
 
+  // Сотрудники агентства нужны окну назначения: кому назначать.
+  const workspace = useWorkspace()
   const [open, setOpen] = useState(false)
+  /** Какое окно панели выбранного открыто. Их два, и разом не бывает. */
+  const [bulkDialog, setBulkDialog] = useState<"status" | "assign" | null>(null)
 
   /**
    * Escape закрывает панель фильтров.
@@ -1322,9 +1352,55 @@ function SearchScreenBody({
               onDisclose={disclosePicked}
               onCollection={() => setBulkCollection(true)}
               onExport={exportPicked}
+              onStatus={() => setBulkDialog("status")}
+              onAssign={() => setBulkDialog("assign")}
             />
           ) : null}
         </main>
+      {/*
+        Два окна панели выбранного. Оба были нарисованы (`a9lIk`, `jUJgJ`)
+        и оба не открывались: у кнопок стоял только атрибут `data-action` —
+        намерение вместо исполнения. Человек выделял двенадцать объектов,
+        нажимал «Сменить статус» и не получал ничего.
+      */}
+      {bulkDialog === "status" ? (
+        <BulkStatusDialog
+          count={pickedVisible.length}
+          onApply={(status, label) => {
+            setListingStatus(pickedVisible.map((row) => row.address), status)
+            setBulkDialog(null)
+            setPicked(new Set())
+            notifyDone(
+              `Статус «${label}» поставлен ${pickedVisible.length} ${plural(pickedVisible.length, "объекту", "объектам", "объектам")}`,
+            )
+          }}
+          onClose={() => setBulkDialog(null)}
+        />
+      ) : null}
+
+      {bulkDialog === "assign" ? (
+        <AssignAgentDialog
+          count={pickedVisible.length}
+          people={workspace.people.map((person) => ({
+            id: person.id,
+            name: person.name,
+            note:
+              person.role === "owner"
+                ? "руководитель · без лимита"
+                : `агент · ${person.limit === null ? "без лимита" : `до ${person.limit} в день`}`,
+          }))}
+          onAssign={(personId, name) => {
+            assignListings(pickedVisible.map((row) => row.address), personId)
+            setBulkDialog(null)
+            setPicked(new Set())
+            notifyDone(
+              `${pickedVisible.length} ${plural(pickedVisible.length, "объект", "объекта", "объектов")} у ${name}`,
+            )
+          }}
+          onClose={() => setBulkDialog(null)}
+        />
+      ) : null}
+
       {/* Окно выбора подборки: клавиша `B` и кнопка в строке ведут сюда.
           Живёт на уровне экрана, а не строки: строк на экране полсотни,
           и полсотни окон в дереве — это полсотни лишних узлов. */}
