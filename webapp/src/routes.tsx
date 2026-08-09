@@ -520,7 +520,6 @@ const productRoutes = [
   productRoute('/agency/plan', () => import('./agency-plan-screen'), 'AgencyPlanPage'),
   productRoute('/profile', () => import('./profile-security-screen'), 'ProfilePage'),
   productRoute('/profile/login-policy', () => import('./profile-security-screen'), 'LoginPolicyPage'),
-  productRoute('/dialogs', () => import('./dialog-screens'), 'DialogsPage'),
   // Первый вход. Адреса отдельные, а не состояние `/search`: эти экраны
   // человек видит один раз, и их надо уметь открыть по ссылке — и чтобы
   // показать владельцу, и чтобы проверить браузером.
@@ -741,7 +740,25 @@ const productRouteTree = [
   ...authProductRoutes,
 ]
 
+/**
+ * Доска диалогов — стенд, а не страница продукта.
+ *
+ * Она показывает восемь окон карточками в колонку, чтобы их можно было
+ * сверить с файлом рядом. Человеку в кабинете смотреть там нечего: каждое
+ * из этих окон он встречает на своём месте и по своему действию.
+ *
+ * До этой правки доска уезжала в сборку как обычный адрес и была открыта
+ * без входа. Семь «мёртвых кнопок» переписи сидели именно на ней — карточки
+ * окон нажимаются, но ведут в никуда, потому что это витрина, а не работа.
+ */
+const dialogsStandRoute = productRoute(
+  '/dialogs',
+  () => import('./dialog-screens'),
+  'DialogsPage',
+)
+
 const standRoutes = [
+  dialogsStandRoute,
   kitchenSinkRoute,
   searchScreenRoute,
   statesScreenRoute,
