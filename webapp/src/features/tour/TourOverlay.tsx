@@ -1,10 +1,12 @@
 import { useNavigate } from "@tanstack/react-router"
+import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useLayoutEffect, useState } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { useSession } from "@/features/auth"
 import { cn } from "@/lib/utils"
+import { SPRING } from "@/platform/motion"
 import { CHAPTERS, FINISH, STEPS } from "./steps"
 import {
   closeTour,
@@ -54,7 +56,7 @@ function indexIn(step: number): number {
   return STEPS.slice(0, step + 1).filter((item) => item.chapter === chapter).length
 }
 
-type Box = { top: number; left: number; width: number; height: number }
+type Box = { top: number; left: number; width: number; height: number; radius: string }
 
 /** Окно 360 в ширину, зазор до подсвеченного 12 — с кадра. */
 const CARD = 360
@@ -162,7 +164,16 @@ function TourOverlay({ blocked = false }: {
       }
       node.setAttribute("data-tour-lit", "")
       const rect = node.getBoundingClientRect()
-      setBox({ top: rect.top, left: rect.left, width: rect.width, height: rect.height })
+      // Радиус берётся у самого элемента: подсвеченная кнопка обязана
+      // остаться капсулой, фотография — своим скруглением, строка — своим.
+      // Прямоугольная дырка поверх капсулы читается как чужая фигура.
+      setBox({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+        radius: getComputedStyle(node).borderRadius,
+      })
     }
 
     const frame = requestAnimationFrame(find)
@@ -240,68 +251,139 @@ function TourOverlay({ blocked = false }: {
 
   return (
     <>
-      {/* Затемнение. Тот же тон, что у всех окон файла. */}
+      {/*
+        ЗАТЕМНЕНИЕ С ВЫРЕЗОМ, А НЕ СПЛОШНОЕ ПОЛОТНО.
+
+        ═══════════════════════════════════════════════════════════════════
+
+        Первая сборка поднимала подсвеченный элемент над затемнением через
+        `z-index`. В браузере это не сработало ни разу, и причина
+        поучительная: экран обёрнут слоем с анимацией прозрачности, а такой
+        слой создаёт свой контекст наложения — из него ребёнку не выбраться
+        никаким `z-index`. Владелец увидел ровно это: «затемняется всё,
+        а не нужные элементы».
+
+        Работает наоборот: затемнение рисуется ТЕНЬЮ вокруг выреза.
+        Прямоугольник размером с элемент, у него огромная сплошная тень —
+        и всё, кроме него, оказывается затемнено. Никаких контекстов
+        наложения, никакой зависимости от того, где элемент лежит в дереве.
+        Радиус берётся у самого элемента: кнопка остаётся капсулой.
+
+        Вырез не ловит нажатия (`pointer-events: none`) — их ловит слой
+        под ним. Иначе нажатие по подсвеченному элементу проваливалось бы
+        в продукт прямо во время рассказа о нём.
+      */}
       <div
         data-slot="tour-scrim"
         aria-hidden
-        className="fixed inset-0 z-40 bg-[#1e1e1e59]"
+        className={cn("fixed inset-0 z-40", box === null && "bg-[#1e1e1e59]")}
         onPointerDown={closeTour}
       />
 
-      <div
-        data-slot="tour-card"
-        role="dialog"
-        aria-label="Обучение"
-        className={cn(
-          "motion-in fixed z-50 flex w-90 flex-col gap-3 rounded-2xl bg-surface p-5",
-          position === null && "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-        )}
-        style={position === null ? undefined : { top: position.top, left: position.left }}
-      >
-        <Typography variant="columnHeader" tone="dense">
-          <>
-            {tour.cover
-              ? `ГЛАВА ${chapter?.number ?? 1} ИЗ ${total}`
-              : last
-                ? FINISH.label
-                : `ГЛАВА ${chapter?.number ?? 1} ИЗ ${total} · ШАГ ${indexIn(tour.step)} ИЗ ${stepsIn(step?.chapter ?? 1)}`}
-          </>
-        </Typography>
+      {box === null ? null : (
+        <motion.div
+          data-slot="tour-light"
+          aria-hidden
+          className="pointer-events-none fixed z-40"
+          initial={false}
+          animate={{
+            top: box.top,
+            left: box.left,
+            width: box.width,
+            height: box.height,
+            borderRadius: box.radius,
+          }}
+          /*
+            Вырез ПЕРЕЕЗЖАЕТ между шагами, а не перерисовывается.
 
-        <Typography variant="strongText" tone="default" as="h2">
-          <>{tour.cover ? (chapter?.title ?? "") : last ? FINISH.title : (step?.title ?? "")}</>
-        </Typography>
+            Это и есть то, чего не хватало: без переезда каждый шаг —
+            новая дырка в новом месте, и глаз не связывает предыдущий
+            элемент со следующим. Пружина «общего элемента» выбрана
+            не наугад: это единственное движение продукта, за которым
+            глаз обязан проследить, и она в проекте самая медленная.
+          */
+          transition={SPRING.shared}
+          style={{ boxShadow: "0 0 0 9999px #1e1e1e59" }}
+        />
+      )}
 
-        <Typography variant="uiText" tone="secondary">
-          <>{tour.cover ? (chapter?.text ?? "") : last ? FINISH.text : (step?.text ?? "")}</>
-        </Typography>
+      {/*
+        Окно меняется с затуханием, а не подменяется кадром.
 
-        <div className="flex w-full items-center gap-2">
-          {/* Выход виден с первого окна и не спрятан: обучение, из которого
-              нельзя выйти, пролистывают целиком вместе с содержанием. */}
-          <button
-            type="button"
-            data-slot="tour-skip"
-            onClick={finishTour}
-            className="-mx-2 cursor-pointer rounded-sm bg-transparent px-2 py-1 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-          >
-            <Typography variant="denseText" tone="dense">
-              <>{tour.cover ? "Пропустить главу" : "Пропустить обучение"}</>
-            </Typography>
-          </button>
+        Ключ — номер шага: `AnimatePresence` видит, что окно другое,
+        и проводит смену. Без ключа React переиспользовал бы тот же узел,
+        текст менялся бы мгновенно, и переход читался бы как подёргивание.
+      */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${tour.step}-${tour.cover}`}
+          data-slot="tour-card"
+          role="dialog"
+          aria-label="Обучение"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          /*
+            Уход быстрый и своим временем, а не пружиной.
 
-          <div className="h-px flex-1" />
-
-          {tour.step === 0 && tour.cover ? null : (
-            <Button variant="quiet" size="sm" onClick={goBack}>
-              Назад
-            </Button>
+            `mode="wait"` держит новое окно, пока старое не ушло. С общей
+            пружиной уход занимал те же 260 мс, и каждый шаг стоил
+            полсекунды ожидания — на двадцати шагах это десять секунд,
+            в течение которых человек смотрит на пустое затемнение.
+            Сто миллисекунд читаются как смена, а не как задержка.
+          */
+          exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }}
+          transition={SPRING.overlay}
+          className={cn(
+            "fixed z-50 flex w-90 flex-col gap-3 rounded-2xl bg-surface p-5",
+            position === null && "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
           )}
-          <Button size="sm" onClick={goNext}>
-            <>{tour.cover ? "Начать главу" : last ? FINISH.action : "Дальше"}</>
-          </Button>
-        </div>
-      </div>
+          style={position === null ? undefined : { top: position.top, left: position.left }}
+        >
+          <Typography variant="columnHeader" tone="dense">
+            <>
+              {tour.cover
+                ? `ГЛАВА ${chapter?.number ?? 1} ИЗ ${total}`
+                : last
+                  ? FINISH.label
+                  : `ГЛАВА ${chapter?.number ?? 1} ИЗ ${total} · ШАГ ${indexIn(tour.step)} ИЗ ${stepsIn(step?.chapter ?? 1)}`}
+            </>
+          </Typography>
+
+          <Typography variant="strongText" tone="default" as="h2">
+            <>{tour.cover ? (chapter?.title ?? "") : last ? FINISH.title : (step?.title ?? "")}</>
+          </Typography>
+
+          <Typography variant="uiText" tone="secondary">
+            <>{tour.cover ? (chapter?.text ?? "") : last ? FINISH.text : (step?.text ?? "")}</>
+          </Typography>
+
+          <div className="flex w-full items-center gap-2">
+            {/* Выход виден с первого окна и не спрятан: обучение, из которого
+                нельзя выйти, пролистывают целиком вместе с содержанием. */}
+            <button
+              type="button"
+              data-slot="tour-skip"
+              onClick={finishTour}
+              className="-mx-2 cursor-pointer rounded-sm bg-transparent px-2 py-1 transition-colors duration-120 outline-none hover:bg-warm active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+            >
+              <Typography variant="denseText" tone="dense">
+                <>{tour.cover ? "Пропустить главу" : "Пропустить обучение"}</>
+              </Typography>
+            </button>
+
+            <div className="h-px flex-1" />
+
+            {tour.step === 0 && tour.cover ? null : (
+              <Button variant="quiet" size="sm" onClick={goBack}>
+                Назад
+              </Button>
+            )}
+            <Button size="sm" onClick={goNext}>
+              <>{tour.cover ? "Начать главу" : last ? FINISH.action : "Дальше"}</>
+            </Button>
+          </div>
+        </motion.div>
+      </AnimatePresence>
     </>
   )
 }

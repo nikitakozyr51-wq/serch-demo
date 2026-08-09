@@ -204,7 +204,7 @@ function AvatarMenu({ initials }: { initials: string }) {
               restartTour()
             }}
           >
-            Пройти обучение заново
+            Открыть обучение
           </MenuRow>
 
           <span aria-hidden className="my-1 h-px w-full bg-line-2" />

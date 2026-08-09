@@ -28,7 +28,7 @@ import { seedSession } from '../lib/session'
 /** Позвать обучение из меню с инициалами — так его зовёт человек. */
 async function openTour(page: import('@playwright/test').Page) {
   await page.click('[data-slot="user-avatar"]')
-  await page.click('text=Пройти обучение заново')
+  await page.click('text=Открыть обучение')
   await page.waitForSelector('[data-slot="tour-card"]')
 }
 
@@ -65,7 +65,9 @@ test('обучение доходит до конца и не гаснет по 
     }
 
     await card.locator('button').last().click()
-    await page.waitForTimeout(320)
+    // Окно уходит за 100 мс и приезжает пружиной. Мерить раньше значит
+    // поймать уходящее окно и решить, что шаг не сдвинулся.
+    await page.waitForTimeout(450)
   }
 
   if (seen.length < 20) {
