@@ -396,6 +396,11 @@ const PUBLIC = new Set<string>([
   // Человек с мёртвой ссылкой в кабинет не входил, а клиент подборки —
   // не сотрудник агентства вовсе. Без этого охрана уведёт обоих на вход,
   // и экран, объясняющий, что случилось, не увидит никто.
+  // У истёкшего сеанса сеанса нет по определению: без этой строки охрана
+  // уведёт человека на вход, и экран, объясняющий, что случилось,
+  // не покажется никогда.
+  '/session-expired',
+  '/m/session-expired',
   '/invite/expired',
   '/m/invite/expired',
   '/m/collections/off',
@@ -574,6 +579,21 @@ const authProductRoutes = [
    * ему форму приёма, которая всё равно откажет, значит заставить
    * заполнить её впустую.
    */
+  /**
+   * Три тупика на двух платформах: нет прав, нет связи, сеанс истёк.
+   *
+   * Свои адреса, а не состояния чужих экранов: на каждый из трёх человека
+   * приводит разная причина, и объяснять её посреди чужого экрана значит
+   * прятать объяснение.
+   */
+  productRoute('/no-rights', () => import('./dead-end-screens'), 'NoRightsPage'),
+  productRoute('/m/no-rights', () => import('./dead-end-screens'), 'MobileNoRightsPage'),
+  productRoute('/offline', () => import('./dead-end-screens'), 'OfflinePage'),
+  productRoute('/m/offline', () => import('./dead-end-screens'), 'MobileOfflinePage'),
+  productRoute('/session-expired', () => import('./dead-end-screens'), 'SessionExpiredPage'),
+  productRoute('/m/session-expired', () => import('./dead-end-screens'), 'MobileSessionExpiredPage'),
+  productRoute('/m/object/delisted', () => import('./mobile-object-screens'), 'MobileObjectDelistedPage'),
+  productRoute('/m/object/duplicates', () => import('./mobile-object-screens'), 'MobileDuplicatesPage'),
   productRoute('/invite/expired', () => import('./invite-expired-screens'), 'InviteExpiredPage'),
   productRoute('/m/invite/expired', () => import('./invite-expired-screens'), 'MobileInviteExpiredPage'),
   productRoute('/m/collections/off', () => import('./mobile-collections-screens'), 'MobileCollectionOffPage'),

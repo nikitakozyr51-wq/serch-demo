@@ -18,10 +18,16 @@ import {
   Wallet,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import { useState } from "react"
 import type { ReactNode } from "react"
 
 import { Typography } from "@/components/typography"
-import { useSession } from "@/features/auth"
+import {
+  requestDeletion,
+  saveRequisites,
+  transferOwner,
+  useSession,
+} from "@/features/auth"
 import { MobileEmptyState, MobileScreen, MobileSectionHeader } from "@/features/cabinet"
 import { groupDigits } from "@/features/listings"
 import {
@@ -33,6 +39,12 @@ import {
   useWorkspace,
 } from "@/features/workspace"
 import { cn } from "@/lib/utils"
+import {
+  DeleteAgencySheet,
+  RequisitesSheet,
+  TransferOwnerSheet,
+} from "@/mobile-agency-sheets"
+import { notifyDone, notifyError } from "@/platform/notify"
 
 /**
  * МОБАЙЛ · Агентство — шесть разделов руководителя.
@@ -243,10 +255,12 @@ function AgencyListRow({
  * не влезает, и в файле он выходит за границы кадра. Обрезать его нельзя —
  * адрес, обрезанный посередине, перестаёт быть адресом.
  *
- * **Каждая строка называет своё действие в `data-action`, но окна не
- * открывает.** Двенадцати экранов правки за этими строками в файле нет:
- * ни смены ИНН, ни выбора порога автопополнения. Придумать их здесь значило
- * бы придумать дизайн, поэтому строка говорит, что случится при нажатии,
+ * **Строка открывает лист там, где лист нарисован, и называет действие там,
+ * где не нарисован.** Из двенадцати строк листы есть у пяти: три реквизита
+ * ведут в `TIJHR`, ответственный за данные — в `iWj2M`, удаление агентства —
+ * в `hnnq8`. Остальным семи экрана правки в файле нет — ни выбора порога
+ * автопополнения, ни смены плотности, — и придумать его здесь значило бы
+ * придумать дизайн. Такая строка говорит, что случится при нажатии,
  * и на этом честно останавливается.
  */
 function AgencySettingRow({
@@ -254,13 +268,17 @@ function AgencySettingRow({
   title,
   note,
   action,
+  onPress,
   last = false,
 }: {
   icon: LucideIcon
   title: string
   note: string
-  /** Что произойдёт при нажатии. Экрана для этого в файле нет. */
+  /** Что произойдёт при нажатии. Остаётся и у строки с листом: атрибут
+   *  описывает действие, а не его отсутствие. */
   action: string
+  /** Открыть лист. Нет — значит экрана правки в файле не нарисовано. */
+  onPress?: () => void
   last?: boolean
 }) {
   return (
@@ -268,6 +286,7 @@ function AgencySettingRow({
       type="button"
       data-slot="agency-setting-row"
       data-action={action}
+      onClick={onPress}
       className={cn(
         "flex min-h-16 w-full cursor-pointer items-center gap-3 bg-transparent py-2 text-left",
         "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
@@ -771,6 +790,9 @@ export function MobileConsentsPage() {
 
 // ── МОБАЙЛ · Настройки агентства (`cdYS2`) ───────────────────────────────────
 
+/** Какой лист настроек открыт. Одновременно бывает только один. */
+type OpenSheet = "none" | "requisites" | "transfer" | "delete"
+
 type SettingsGroupData = {
   label: string
   rows: {
@@ -778,8 +800,10 @@ type SettingsGroupData = {
     icon: LucideIcon
     title: string
     note: string
-    /** Что случится при нажатии. Своего экрана ни у одной строки нет. */
+    /** Что случится при нажатии. */
     action: string
+    /** Какой лист открывает. Пусто — листа в файле не нарисовано. */
+    opens?: Exclude<OpenSheet, "none">
   }[]
 }
 
@@ -810,6 +834,10 @@ function settingsGroups(values: {
           // вёрстки, а не как «названия нет».
           note: values.agency === "" ? "—" : values.agency,
           action: "Меняет название агентства",
+          // Все три реквизита ведут в ОДИН лист `TIJHR`: он и нарисован
+          // тремя полями сразу. Три отдельных листа по одному полю пришлось
+          // бы выдумать, а ИНН и адрес всё равно сверяются с ЕГРЮЛ вместе.
+          opens: "requisites",
         },
         {
           id: "inn",
@@ -819,6 +847,7 @@ function settingsGroups(values: {
           // ни адреса продукт ещё не собирает и хранить их негде.
           note: "не заполнен · нужен для договора и счетов",
           action: "Меняет ИНН и заново сверяет его с ЕГРЮЛ",
+          opens: "requisites",
         },
         {
           id: "address",
@@ -826,6 +855,7 @@ function settingsGroups(values: {
           title: "Юридический адрес",
           note: "не заполнен · подставится из ЕГРЮЛ после проверки ИНН",
           action: "Меняет юридический адрес агентства",
+          opens: "requisites",
         },
       ],
     },
@@ -838,6 +868,7 @@ function settingsGroups(values: {
           title: values.officer,
           note: values.officerNote,
           action: "Назначает другого ответственного за персональные данные",
+          opens: "transfer",
         },
       ],
     },
@@ -906,6 +937,7 @@ function settingsGroups(values: {
           title: "Удаление агентства",
           note: "три рабочих дня · журнал хранится год",
           action: "Запускает удаление агентства: три рабочих дня на отмену",
+          opens: "delete",
         },
       ],
     },
@@ -928,7 +960,14 @@ function settingsGroups(values: {
  * **Опасная зона названа вслух, но красным не выкрашена.** В продукте красный
  * значит ровно одно — «сейчас спишутся деньги», — и удаление агентства
  * этим цветом пользоваться не может. Предупреждает здесь заголовок группы
- * и подпись «три рабочих дня · журнал хранится год», а не цвет.
+ * и подпись «три рабочих дня · журнал хранится год», а не цвет. Красный
+ * появляется единожды и только внутри листа `hnnq8`, на кнопке, после
+ * которой отмены нет.
+ *
+ * **Три из двенадцати строк теперь открывают листы**, и это те же три окна,
+ * что у руководителя на компьютере: реквизиты, передача роли, удаление
+ * агентства. Слова и правила проверки взяты у них — расходиться платформам
+ * в том, что они обещают про юрлицо и про необратимость, нельзя.
  *
  * **Ни одного чужого реквизита на экране больше нет.** Здесь стояли «Невский
  * проспект», ИНН 7806154392, адрес на Свердловской набережной и Смирнова Ирина
@@ -967,6 +1006,34 @@ export function MobileAgencySettingsPage() {
 
   const groups = settingsGroups({ agency, officer, officerNote, consentNote })
 
+  const [sheet, setSheet] = useState<OpenSheet>("none")
+
+  /**
+   * Реквизиты живут в базе, а до неё — нигде.
+   *
+   * Без сервера сохранять их некуда: колонки есть только в базе, а в браузере
+   * они пережили бы ровно до смены устройства. Поэтому лист открывается с тем,
+   * что уже записано, и пустые поля здесь — не ошибка, а «ещё не заполняли».
+   * Ровно так же устроен экран настроек на компьютере.
+   */
+  const [requisites, setRequisites] = useState({ legalName: "", inn: "", legalAddress: "" })
+
+  /**
+   * Кому можно передать роль — все, кроме себя. Передать роль себе
+   * бессмысленно, и своя строка в списке выбора читалась бы как ошибка.
+   */
+  const colleagues = workspace.people.filter(
+    (person) =>
+      person.email.trim().toLowerCase() !== (session?.email ?? "").trim().toLowerCase(),
+  )
+
+  /** Отчитаться о том, что сделал сервер. Молча такие действия проходить не должны. */
+  const report = (done: string) => (failed: string | null) => {
+    if (failed === null) notifyDone(done)
+    else notifyError(failed)
+    setSheet("none")
+  }
+
   return (
     <MobileScreen
       activeTab="more"
@@ -984,19 +1051,74 @@ export function MobileAgencySettingsPage() {
 
         {groups.map((group) => (
           <AgencySettingsGroup key={group.label} label={group.label}>
-            {group.rows.map((row, index) => (
-              <AgencySettingRow
-                key={row.id}
-                icon={row.icon}
-                title={row.title}
-                note={row.note}
-                action={row.action}
-                last={index === group.rows.length - 1}
-              />
-            ))}
+            {group.rows.map((row, index) => {
+              // Значение снимается в переменную до замыкания: сужение типа
+              // по свойству объекта внутри стрелки не переживает границу
+              // функции, и `row.opens` там снова стал бы «может быть пусто».
+              const opens = row.opens
+              return (
+                <AgencySettingRow
+                  key={row.id}
+                  icon={row.icon}
+                  title={row.title}
+                  note={row.note}
+                  action={row.action}
+                  onPress={opens === undefined ? undefined : () => setSheet(opens)}
+                  last={index === group.rows.length - 1}
+                />
+              )
+            })}
           </AgencySettingsGroup>
         ))}
       </div>
+
+      {/* Листы лежат поверх окна, а не внутри прокручиваемого тела: затемнение
+          обязано накрыть и шапку, и нижнюю навигацию. Экран настроек занимает
+          высоту окна целиком, поэтому `fixed`, а не `absolute`. */}
+      {sheet === "requisites" ? (
+        <RequisitesSheet
+          // Название подставляется из сеанса, пока реквизиты не заполняли:
+          // оно единственное, что продукт про юрлицо знает наверняка.
+          legalName={requisites.legalName || agency}
+          inn={requisites.inn}
+          legalAddress={requisites.legalAddress}
+          onClose={() => setSheet("none")}
+          onSave={(next) => {
+            setRequisites(next)
+            void saveRequisites(next).then(report("Реквизиты сохранены"))
+          }}
+        />
+      ) : null}
+
+      {sheet === "transfer" ? (
+        <TransferOwnerSheet
+          ownerName={session?.name ?? ""}
+          // Подпись строки — роль и лимит, теми же словами, что в окне
+          // на компьютере: подпись, отвечающая на разных платформах
+          // на разные вопросы, приводит к выбору разных людей.
+          people={colleagues.map((person) => ({
+            id: person.id,
+            name: person.name,
+            note: `${person.role === "owner" ? "руководитель" : "агент"} · ${
+              person.limit === null ? "без лимита" : `лимит ${person.limit} в сутки`
+            }`,
+          }))}
+          onClose={() => setSheet("none")}
+          onTransfer={(id) => void transferOwner(id).then(report("Роль передана"))}
+        />
+      ) : null}
+
+      {sheet === "delete" ? (
+        <DeleteAgencySheet
+          agency={agency}
+          onClose={() => setSheet("none")}
+          onRequest={() =>
+            void requestDeletion().then(
+              report("Запрос на удаление принят: данные удалим за три рабочих дня"),
+            )
+          }
+        />
+      ) : null}
     </MobileScreen>
   )
 }

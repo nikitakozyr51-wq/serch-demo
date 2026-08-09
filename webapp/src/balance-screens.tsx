@@ -23,20 +23,13 @@ import {
   type Workspace,
 } from "@/features/workspace"
 import { cn } from "@/lib/utils"
-import { TopUpDoneDialog } from "@/money-confirmations"
-import { useExitValue } from "@/platform/motion"
-
-/** Доступ агентства — 3 000 ₽ в месяц. Вторая и последняя цена продукта. */
-const SUBSCRIPTION_PRICE = 3000
+import { RequestTopUpDialog, TopUpDoneDialog } from "@/money-confirmations"
+import { SUBSCRIPTION_PRICE, disclosuresFor } from "@/money-texts"
+import { notifyDone } from "@/platform/notify"
+import { useExit, useExitValue } from "@/platform/motion"
 
 /** Тридцать дней в миллисекундах: окно, за которое считаются деньги в шапке. */
 const MONTH = 30 * 24 * 60 * 60 * 1000
-
-/** «хватит на 43 раскрытия» — рубли переводятся в работу отдела. */
-function disclosuresFor(amount: number) {
-  const count = Math.floor(amount / DISCLOSURE_PRICE)
-  return `${count} ${plural(count, "раскрытие", "раскрытия", "раскрытий")}`
-}
 
 /**
  * БАЛАНС · три вкладки на одном каркасе.
@@ -265,6 +258,25 @@ function BalanceShell({
   const paper = usePaper()
   const shownTabs = tabs ?? balanceTabs(workspace)
 
+  /**
+   * Руководитель ли смотрит на счёт — то же условие, что в шапке кабинета.
+   *
+   * Написано одинаково, а не «похоже»: разойдись эти два места, и человек
+   * получил бы «Запросить пополнение» в шапке и «Пополнить» на самой странице
+   * баланса — то есть продукт сказал бы ему обе вещи сразу.
+   */
+  const owner = session?.role !== "agent"
+
+  /**
+   * Окно `V9TDoV`. Открыто или уходит — решает страница, а не окно.
+   *
+   * Держать его 120 мс после закрытия нужно по той же причине, что и
+   * подтверждение пополнения: исчезновение видно лучше появления, потому что
+   * человек уже смотрит именно туда.
+   */
+  const [asking, setAsking] = useState(false)
+  const ask = useExit(asking)
+
   return (
     <CabinetShell activeId="balance">
       <CabinetPage>
@@ -285,16 +297,37 @@ function BalanceShell({
           <Button variant="quiet" size="sm" onClick={() => paper("Счёт")}>
             Скачать счёт
           </Button>
-          {/* Пополнение — нарисованный экран, и человек должен попадать на него
-              переходом. Кнопка проекта закрыта и ссылкой не притворяется,
-              поэтому переход делается здесь, а адрес остаётся настоящим. */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => void navigate({ to: "/balance/top-up" })}
-          >
-            Пополнить
-          </Button>
+          {/*
+            У агента здесь другая кнопка, и это право, а не формулировка.
+
+            ═══════════════════════════════════════════════════════════════════
+
+            Счёт принадлежит агентству. Вносить деньги, выставлять счёт на
+            юрлицо и получать закрывающие документы может только руководитель:
+            у агента нет ни доступа к реквизитам, ни права обязывать агентство
+            платить. Шапка кабинета это уже знает и показывает ему «Запросить
+            пополнение», а сама страница баланса — ровно та, куда он приходит
+            смотреть на кончившиеся деньги, — продолжала звать его «Пополнить»
+            и вела на экран, где он упирается в отказ.
+
+            Пополнение — нарисованный экран, и руководитель должен попадать
+            на него переходом. Кнопка проекта закрыта и ссылкой не
+            притворяется, поэтому переход делается здесь, а адрес остаётся
+            настоящим.
+          */}
+          {owner ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => void navigate({ to: "/balance/top-up" })}
+            >
+              Пополнить
+            </Button>
+          ) : (
+            <Button variant="primary" size="sm" onClick={() => setAsking(true)}>
+              Запросить пополнение
+            </Button>
+          )}
         </div>
 
         <KeyNumbers items={keyNumbers(workspace, now, balance)} />
@@ -344,6 +377,31 @@ function BalanceShell({
         </div>
 
         <>{children}</>
+
+        {/*
+          СОСТОЯНИЕ · Запросить пополнение (`V9TDoV`).
+
+          Окно, а не всплывающее сообщение: до него нажатие «Запросить
+          пополнение» мгновенно отвечало строкой, которая исчезала за четыре
+          секунды, — агент не успевал ни увидеть остаток, ни решить, точно ли
+          он хочет дёргать руководителя.
+
+          **Слова расписки взяты у шапки кабинета, а не написаны заново.**
+          Там та же кнопка отвечает ровно так, и два разных ответа на одно
+          действие означали бы, что продукт сам не знает, что он сделал.
+          Что доставки за этой строкой пока не стоит — отдельный пункт отчёта:
+          журнала запросов в продукте нет.
+        */}
+        {ask.mounted ? (
+          <RequestTopUpDialog
+            leaving={ask.leaving}
+            onSend={() => {
+              notifyDone("Руководителю показано, что нужно пополнить счёт")
+              setAsking(false)
+            }}
+            onClose={() => setAsking(false)}
+          />
+        ) : null}
       </CabinetPage>
     </CabinetShell>
   )

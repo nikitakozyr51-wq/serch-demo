@@ -13,9 +13,27 @@ import {
   MobileHeader,
   PhoneFrame,
 } from "@/features/cabinet"
-import { countQuery, MobileListingRow, photoFor } from "@/features/listings"
+import { countQuery, MobileListingRow, photoFor, plural } from "@/features/listings"
 import { touchSavedSearch, useWorkspace, type SavedSearch } from "@/features/workspace"
 import { cn } from "@/lib/utils"
+import {
+  ASSIGN_AGENT_EMPTY,
+  BULK_STATUSES,
+  BULK_STATUS_FOOTNOTE,
+  BULK_STATUS_LEAD,
+  COLLECTION_PICK_LEAD,
+  COLLECTION_PICK_NEW,
+  assignAgentText,
+  assignAgentTitle,
+  bulkStatusAction,
+  bulkStatusTitle,
+  collectionPickAction,
+  collectionPickTitle,
+  personNote,
+  type BulkStatusId,
+} from "./bulk-action-text"
+import { PhoneSheet } from "./phone-sheet"
+import { SheetChoiceRow } from "./sheet-choice-row"
 
 /**
  * Условия поиска одной строкой: «Красногвардейский · 2-к · до 15 млн».
@@ -39,10 +57,11 @@ function describeQuery(query: SavedSearch["query"]): string {
 /**
  * МОБАЙЛ · Поиски, массовые действия, пуши.
  *
- * Шесть кадров одной группы: `LlJyw` сохранённые поиски, `sN5wC` лист
+ * Девять кадров одной группы: `LlJyw` сохранённые поиски, `sN5wC` лист
  * «Сохранить поиск», `bx94j` глобальный поиск, `liwT8` подтверждение массового
  * раскрытия, `vmUET` панель массовых действий, `nZGka` пуши на экране
- * блокировки.
+ * блокировки и три листа самой панели — `u2WQZ` в подборку, `OWHVQ` сменить
+ * статус, `ZQvsE` назначить агенту.
  *
  * Все значения сняты замером из файла. Общая рамка стенда — 390 × 844,
  * как у `mobile-search-screen.tsx` и `mobile-call-screen.tsx`: экраны смотрят
@@ -73,69 +92,6 @@ function PhoneStand({
     <PhoneFrame slot="mobile-screen" surface={surface}>
       {children}
     </PhoneFrame>
-  )
-}
-
-/**
- * Лист снизу со скримом.
- *
- * **Файл рисует лист двумя разными формами, и это расхождение файла с самим
- * собой, а не решение.** Подтверждение массового раскрытия и панель действий
- * идут широкой формой (радиус 24, поля [12, 20, 32, 20], хват 36 × 5 цветом
- * `line-2`, затемнение 35 %). Лист «Сохранить поиск» идёт формой поуже
- * (радиус 16, поля [12, 16, 24, 16], хват 36 × 4 цветом `line-3`,
- * затемнение 45 %). Обе воспроизведены как нарисованы.
- *
- * Общий у обеих только зазор 20 между блоками и нижнее поле больше верхнего:
- * под листом системная полоса жеста, и кнопка, прижатая к самому краю,
- * ловилась бы вместе с ней.
- *
- * Общий `MobileSheet` из `@/features/cabinet` сюда не встал: его скрим задан
- * высотой `h-svh` и внутри рамки 844 уезжает за нижний край.
- */
-function PhoneSheet({
-  shape = "wide",
-  label,
-  children,
-}: {
-  /** `wide` — лист массовых действий, `form` — лист с полями «Сохранить поиск». */
-  shape?: "wide" | "form"
-  label: string
-  children: ReactNode
-}) {
-  const form = shape === "form"
-
-  return (
-    <div
-      data-slot="phone-sheet-scrim"
-      className={cn(
-        "absolute inset-0 z-10 flex flex-col justify-end",
-        form ? "bg-[#1e1e1e73]" : "bg-[#1e1e1e59]",
-      )}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        data-slot="phone-sheet"
-        className={cn(
-          "flex w-full flex-col gap-5 bg-surface",
-          form ? "rounded-t-2xl px-4 pt-3 pb-6" : "rounded-t-3xl px-5 pt-3 pb-8",
-        )}
-      >
-        {/* Хват говорит, что лист тянется пальцем. Крестика в файле нет. */}
-        <div className="flex w-full justify-center">
-          <span
-            aria-hidden
-            className={cn(
-              "w-9 shrink-0 rounded-full",
-              form ? "h-1 bg-line-3" : "h-[5px] bg-line-2",
-            )}
-          />
-        </div>
-        {children}
-      </div>
-    </div>
   )
 }
 
@@ -951,18 +907,41 @@ export function MobileBulkDisclosurePage() {
    ──────────────────────────────────────────────────────────────────────── */
 
 /**
+ * Сколько объектов отмечено в выдаче под панелью.
+ *
+ * Число живёт здесь одно на все четыре действия: заголовок панели, подписи
+ * листов и подпись кнопки списания считают одно и то же выделение, и разойтись
+ * они не имеют права. Раньше «12» было набрано в пяти местах текстом.
+ */
+const BULK_PICKED = 12
+
+/** Какой лист панели открыт. `null` — открыта сама панель. */
+type BulkSheet = "collection" | "status" | "assign"
+
+/**
  * Четыре массовых действия.
  *
- * **Только у первого есть нарисованное продолжение** — подтверждение списания.
- * У трёх остальных выбора в макете нет: ни списка подборок, ни списка статусов,
- * ни списка агентов. Они названы действием и молчат; выдуманный список
- * подборок здесь обещал бы человеку набор, которого продукт ещё не показывает.
+ * **Все четыре теперь ведут к нарисованному листу.** Раньше вёл только первый,
+ * а «В подборку», «Сменить статус» и «Назначить агенту» стояли с одним лишь
+ * `data-action` — намерением вместо исполнения: человек отмечал двенадцать
+ * объектов, нажимал «Сменить статус» и не получал ничего. Листы были
+ * нарисованы (`u2WQZ`, `OWHVQ`, `ZQvsE`) и просто не собраны.
+ *
+ * Подтверждение списания осталось отдельным адресом (`/m/bulk-disclosure`):
+ * это его собственный экран, и отмена на нём возвращает сюда. Три остальных
+ * листа адреса не получили — они открываются поверх панели состоянием, ровно
+ * как их компьютерные близнецы открываются из панели выбранного в выдаче.
  */
-const BULK_ACTIONS: { label: string; primary: boolean; to?: SheetRoute; action?: string }[] = [
+const BULK_ACTIONS: {
+  label: string
+  primary: boolean
+  to?: SheetRoute
+  open?: BulkSheet
+}[] = [
   { label: "Раскрыть 9 контактов · 1 791 ₽", primary: true, to: "/m/bulk-disclosure" },
-  { label: "В подборку", primary: false, action: "Добавить 12 объектов в подборку" },
-  { label: "Сменить статус", primary: false, action: "Сменить статус у 12 объектов" },
-  { label: "Назначить агенту", primary: false, action: "Назначить 12 объектов агенту" },
+  { label: "В подборку", primary: false, open: "collection" },
+  { label: "Сменить статус", primary: false, open: "status" },
+  { label: "Назначить агенту", primary: false, open: "assign" },
 ]
 
 /**
@@ -975,15 +954,13 @@ function BulkActionRow({
   label,
   primary,
   to,
-  action,
+  onOpen,
 }: {
   label: string
   primary: boolean
   /** Экран за пунктом. Задан — пункт становится ссылкой. */
   to?: SheetRoute
-  /** Действие без нарисованного экрана: названо и ничего не рисует. */
-  action?: string
-  /** Строка нажимается и что-то делает. Тогда это кнопка, а не ссылка. */
+  /** Лист поверх панели. Задан — пункт становится кнопкой. */
   onOpen?: () => void
 }) {
   const shell = cn(
@@ -1010,9 +987,260 @@ function BulkActionRow({
   }
 
   return (
-    <button type="button" data-slot="bulk-action" data-action={action} className={shell}>
+    <button type="button" data-slot="bulk-action" onClick={onOpen} className={shell}>
       <>{caption}</>
     </button>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Три листа панели: `u2WQZ`, `OWHVQ`, `ZQvsE`
+   ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Общее у трёх листов: почему главная кнопка ничего не применяет.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Выбор внутри листа настоящий — отметка переставляется, подпись кнопки
+ * пересобирается за ней. А вот последнее нажатие названо действием и молчит,
+ * и ровно по той же причине, что у подтверждения массового раскрытия: **этот
+ * кадр нарисован без списка объектов.** Ни адресов, ни идентификаторов на нём
+ * нет, «12» — образец текста дизайнера. Придумать двенадцать адресов ради
+ * нажатия значило бы записать в работу агентства статусы, назначения
+ * и подборки объектов, которых никто не выбирал, — и остальные экраны показали
+ * бы владельцу вымысел как факт.
+ *
+ * На компьютере те же окна применяются по-настоящему: там панель выбранного
+ * стоит над живой выдачей и знает адреса отмеченных строк. На телефоне режима
+ * выделения в выдаче ещё нет — появится, и три `data-action` станут вызовами
+ * `setListingStatus`, `assignListings` и `addToCollection`.
+ *
+ * Отмена при этом работает по-настоящему: она возвращает к панели, откуда лист
+ * и открыли, и выбор из двенадцати объектов не пропадает.
+ */
+function BulkSheetActions({
+  primary,
+  action,
+  onCancel,
+}: {
+  primary: string
+  /** Что случилось бы, будь у листа список объектов. */
+  action: string
+  onCancel: () => void
+}) {
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <Button variant="primary" size="lg" block data-action={action}>
+        <>{primary}</>
+      </Button>
+      <Button variant="quiet" size="lg" block onClick={onCancel}>
+        Отмена
+      </Button>
+    </div>
+  )
+}
+
+/**
+ * МОБАЙЛ · Сменить статус (`OWHVQ`) — близнец окна `a9lIk`.
+ *
+ * Лист 583: хват, блок текста 390 с внутренним зазором 14, ряд кнопок 104.
+ * Четыре статуса капсулами по 48 с зазором 8.
+ *
+ * **Слова и правила взяты у собранного компьютерного окна**, а не написаны
+ * заново, — они лежат в `bulk-action-text.ts`. Главное из них: стоп-листа
+ * в списке нет и быть не может.
+ *
+ * Внутренний зазор блока 14, а не 8: в кадре у него четыре части — заголовок,
+ * объяснение, список и сноска, — и все четыре стоят на одном шаге. Восьмёрка
+ * из компонента `SItir` описывает пару «заголовок и объяснение», а здесь пара
+ * не одна.
+ */
+function BulkStatusSheet({ count, onCancel }: { count: number; onCancel: () => void }) {
+  const [chosen, setChosen] = useState<BulkStatusId>("in-progress")
+  const label = BULK_STATUSES.find((status) => status.id === chosen)?.label ?? ""
+
+  return (
+    <PhoneSheet label={bulkStatusTitle(count)}>
+      <div className="flex w-full flex-col gap-3.5">
+        <Typography variant="panelTitle" tone="default" as="h2">
+          <>{bulkStatusTitle(count)}</>
+        </Typography>
+        <Typography variant="uiText" tone="secondary">
+          <>{BULK_STATUS_LEAD}</>
+        </Typography>
+
+        <div role="radiogroup" aria-label="Статус" className="flex w-full flex-col gap-2">
+          {BULK_STATUSES.map((status) => (
+            <SheetChoiceRow
+              key={status.id}
+              label={status.label}
+              selected={status.id === chosen}
+              onSelect={() => setChosen(status.id)}
+            />
+          ))}
+        </div>
+
+        <Typography variant="metaText" tone="dense">
+          <>{BULK_STATUS_FOOTNOTE}</>
+        </Typography>
+      </div>
+
+      <BulkSheetActions
+        primary={bulkStatusAction(label)}
+        action={`Поставить статус «${label}» ${count} объектам`}
+        onCancel={onCancel}
+      />
+    </PhoneSheet>
+  )
+}
+
+/**
+ * МОБАЙЛ · Назначить объект агенту (`ZQvsE`) — близнец окна `jUJgJ`.
+ *
+ * Лист 269: хват, блок текста 76 с зазором 8, ряд кнопок 104.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * НАЗВАННОЕ РАСХОЖДЕНИЕ С КАДРОМ — ТО ЖЕ, ЧТО НА КОМПЬЮТЕРЕ
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **В кадре нет выбора агента.** Текст говорит «перейдёт в работу выбранному
+ * агенту», но чем выбирать — не нарисовано: лист состоит из двух абзацев
+ * и двух кнопок. Собрать его буквально значит собрать лист, который ничего
+ * не может: «Назначить» кому?
+ *
+ * Компьютерное окно (`AssignAgentDialog`) уже решило это, добавив список
+ * людей из окна передачи роли. Телефон повторяет решение, а не изобретает
+ * второе: строка выбора здесь та же, что в листе статусов и подборок, —
+ * это форма телефона, а решение общее.
+ *
+ * Список людей настоящий: сотрудники агентства из его же работы.
+ */
+function AssignAgentSheet({ count, onCancel }: { count: number; onCancel: () => void }) {
+  const workspace = useWorkspace()
+  const people = workspace.people
+  const [chosen, setChosen] = useState<string | null>(people[0]?.id ?? null)
+  const name = people.find((person) => person.id === chosen)?.name ?? ""
+
+  return (
+    <PhoneSheet label={assignAgentTitle(count)}>
+      <div className="flex w-full flex-col gap-2">
+        <Typography variant="panelTitle" tone="default" as="h2">
+          <>{assignAgentTitle(count)}</>
+        </Typography>
+        <Typography variant="uiText" tone="secondary">
+          <>{assignAgentText(count)}</>
+        </Typography>
+      </div>
+
+      {people.length === 0 ? (
+        <Typography variant="denseText" tone="dense">
+          <>{ASSIGN_AGENT_EMPTY}</>
+        </Typography>
+      ) : (
+        <div role="radiogroup" aria-label="Агент" className="flex w-full flex-col gap-2">
+          {people.map((person) => (
+            <SheetChoiceRow
+              key={person.id}
+              label={person.name}
+              note={personNote(person)}
+              selected={person.id === chosen}
+              onSelect={() => setChosen(person.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      <BulkSheetActions
+        primary="Назначить"
+        action={`Назначить ${count} объектов агенту ${name}`}
+        onCancel={onCancel}
+      />
+    </PhoneSheet>
+  )
+}
+
+/**
+ * МОБАЙЛ · В подборку (`u2WQZ`) — близнец окна `c5I2qO`.
+ *
+ * Лист 593: хват, блок текста 400 с внутренним зазором 14, ряд кнопок 104.
+ * Первой строкой списка стоит не подборка, а способ завести новую.
+ *
+ * **Подборки настоящие — те, что собрало это агентство.** В кадре их пять
+ * с образцовыми именами («Расселение, Лиговка», «Доли и комнаты, отбор»);
+ * подставлять их живому человеку значило бы показать ему чужую работу как
+ * свою. У агентства без единой подборки список состоит из одной строки —
+ * «Новая подборка», — и это честный ответ, а не пустая рамка.
+ *
+ * **«Новая подборка» ведёт на лист `nVXGr`, а не заводит подборку молча.**
+ * Имя подборки увидит клиент, и спрашивать его надо там, где под полем стоит
+ * подсказка про это, — на уже собранном экране «Новая подборка». Второе поле
+ * имени в этом листе означало бы два места, где подборку называют.
+ */
+function CollectionPickSheet({ count, onCancel }: { count: number; onCancel: () => void }) {
+  const workspace = useWorkspace()
+  const navigate = useNavigate()
+  const collections = workspace.collections
+  /** `null` — выбрана строка «Новая подборка». */
+  const [chosen, setChosen] = useState<string | null>(collections[0]?.id ?? null)
+  const picked = collections.find((collection) => collection.id === chosen)
+  const objects = plural(count, "объект", "объекта", "объектов")
+
+  return (
+    <PhoneSheet label={collectionPickTitle(count, objects)}>
+      <div className="flex w-full flex-col gap-3.5">
+        <Typography variant="panelTitle" tone="default" as="h2">
+          <>{collectionPickTitle(count, objects)}</>
+        </Typography>
+        <Typography variant="uiText" tone="secondary">
+          <>{COLLECTION_PICK_LEAD}</>
+        </Typography>
+
+        <div role="radiogroup" aria-label="Подборка" className="flex w-full flex-col gap-2">
+          <SheetChoiceRow
+            label={COLLECTION_PICK_NEW.label}
+            note={COLLECTION_PICK_NEW.note}
+            selected={chosen === null}
+            onSelect={() => setChosen(null)}
+          />
+          {collections.map((collection) => (
+            <SheetChoiceRow
+              key={collection.id}
+              label={collection.name}
+              note={`${collection.items.length} ${plural(collection.items.length, "объект", "объекта", "объектов")}`}
+              selected={collection.id === chosen}
+              onSelect={() => setChosen(collection.id)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {picked === undefined ? (
+        <div className="flex w-full flex-col gap-2">
+          {/* Переход настоящий: лист «Новая подборка» собран и заводит
+              подборку в работе агентства. Подпись кнопки та же, что на нём, —
+              человек нажимает одно и то же слово дважды и попадает туда,
+              куда оно обещало. */}
+          <Button
+            variant="primary"
+            size="lg"
+            block
+            onClick={() => void navigate({ to: "/m/collections/new" })}
+          >
+            Создать подборку
+          </Button>
+          <Button variant="quiet" size="lg" block onClick={onCancel}>
+            Отмена
+          </Button>
+        </div>
+      ) : (
+        <BulkSheetActions
+          primary={collectionPickAction(picked.name)}
+          action={`Добавить ${count} ${objects} в подборку «${picked.name}»`}
+          onCancel={onCancel}
+        />
+      )}
+    </PhoneSheet>
   )
 }
 
@@ -1033,32 +1261,54 @@ function BulkActionRow({
  *
  * «Снять выбор» отделено зазором 20 и капсулой: это выход из режима,
  * а не пятое действие над объектами.
+ *
+ * **Лист действия ЗАМЕНЯЕТ панель, а не встаёт поверх неё.** Так нарисовано:
+ * под затемнением всех трёх кадров пусто, панели там нет. Два листа друг
+ * на друге читались бы как заедание, а панель после выбора действия человеку
+ * не нужна — она нужна снова только при отмене, и тогда возвращается.
  */
 export function MobileBulkPanelPage() {
+  const [sheet, setSheet] = useState<BulkSheet | null>(null)
+  const close = () => setSheet(null)
+
   return (
     <PhoneStand surface="none">
-      <PhoneSheet label="12 объектов выбрано">
-        <div className="flex w-full flex-col gap-2">
-          <Typography variant="panelTitle" tone="default" as="h2">
-            12 объектов выбрано
-          </Typography>
-          <Typography variant="uiText" tone="secondary">
-            Действие применится ко всем сразу.
-          </Typography>
-        </div>
+      {sheet === "collection" ? (
+        <CollectionPickSheet count={BULK_PICKED} onCancel={close} />
+      ) : sheet === "status" ? (
+        <BulkStatusSheet count={BULK_PICKED} onCancel={close} />
+      ) : sheet === "assign" ? (
+        <AssignAgentSheet count={BULK_PICKED} onCancel={close} />
+      ) : (
+        <PhoneSheet label={`${BULK_PICKED} объектов выбрано`}>
+          <div className="flex w-full flex-col gap-2">
+            <Typography variant="panelTitle" tone="default" as="h2">
+              <>{`${BULK_PICKED} объектов выбрано`}</>
+            </Typography>
+            <Typography variant="uiText" tone="secondary">
+              Действие применится ко всем сразу.
+            </Typography>
+          </div>
 
-        <div className="flex w-full flex-col gap-2">
-          {BULK_ACTIONS.map((action) => (
-            <BulkActionRow key={action.label} {...action} />
-          ))}
-        </div>
+          <div className="flex w-full flex-col gap-2">
+            {BULK_ACTIONS.map(({ label, primary, to, open }) => (
+              <BulkActionRow
+                key={label}
+                label={label}
+                primary={primary}
+                to={to}
+                onOpen={open === undefined ? undefined : () => setSheet(open)}
+              />
+            ))}
+          </div>
 
-        {/* Снятие выбора возвращает в обычную выдачу, а у мобильной выдачи
-            собственного адреса пока нет. Действие названо и ничего не рисует. */}
-        <div className="flex w-full flex-col gap-2">
-          <QuietPill action="Снять выбор с 12 объектов">Снять выбор</QuietPill>
-        </div>
-      </PhoneSheet>
+          {/* Снятие выбора возвращает в обычную выдачу, а режима выделения
+              у мобильной выдачи пока нет. Действие названо и ничего не рисует. */}
+          <div className="flex w-full flex-col gap-2">
+            <QuietPill action={`Снять выбор с ${BULK_PICKED} объектов`}>Снять выбор</QuietPill>
+          </div>
+        </PhoneSheet>
+      )}
     </PhoneStand>
   )
 }

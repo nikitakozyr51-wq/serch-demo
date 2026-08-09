@@ -54,6 +54,9 @@ const NOT_A_SCREEN = [
   { test: (name) => name.startsWith('ПОЛОСА'), why: 'подпись раздела холста' },
   { test: (name) => name.startsWith('СИСТЕМА'), why: 'доска решений' },
   { test: (name) => name.startsWith('ЗАМЕЧАНИЕ'), why: 'записка на холсте' },
+  // Доска сгенерированных кадров квартир: сырьё, а не экран. Собирать
+  // на ней нечего — её содержимое уже лежит в `public/demo-photos`.
+  { test: (name) => name.startsWith('ФОТО'), why: 'доска исходников' },
 ]
 
 /**

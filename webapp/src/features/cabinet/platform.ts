@@ -45,6 +45,10 @@ const TWINS: Array<[desktop: string, mobile: string]> = [
   // Человек получает ссылку в письме и открывает её с чего угодно —
   // чаще всего с телефона.
   ["/invite/expired", "/m/invite/expired"],
+  // Три тупика: человек попадает в них с любого устройства.
+  ["/no-rights", "/m/no-rights"],
+  ["/offline", "/m/offline"],
+  ["/session-expired", "/m/session-expired"],
   ["/today", "/m/today"],
   ["/search", "/m/search"],
   ["/object", "/m/object"],
