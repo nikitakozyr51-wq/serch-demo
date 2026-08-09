@@ -256,14 +256,38 @@ export function KitchenSinkPage() {
                 ],
               ]}
               nearAddress="Лиговский пр., 44 · 1 км"
-              more={[
+              /*
+                Три группы вместо прежних «ещё фильтров».
+
+                «Ещё фильтры» была нашей выдумкой: такой группы в кадре нет.
+                В неё свалили комнатность и потолки цены — и потолки спорили
+                с полями «от / до» прямо над собой. Теперь тип объекта,
+                комнатность и свежесть стоят своими группами, как в `aoguG`,
+                и у каждого чипа счётчик: он отвечает «а там что-нибудь
+                есть» ДО нажатия, а ноль выключает чип сам.
+              */
+              kinds={[
                 [
-                  { id: "freshness", label: "Свежесть" },
-                  { id: "price-behaviour", label: "Поведение цены" },
+                  { id: "flat", label: "Квартира", selected: true, count: 214 },
+                  { id: "room", label: "Комната", count: 23 },
+                  { id: "share", label: "Доля", count: 6 },
+                  { id: "apartments", label: "Апартаменты", count: 0 },
                 ],
+              ]}
+              rooms={[
                 [
-                  { id: "rooms", label: "Комнат" },
-                  { id: "type", label: "Тип объекта" },
+                  { id: "1", label: "1", count: 41 },
+                  { id: "2", label: "2", selected: true, count: 79 },
+                  { id: "3", label: "3", count: 49 },
+                  { id: "4", label: "4 и более", count: 6 },
+                ],
+              ]}
+              freshness={[
+                [
+                  { id: "24h", label: "за 24 часа", count: 12 },
+                  { id: "3d", label: "за 3 дня", count: 31 },
+                  { id: "7d", label: "за неделю", selected: true, count: 68 },
+                  { id: "60d", label: "дольше 60 дней", count: 9 },
                 ],
               ]}
             />

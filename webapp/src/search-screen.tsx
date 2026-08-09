@@ -98,21 +98,23 @@ const SORTS = {
 type SortId = keyof typeof SORTS
 
 /**
- * Ступени потолка цены — свои у каждого режима.
+ * Ступени свежести из кадра `aoguG`.
  *
- * У продажи миллионы, у аренды тысячи рублей в месяц: «до 15 млн» в аренде
- * не сужает ничего, потому что дороже пятнадцати миллионов в месяц квартир
- * не бывает. Общий набор означал бы, что в одном из режимов фильтр цены
- * просто не работает — и работал бы вид, а не фильтр.
+ * Три первые сужают к недавнему, четвёртая — наоборот, к залежавшемуся:
+ * объект, висящий дольше двух месяцев, это повод торговаться, и агент
+ * ищет такие нарочно. Поэтому она в той же группе, а не в отдельной.
  *
- * Значения аренды взяты из колонки, описанной в `АРЕНДА-v1.md`:
- * «от 40 000 · до 90 000». Единица хранится числом рублей, а подпись
- * собирается из режима.
+ * Выбор одиночный: «за 24 часа» и «за неделю» вместе означали бы «за
+ * неделю», то есть второй чип поглощал бы первый.
  */
-const PRICE_CAPS: Record<SearchMode, readonly number[]> = {
-  sale: [8, 15, 25, 0],
-  rent: [40_000, 60_000, 90_000, 0],
-}
+const FRESHNESS = [
+  { id: "24h", label: "за 24 часа", match: (minutes: number) => minutes <= 60 * 24 },
+  { id: "3d", label: "за 3 дня", match: (minutes: number) => minutes <= 60 * 24 * 3 },
+  { id: "7d", label: "за неделю", match: (minutes: number) => minutes <= 60 * 24 * 7 },
+  { id: "60d", label: "дольше 60 дней", match: (minutes: number) => minutes > 60 * 24 * 60 },
+] as const
+
+type FreshId = (typeof FRESHNESS)[number]["id"]
 
 /** Потолок по умолчанию: то, с чем открывается выдача в этом режиме. */
 const PRICE_CAP_DEFAULT: Record<SearchMode, number> = { sale: 15, rent: 90_000 }
@@ -388,6 +390,10 @@ function SearchScreenBody({
     setPriceCap(PRICE_CAP_DEFAULT[mode ?? "sale"])
   }
   const [rooms, setRooms] = useState<number[]>(opened?.query.rooms ?? [])
+  /** Тип объекта: пусто — все типы. Несколько разом складываются «или». */
+  const [kinds, setKinds] = useState<string[]>([])
+  /** Свежесть: одна ступень или ни одной. См. `FRESHNESS`. */
+  const [fresh, setFresh] = useState<FreshId | null>(null)
   const [districts, setDistricts] = useState<string[]>(
     opened?.query.districts ?? ["krasnogvardeisky", "nevsky", "kalininsky"],
   )
@@ -614,7 +620,13 @@ function SearchScreenBody({
     .filter((row) => (TAB_FILTER[activeTab] ?? TAB_FILTER.all!)(row))
     .filter((row) => districts.length === 0 || districts.includes(row.district))
     .filter((row) => priceCap === 0 || row.priceValue <= priceCap * PRICE_UNIT[mode ?? "sale"])
-    .filter((row) => rooms.length === 0 || rooms.includes(row.rooms))
+    .filter((row) => rooms.length === 0 || rooms.some((n) => (n === 4 ? row.rooms >= 4 : row.rooms === n)))
+    .filter((row) => kinds.length === 0 || kinds.includes(row.kind ?? "flat"))
+    .filter((row) => {
+      if (fresh === null) return true
+      const step = FRESHNESS.find((item) => item.id === fresh)
+      return step === undefined || step.match(row.freshnessMinutes)
+    })
     // Цена, площадь, этаж и метро. До этой правки четыре поля и семь чипов
     // колонки не участвовали в отборе вовсе: список не менялся ни на строку.
     .filter((row) => conditions.priceFrom === undefined || row.priceValue >= conditions.priceFrom)
@@ -653,7 +665,13 @@ function SearchScreenBody({
   const withoutTab = rows
     .filter((row) => districts.length === 0 || districts.includes(row.district))
     .filter((row) => priceCap === 0 || row.priceValue <= priceCap * PRICE_UNIT[mode ?? "sale"])
-    .filter((row) => rooms.length === 0 || rooms.includes(row.rooms))
+    .filter((row) => rooms.length === 0 || rooms.some((n) => (n === 4 ? row.rooms >= 4 : row.rooms === n)))
+    .filter((row) => kinds.length === 0 || kinds.includes(row.kind ?? "flat"))
+    .filter((row) => {
+      if (fresh === null) return true
+      const step = FRESHNESS.find((item) => item.id === fresh)
+      return step === undefined || step.match(row.freshnessMinutes)
+    })
     .filter((row) => conditions.priceFrom === undefined || row.priceValue >= conditions.priceFrom)
     .filter((row) => conditions.priceTo === undefined || row.priceValue <= conditions.priceTo)
     .filter((row) => conditions.areaFrom === undefined || row.area >= conditions.areaFrom)
@@ -667,6 +685,20 @@ function SearchScreenBody({
         nearAddress === "" ||
         row.address.toLowerCase().includes(nearAddress.toLowerCase()),
     )
+
+  /**
+   * Сколько объектов даст чип, если его нажать.
+   *
+   * Считается по уже суженной выдаче, а не по всей базе: иначе «Комната 23»
+   * обещала бы двадцать три объекта, а по нажатию показывала два —
+   * остальных отсекал бы район, выбранный выше. Счётчик, который врёт
+   * после нажатия, хуже отсутствующего.
+   *
+   * За основу берётся набор БЕЗ таба: табы и фильтры отвечают на разные
+   * вопросы, и чип не должен зависеть от того, какая вкладка открыта.
+   */
+  const countWith = (match: (row: SearchRow) => boolean) =>
+    withoutTab.filter(match).length
 
   const tabCount = (id: string) =>
     withoutTab.filter((row) => (TAB_FILTER[id] ?? TAB_FILTER.all!)(row)).length
@@ -1011,7 +1043,15 @@ function SearchScreenBody({
               else toggleDistrict(id)
             }
             if (group === "price") setPriceCap(Number.parseInt(id, 10))
-            if (group === "more") {
+            if (group === "kind") {
+              // Типы складываются «или»: квартира ИЛИ апартаменты.
+              setKinds((current) =>
+                current.includes(id)
+                  ? current.filter((item) => item !== id)
+                  : [...current, id],
+              )
+            }
+            if (group === "rooms") {
               const room = Number.parseInt(id, 10)
               if (Number.isFinite(room)) {
                 setRooms((current) =>
@@ -1020,6 +1060,11 @@ function SearchScreenBody({
                     : [...current, room],
                 )
               }
+            }
+            if (group === "freshness") {
+              // Выбор одиночный, и повторное нажатие снимает: «за 24 часа»
+              // вместе с «за неделю» означало бы просто «за неделю».
+              setFresh((current) => (current === id ? null : (id as FreshId)))
             }
             // Две группы, которых в этом обработчике не было вовсе, — из-за
             // чего семь чипов колонки нажимались и не делали ничего.
@@ -1093,16 +1138,47 @@ function SearchScreenBody({
           // города. Теперь за плюсом лежат все.
           metro={metroRows}
           nearAddress={nearAddress === "" ? undefined : nearAddress}
-          more={[
+          /*
+            Три группы из кадра `aoguG`, и у каждого чипа свой счётчик.
+
+            Счёт ведётся по объектам, которые останутся ПОСЛЕ нажатия
+            на этот чип, а не по всей базе: иначе «Комната 23» обещала бы
+            двадцать три объекта, а по нажатию показывала два — остальных
+            отсекал бы район, уже выбранный выше. Счётчик, который врёт
+            после нажатия, хуже отсутствующего.
+
+            Ноль выключает чип сам, и это делает группу «Тип объекта»
+            честной: слов «комната», «доля» и «апартаменты» в выгрузке
+            владельца нет ни разу, и чипы стоят с нулём — не потому, что
+            фильтр сломан, а потому, что таких объектов в базе сейчас нет.
+          */
+          kinds={[
+            ([
+              ["flat", "Квартира"],
+              ["room", "Комната"],
+              ["share", "Доля"],
+              ["apartments", "Апартаменты"],
+            ] as const).map(([id, label]) => ({
+              id,
+              label,
+              selected: kinds.includes(id),
+              count: countWith((row) => (row.kind ?? "flat") === id),
+            })),
+          ]}
+          rooms={[
             [1, 2, 3, 4].map((room) => ({
               id: String(room),
-              label: `${room}-к`,
+              label: room === 4 ? "4 и более" : String(room),
               selected: rooms.includes(room),
+              count: countWith((row) => (room === 4 ? row.rooms >= 4 : row.rooms === room)),
             })),
-            PRICE_CAPS[mode ?? "sale"].map((cap) => ({
-              id: String(cap),
-              label: capLabel(mode ?? "sale", cap),
-              selected: priceCap === cap,
+          ]}
+          freshness={[
+            FRESHNESS.map((step) => ({
+              id: step.id,
+              label: step.label,
+              selected: fresh === step.id,
+              count: countWith((row) => step.match(row.freshnessMinutes)),
             })),
           ]}
           onSaveSearch={() => {

@@ -146,6 +146,16 @@ type ChipOption = {
   id: string
   label: string
   selected?: boolean
+  /**
+   * Сколько объектов даст этот чип — числом рядом с подписью.
+   *
+   * В кадре счётчик стоит у каждого чипа, и это не украшение: он отвечает
+   * на вопрос «а там вообще что-нибудь есть» ДО нажатия. Ноль при этом
+   * законное значение и выключает чип: «Комната 0» честно говорит, что
+   * таких объектов в базе сейчас нет. Чип без счётчика на его месте
+   * говорил бы, что фильтр сломан.
+   */
+  count?: number
   /** Подсказка, а не условие: граница светлее. Так набраны станции метро. */
   muted?: boolean
   /**
@@ -169,9 +179,14 @@ type FilterPanelProps = {
   area: [string, string]
   floor: ChipRows
   metro: ChipRows
+  /** Квартира · Комната · Доля · Апартаменты. Со счётчиками. */
+  kinds: ChipRows
+  /** 1 · 2 · 3 · 4 и более. Своя группа, а не часть «ещё фильтров». */
+  rooms: ChipRows
+  /** за 24 часа · за 3 дня · за неделю · дольше 60 дней. */
+  freshness: ChipRows
   /** Строка «Лиговский пр., 44 · 1 км» с ссылкой «Изменить». */
   nearAddress?: string
-  more: ChipRows
   onReset?: () => void
   onToggle?: (group: string, optionId: string) => void
   /**
@@ -219,7 +234,9 @@ function FilterPanel({
   floor,
   metro,
   nearAddress,
-  more,
+  kinds,
+  rooms,
+  freshness,
   onReset,
   onToggle,
   onChangeRange,
@@ -237,8 +254,10 @@ function FilterPanel({
           key={option.id}
           label={option.label}
           selected={option.selected}
+          count={option.count}
           muted={option.muted}
-          disabled={option.disabled}
+          // Ноль выключает чип сам: нажимать нечего, и это видно по числу.
+          disabled={option.disabled || option.count === 0}
           onClick={() => onToggle?.(group, option.id)}
         />
       )),
@@ -332,6 +351,16 @@ function FilterPanel({
         </Typography>
       </div>
 
+      {/*
+        Тип объекта — вторая группа, до района.
+
+        Так в кадре `aoguG`, и порядок не случаен: сначала человек решает,
+        ЧТО ищет, и только потом где. Комната и доля живут по своим законам
+        цены, и смешивать их с квартирами в одном списке значит показывать
+        человеку выдачу, которую он не просил.
+      */}
+      <FilterGroup label="Тип объекта" rows={chipRows("kind", kinds)} />
+
       <FilterGroup label="Район" rows={chipRows("district", districts)} />
 
       <div className="flex w-full flex-col gap-4">
@@ -373,6 +402,7 @@ function FilterPanel({
         </div>
       </div>
 
+      <FilterGroup label="Комнат" rows={chipRows("rooms", rooms)} />
       <FilterGroup label="Этаж" rows={chipRows("floor", floor)} />
       <FilterGroup label="Метро" rows={chipRows("metro", metro)} />
 
@@ -407,7 +437,16 @@ function FilterPanel({
         </div>
       ) : null}
 
-      <FilterGroup label="Ещё фильтры" rows={chipRows("more", more)} rowGap="gap-2" />
+      {/*
+        Комнатность и свежесть — свои группы, а не «ещё фильтры».
+
+        «Ещё фильтры» была нашей выдумкой: такой группы в кадре нет и не
+        было. В неё свалили комнатность и потолки цены — и потолки спорили
+        с полями «от / до» прямо над собой, то есть один и тот же вопрос
+        задавался дважды и по-разному. Потолки убраны, комнатность встала
+        своей группой, как нарисовано.
+      */}
+      <FilterGroup label="Свежесть" rows={chipRows("freshness", freshness)} />
 
       <div className="flex-1" />
 

@@ -60,6 +60,26 @@ function withoutDistrict(address: string): string {
   return STREET.test(tail) ? tail : address
 }
 
+/**
+ * Что за объект — из поля `type` выгрузки.
+ *
+ * В таблице владельца оно записано как «2-к.кв», «Студия», «Своб. назн.»,
+ * «Офис», «Дом 4 сот.». Слов «комната», «доля» и «апартаменты» в этой
+ * выгрузке нет ни разу — значит и объектов таких в ней нет, а не «мы
+ * не умеем их распознать».
+ *
+ * Это важно для фильтра: чип «Комната 0» честно говорит, что таких
+ * объектов сейчас в базе нет. Чип без счётчика на его месте говорил бы,
+ * что фильтр сломан.
+ */
+function kindOf(type: string): "flat" | "room" | "share" | "apartments" {
+  const value = type.toLowerCase()
+  if (value.includes("комнат")) return "room"
+  if (value.includes("доля") || value.includes("дол.")) return "share"
+  if (value.includes("апарт")) return "apartments"
+  return "flat"
+}
+
 /** Комнатность аренды: у студии своё слово, «4+» вместо «4-к» и выше. */
 function roomsLabel(rooms: number): string {
   if (rooms === 0) return "студия"
@@ -109,6 +129,7 @@ function toRow(item: Rental, now: number): SearchRow {
 
   return {
     address: withoutDistrict(item.address),
+    kind: kindOf(item.type),
     price: priceLabel("rent", item.price),
     // Ноль означает «в пределах рынка», а отсутствие аналогов — отдельный
     // случай: у таких объектов отклонения нет вовсе, и колонка молчит.
