@@ -151,7 +151,7 @@ const kitchenSinkRoute = createRoute({
 // Тоже только для разработки: настоящий маршрут появится, когда за экраном
 // будут данные, а не заглушки.
 const searchScreenRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/search',
   // Стенд показывает девять замеренных строк и только их: снимок для сверки
   // с макетом обязан быть одинаковым сегодня и через месяц. Продуктовый
@@ -191,7 +191,7 @@ const mobileSearchRoute = createRoute({
 // КАБИНЕТ · Карточка объекта — до раскрытия. Экран, отвечающий на один
 // вопрос: звонить или нет. Собран как доказательство, а не как паспорт.
 const objectCardRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/object',
   component: lazyRouteComponent(
     () => import('./object-card-screen'),
@@ -202,7 +202,7 @@ const objectCardRoute = createRoute({
 // Парная карточка: что человек получает за 199 ₽. Отдельный маршрут,
 // потому что в файле это отдельный экран, а не состояние первого.
 const objectCardDisclosedRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/object-disclosed',
   component: lazyRouteComponent(
     () => import('./object-card-disclosed-screen'),
@@ -213,7 +213,7 @@ const objectCardDisclosedRoute = createRoute({
 // КАБИНЕТ · Сегодня. Рабочий день агента: с чего начать, что подвисло
 // и что нового пришло по сохранённым поискам.
 const todayRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/today',
   component: lazyRouteComponent(() => import('./today-screen'), 'TodayScreenPage'),
 })
@@ -248,7 +248,7 @@ const mobileCallRoute = createRoute({
 // КАБИНЕТ · Агентство → Отказы. Реестр номеров, которым агентство
 // навсегда запретило себе звонить. Снять отметку нельзя ни одной ролью.
 const agencyRefusalsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/agency-refusals',
   component: lazyRouteComponent(
     () => import('./agency-refusals-screen'),
@@ -257,7 +257,7 @@ const agencyRefusalsRoute = createRoute({
 })
 
 const agencyStaffRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/agency-staff',
   component: lazyRouteComponent(() => import('./agency-staff-screen'), 'AgencyStaffPage'),
 })
@@ -265,7 +265,7 @@ const agencyStaffRoute = createRoute({
 // Экран руководителя: куда уходят деньги агентства. Первым идёт не метрика,
 // а простой — он единственный говорит, что можно сделать сегодня.
 const agencyEfficiencyRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/agency-efficiency',
   component: lazyRouteComponent(
     () => import('./agency-efficiency-screen'),
@@ -274,25 +274,25 @@ const agencyEfficiencyRoute = createRoute({
 })
 
 const agencyAccessRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/agency-access',
   component: lazyRouteComponent(() => import('./agency-access-screen'), 'AgencyAccessPage'),
 })
 
 const agencyConsentsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/agency-consents',
   component: lazyRouteComponent(() => import('./agency-consents-screen'), 'AgencyConsentsPage'),
 })
 
 const agencySettingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/agency-settings',
   component: lazyRouteComponent(() => import('./agency-settings-screen'), 'AgencySettingsPage'),
 })
 
 const agencyPlanRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => cabinetLayoutRoute,
   path: '/screen/agency-plan',
   component: lazyRouteComponent(() => import('./agency-plan-screen'), 'AgencyPlanPage'),
 })
@@ -433,27 +433,94 @@ function productRoute<TModule extends Record<string, unknown>, const TPath exten
      * не останавливал это словами «Maximum update depth exceeded», и экран
      * оставался белым.
      */
-    beforeLoad: () => {
-      const twin = platformTwin(path)
-      if (twin !== null) throw redirect({ to: twin, replace: true })
-
-      /**
-       * Дверь кабинета.
-       *
-       * Раньше охрана жила внутри каркаса `CabinetShell`, и разделы
-       * агентства мимо неё проходили: `AgencyShell` — другой каркас. Без
-       * сеанса там показывались чужие данные целиком. Теперь дверь стоит
-       * на маршруте: мимо неё не пройти ни одному экрану.
-       */
-      if (!PUBLIC.has(path) && !hasSession()) {
-        throw redirect({ to: loginPath(), search: { returnTo: undefined }, replace: true })
-      }
-    },
+    beforeLoad: guardOf(path),
     component: lazyRouteComponent(load, name),
   })
 }
 
-const productRoutes = [
+/**
+ * Выбор экрана по устройству и дверь кабинета — одной проверкой.
+ *
+ * Вынесено из `productRoute`, потому что ровно то же самое нужно экранам
+ * под каркасом кабинета (`cabinetRoute` ниже). Две копии этой проверки
+ * разъехались бы на первом же новом публичном адресе.
+ */
+function guardOf(path: string) {
+  return () => {
+    const twin = platformTwin(path)
+    if (twin !== null) throw redirect({ to: twin, replace: true })
+
+    /**
+     * Дверь кабинета.
+     *
+     * Раньше охрана жила внутри каркаса `CabinetShell`, и разделы
+     * агентства мимо неё проходили: `AgencyShell` — другой каркас. Без
+     * сеанса там показывались чужие данные целиком. Теперь дверь стоит
+     * на маршруте: мимо неё не пройти ни одному экрану.
+     */
+    if (!PUBLIC.has(path) && !hasSession()) {
+      throw redirect({ to: loginPath(), search: { returnTo: undefined }, replace: true })
+    }
+  }
+}
+
+/**
+ * Безадресный слой кабинета: шапка, боковое меню, палитра.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * У него нет своего адреса — только `id`. Он существует ровно затем, чтобы
+ * у всех экранов кабинета появился ОБЩИЙ родитель, который между переходами
+ * не меняется. Пока родителя не было, каждый переход менял тип компонента
+ * в одной позиции дерева, и React сносил кабинет целиком — вместе с шапкой,
+ * меню и счётчиком денег. Это и была «дёрганность».
+ *
+ * Подробности и следствия — в `features/cabinet/CabinetFrame.tsx`
+ * и в законе движения `docs/MOTION.md`.
+ */
+const cabinetLayoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'cabinet',
+  // Через общий вход раздела, а не напрямую в файл: правило границ модулей
+  // держит проверка `architecture:check`, и обойти её значило бы завести
+  // первую зависимость от внутренностей чужого раздела.
+  component: lazyRouteComponent(() => import('./features/cabinet'), 'CabinetFrame'),
+})
+
+/**
+ * Экран, который рисуется ВНУТРИ каркаса кабинета.
+ *
+ * Отличается от `productRoute` ровно одним — родителем. Всё остальное
+ * (выбор экрана по устройству, дверь, ленивая загрузка) общее.
+ *
+ * Такие экраны больше не несут `<CabinetShell>` сами: каркас теперь этажом
+ * выше, а экран отдаёт только своё тело.
+ */
+function cabinetRoute<TModule extends Record<string, unknown>, const TPath extends string>(
+  path: TPath,
+  load: () => Promise<TModule>,
+  name: keyof TModule & string,
+  extra?: { validateSearch: (search: Record<string, unknown>) => Record<string, unknown> },
+) {
+  return createRoute({
+    getParentRoute: () => cabinetLayoutRoute,
+    path,
+    ...(extra ?? {}),
+    beforeLoad: guardOf(path),
+    component: lazyRouteComponent(load, name),
+  })
+}
+
+/**
+ * Экраны кабинета — все под одним каркасом.
+ *
+ * Массив целиком становится детьми `cabinetLayoutRoute`, поэтому шапка,
+ * боковое меню и палитра между этими адресами не пересобираются.
+ *
+ * Полноэкранный прозвон сюда не входит: у него нет ни шапки, ни меню
+ * по решению файла, и общий каркас ему только мешал бы.
+ */
+const cabinetRoutes = [
   /**
    * Главная кабинета — сохранённые поиски.
    *
@@ -461,8 +528,8 @@ const productRoutes = [
    * этот экран пуст, и продукт начинался с пустоты. Теперь начинается
    * с вопроса «что вы ищете» и четырёх готовых ответов.
    */
-  productRoute('/searches', () => import('./searches-screen'), 'SearchesPage'),
-  productRoute('/today', () => import('./today-screen'), 'TodayScreenPage'),
+  cabinetRoute('/searches', () => import('./searches-screen'), 'SearchesPage'),
+  cabinetRoute('/today', () => import('./today-screen'), 'TodayScreenPage'),
   /**
    * Выдача помнит, куда вернуть курсор.
    *
@@ -472,7 +539,7 @@ const productRoutes = [
    * каждого звонка». На тридцатом звонке за смену это уже не мелочь.
    */
   createRoute({
-    getParentRoute: () => rootRoute,
+    getParentRoute: () => cabinetLayoutRoute,
     path: '/search',
     // Тип с необязательным ключом, а не `string | undefined`: иначе
     // маршрутизатор требует передавать `search` при каждом переходе
@@ -496,7 +563,7 @@ const productRoutes = [
    * квартиру. Тот же приём, что у выдачи выше, и по той же причине.
    */
   createRoute({
-    getParentRoute: () => rootRoute,
+    getParentRoute: () => cabinetLayoutRoute,
     path: '/object',
     validateSearch: (search: Record<string, unknown>): { at?: string } =>
       typeof search.at === 'string' ? { at: search.at } : {},
@@ -504,7 +571,7 @@ const productRoutes = [
   }),
   /** Раскрытая карточка — того же объекта, за который заплатили. */
   createRoute({
-    getParentRoute: () => rootRoute,
+    getParentRoute: () => cabinetLayoutRoute,
     path: '/object/disclosed',
     validateSearch: (search: Record<string, unknown>): { at?: string } =>
       typeof search.at === 'string' ? { at: search.at } : {},
@@ -513,31 +580,41 @@ const productRoutes = [
       'ObjectCardDisclosedPage',
     ),
   }),
-  productRoute('/call', () => import('./call-mode-screen'), 'CallModeScreenPage'),
-  productRoute('/balance', () => import('./balance-screens'), 'BalanceChargesPage'),
-  productRoute('/balance/refunds', () => import('./balance-screens'), 'BalanceRefundsPage'),
-  productRoute('/balance/top-ups', () => import('./balance-screens'), 'BalanceTopUpsPage'),
-  productRoute('/balance/documents', () => import('./balance-screens'), 'BalanceDocumentsPage'),
-  productRoute('/balance/top-up', () => import('./balance-screens'), 'BalanceTopUpPage'),
-  productRoute('/collections', () => import('./collections-screens'), 'CollectionsPage'),
-  productRoute('/collections/inside', () => import('./collections-screens'), 'CollectionInsidePage'),
-  productRoute('/agency', () => import('./agency-efficiency-screen'), 'AgencyEfficiencyPage'),
-  productRoute('/agency/staff', () => import('./agency-staff-screen'), 'AgencyStaffPage'),
-  productRoute('/agency/invite', () => import('./agency-invite-screen'), 'AgencyInvitePage'),
-  productRoute('/agency/staff/person', () => import('./agency-staff-screen'), 'AgencyPersonPage'),
-  productRoute('/agency/refusals', () => import('./agency-refusals-screen'), 'AgencyRefusalsPage'),
-  productRoute('/agency/access', () => import('./agency-access-screen'), 'AgencyAccessPage'),
-  productRoute('/agency/consents', () => import('./agency-consents-screen'), 'AgencyConsentsPage'),
-  productRoute('/agency/settings', () => import('./agency-settings-screen'), 'AgencySettingsPage'),
-  productRoute('/agency/plan', () => import('./agency-plan-screen'), 'AgencyPlanPage'),
-  productRoute('/profile', () => import('./profile-security-screen'), 'ProfilePage'),
-  productRoute('/profile/login-policy', () => import('./profile-security-screen'), 'LoginPolicyPage'),
+  cabinetRoute('/balance', () => import('./balance-screens'), 'BalanceChargesPage'),
+  cabinetRoute('/balance/refunds', () => import('./balance-screens'), 'BalanceRefundsPage'),
+  cabinetRoute('/balance/top-ups', () => import('./balance-screens'), 'BalanceTopUpsPage'),
+  cabinetRoute('/balance/documents', () => import('./balance-screens'), 'BalanceDocumentsPage'),
+  cabinetRoute('/balance/top-up', () => import('./balance-screens'), 'BalanceTopUpPage'),
+  cabinetRoute('/collections', () => import('./collections-screens'), 'CollectionsPage'),
+  cabinetRoute('/collections/inside', () => import('./collections-screens'), 'CollectionInsidePage'),
+  cabinetRoute('/agency', () => import('./agency-efficiency-screen'), 'AgencyEfficiencyPage'),
+  cabinetRoute('/agency/staff', () => import('./agency-staff-screen'), 'AgencyStaffPage'),
+  cabinetRoute('/agency/invite', () => import('./agency-invite-screen'), 'AgencyInvitePage'),
+  cabinetRoute('/agency/staff/person', () => import('./agency-staff-screen'), 'AgencyPersonPage'),
+  cabinetRoute('/agency/refusals', () => import('./agency-refusals-screen'), 'AgencyRefusalsPage'),
+  cabinetRoute('/agency/access', () => import('./agency-access-screen'), 'AgencyAccessPage'),
+  cabinetRoute('/agency/consents', () => import('./agency-consents-screen'), 'AgencyConsentsPage'),
+  cabinetRoute('/agency/settings', () => import('./agency-settings-screen'), 'AgencySettingsPage'),
+  cabinetRoute('/agency/plan', () => import('./agency-plan-screen'), 'AgencyPlanPage'),
+  cabinetRoute('/profile', () => import('./profile-security-screen'), 'ProfilePage'),
+  cabinetRoute('/profile/login-policy', () => import('./profile-security-screen'), 'LoginPolicyPage'),
   // Первый вход. Адреса отдельные, а не состояние `/search`: эти экраны
   // человек видит один раз, и их надо уметь открыть по ссылке — и чтобы
   // показать владельцу, и чтобы проверить браузером.
-  productRoute('/first-run/search', () => import('./first-run-screens'), 'FirstSearchPage'),
-  productRoute('/first-run/agency', () => import('./first-run-screens'), 'AgencyEmptyPage'),
-  productRoute('/first-run/employee', () => import('./first-run-screens'), 'SecondEmployeePage'),
+  cabinetRoute('/first-run/search', () => import('./first-run-screens'), 'FirstSearchPage'),
+  cabinetRoute('/first-run/agency', () => import('./first-run-screens'), 'AgencyEmptyPage'),
+  cabinetRoute('/first-run/employee', () => import('./first-run-screens'), 'SecondEmployeePage'),
+]
+
+/**
+ * Экраны без каркаса кабинета.
+ *
+ * Прозвон занимает окно целиком — ни шапки, ни бокового меню: агент идёт
+ * по списку подряд, и всё, что уводит в сторону, из кадра убрано. Так
+ * нарисовано в файле, и общий каркас здесь был бы прямым нарушением.
+ */
+const fullScreenRoutes = [
+  productRoute('/call', () => import('./call-mode-screen'), 'CallModeScreenPage'),
 ]
 
 /**
@@ -773,7 +850,14 @@ const mobileRoutes = [
  * и людям, которым показывают продукт, там делать нечего.
  */
 const productRouteTree = [
-  ...productRoutes,
+  /**
+   * Кабинет — одним поддеревом под общим каркасом.
+   *
+   * Это и есть та самая правка, из-за которой шапка и боковое меню перестают
+   * пересобираться при смене раздела: у всех экранов кабинета общий родитель,
+   * и совпадение этого родителя между переходами сохраняется.
+   */
+  ...fullScreenRoutes,
   ...mobileRoutes,
   ...authProductRoutes,
 ]
@@ -795,17 +879,19 @@ const dialogsStandRoute = productRoute(
   'DialogsPage',
 )
 
-const standRoutes = [
-  dialogsStandRoute,
-  kitchenSinkRoute,
+/**
+ * Стенды, которые показывают экран КАБИНЕТА.
+ *
+ * Они обязаны нести тот же каркас, что продукт: в Pencil эти кадры нарисованы
+ * целиком — 1440 с шапкой 56 и боковым меню 240, — и стенд без каркаса меряет
+ * не тот экран. Проверка это и поймала: карточка объекта на стенде вышла
+ * шириной 1440 вместо 1200, когда каркас переехал на маршруты.
+ */
+const cabinetStandRoutes = [
   searchScreenRoute,
-  statesScreenRoute,
-  mobileSearchRoute,
   objectCardRoute,
   objectCardDisclosedRoute,
   todayRoute,
-  callModeRoute,
-  mobileCallRoute,
   agencyRefusalsRoute,
   agencyStaffRoute,
   agencyEfficiencyRoute,
@@ -813,6 +899,16 @@ const standRoutes = [
   agencyConsentsRoute,
   agencySettingsRoute,
   agencyPlanRoute,
+]
+
+/** Стенды вне кабинета: полигон, состояния, телефон, прозвон, карта экранов. */
+const standRoutes = [
+  dialogsStandRoute,
+  kitchenSinkRoute,
+  statesScreenRoute,
+  mobileSearchRoute,
+  callModeRoute,
+  mobileCallRoute,
   ...authScreenRoutes,
   ...balanceRoutes,
   ...collectionRoutes,
@@ -825,6 +921,18 @@ const routeTree = rootRoute.addChildren([
   signupRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
+  /**
+   * Кабинет — одним поддеревом под общим каркасом.
+   *
+   * Собирается здесь, а не в `productRouteTree`, только потому, что стенды
+   * кабинета объявлены ниже по файлу: порядок объявлений, а не смысл.
+   */
+  cabinetLayoutRoute.addChildren([
+    ...cabinetRoutes,
+    // Стенды кабинета — тоже его дети: иначе они рисуются без шапки и меню
+    // и меряют не тот экран, который нарисован в файле.
+    ...(import.meta.env.DEV ? cabinetStandRoutes : []),
+  ]),
   ...productRouteTree,
   ...(import.meta.env.DEV ? standRoutes : []),
   userWorkspaceRoute.addChildren([

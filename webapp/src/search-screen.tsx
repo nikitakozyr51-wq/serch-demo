@@ -25,7 +25,7 @@ import {
   type SavedSearch,
   type Workspace,
 } from "@/features/workspace"
-import { BalanceStoppedBar, CabinetShell, useHotkeys } from "@/features/cabinet"
+import { BalanceStoppedBar, useHotkeys } from "@/features/cabinet"
 import { useDensity } from "@/platform/density"
 import {
   AssignAgentDialog,
@@ -321,7 +321,7 @@ export function SearchScreenPage({ dataset = "all" }: { dataset?: "all" | "measu
    * Условия НЕ едут в адресе. Они уже лежат в журнале, и второй источник
    * правды разъехался бы с первым при первой же правке.
    */
-  const { at, saved } = useSearch({ from: '/search', shouldThrow: false }) ?? {}
+  const { at, saved } = useSearch({ from: '/cabinet/search', shouldThrow: false }) ?? {}
   const openedSearch = workspace.savedSearches.find((item) => item.id === saved)
 
   return (
@@ -1196,7 +1196,8 @@ function SearchScreenBody({
   )
 
   return (
-    <CabinetShell activeId="search">
+    <>
+      {/* Каркас кабинета поднят на маршрут: экран отдаёт только тело. */}
         {/*
           Колонки фильтров нет ни на одной ширине — решение владельца
           от 9 августа, кадры `aoguG`, `C4zkJ`, `E5kwP`.
@@ -1542,6 +1543,6 @@ function SearchScreenBody({
           leaving={collectPicker.leaving}
         />
       ) : null}
-    </CabinetShell>
+    </>
   )
 }

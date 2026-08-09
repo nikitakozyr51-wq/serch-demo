@@ -6,7 +6,7 @@ import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { useSession } from "@/features/auth"
-import { CabinetPage, CabinetShell } from "@/features/cabinet"
+import { CabinetPage } from "@/features/cabinet"
 import { countQuery, groupDigits, plural } from "@/features/listings"
 import {
   formatMoment,
@@ -564,7 +564,10 @@ export function SearchesPage() {
   const shared = workspace.savedSearches.length - personal
 
   return (
-    <CabinetShell activeId="search">
+    <>
+      {/* Каркас кабинета теперь этажом выше — на маршруте, а не в экране.
+          Экран отдаёт только своё тело, поэтому шапка и меню при переходе
+          сюда не пересобираются. См. `features/cabinet/CabinetFrame.tsx`. */}
       {/*
         Ритм 24 на обоих состояниях экрана.
 
@@ -669,7 +672,7 @@ export function SearchesPage() {
           </>
         )}
       </CabinetPage>
-    </CabinetShell>
+    </>
   )
 }
 

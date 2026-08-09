@@ -6,7 +6,7 @@ import { useState, type ReactNode } from "react"
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { useSession } from "@/features/auth"
-import { CabinetShell, useHotkeys } from "@/features/cabinet"
+import { useHotkeys } from "@/features/cabinet"
 import { RISE, SPRING, Stagger, STAGGER, ZOOM } from "@/platform/motion"
 import { CollectionPicker } from "@/features/workspace"
 import {
@@ -140,7 +140,11 @@ function CardShell({
   })
 
   return (
-    <CabinetShell activeId="search">
+    <>
+      {/* Каркас кабинета поднят на маршрут: карточка отдаёт только тело.
+          Отдельная польза именно здесь — счётчик списания в шапке переживает
+          переход с карточки объекта на карточку с номером и наконец
+          досчитывает свои 600 мс, а не монтируется уже с итогом. */}
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
           {/*
             Панель приезжает первой и отдельно от тела.
@@ -263,7 +267,7 @@ function CardShell({
             onClose={() => setCollecting(false)}
           />
         ) : null}
-    </CabinetShell>
+    </>
   )
 }
 

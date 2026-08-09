@@ -89,7 +89,7 @@ export function ObjectCardScreenPage() {
    * человек видел секунду назад. Иначе карточка показывала бы другие числа
    * про тот же объект, и это заметно сразу.
    */
-  const { at } = useSearch({ from: "/object", shouldThrow: false }) ?? { at: undefined }
+  const { at } = useSearch({ from: "/cabinet/object", shouldThrow: false }) ?? { at: undefined }
   const address = at ?? FALLBACK
   const row = ALL_ROWS.find((item) => item.address === address)
 

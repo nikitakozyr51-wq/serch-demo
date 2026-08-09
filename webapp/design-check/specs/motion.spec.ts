@@ -353,6 +353,74 @@ test('список выдачи собирается волной, а не по�
 })
 
 /**
+ * Каркас кабинета переживает смену раздела.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * **Это главная проверка слоя, и до неё все остальные меряли следствие.**
+ * Владелец говорил «весь сайт слишком дёрганый», и причина была не в том,
+ * что чего-то не хватало, а в том, что при каждом переходе React сносил
+ * кабинет целиком: шапка, боковое меню, счётчик денег и палитра строились
+ * заново. Плавно показать то, что уничтожают, нельзя никакой анимацией.
+ *
+ * Проверяется не «выглядит ли похоже», а тождество узла. Перед переходом
+ * на живой узел шапки вешается метка прямо в DOM. Если после перехода метка
+ * на месте — это ТОТ ЖЕ САМЫЙ узел, он пережил переход. Если метки нет,
+ * узел построен заново, как бы одинаково он ни выглядел.
+ *
+ * Закон движения — `docs/MOTION.md`, раздел «Каркас неподвижен».
+ */
+test('каркас кабинета переживает смену раздела', async ({ page }) => {
+  await seedSession(page)
+  await page.goto('/today')
+  await page.waitForSelector('[data-slot="cabinet-header"]')
+
+  const FRAME = ['cabinet-header', 'cabinet-sidebar'] as const
+
+  // Метка живёт на самом узле, а не в атрибуте: атрибут можно скопировать
+  // при перестройке, свойство объекта — нельзя.
+  await page.evaluate((slots) => {
+    for (const slot of slots) {
+      const node = document.querySelector(`[data-slot="${slot}"]`)
+      if (node) (node as unknown as Record<string, unknown>).__serchProbe = slot
+    }
+  }, FRAME)
+
+  const failures: string[] = []
+
+  /*
+    Переходы идут НАЖАТИЕМ в меню, а не `page.goto`.
+
+    `goto` перезагружает документ целиком, и каркас пересобрался бы при любом
+    устройстве маршрутов — проверка была бы вечнокрасной и ничего не значила.
+    Человек переключает разделы нажатием, и мерить надо ровно это.
+
+    Три перехода подряд, а не один: пересборка могла случаться только
+    на входе в агентство, у которого раньше был свой отдельный каркас.
+  */
+  for (const to of ['/balance', '/agency', '/collections']) {
+    await page.click(`[data-slot="nav-item"][href$="${to}"]`)
+    await page.waitForURL((url) => url.pathname.endsWith(to))
+    await page.waitForSelector('[data-slot="cabinet-header"]')
+
+    const alive = await page.evaluate((slots) =>
+      slots.filter((slot) => {
+        const node = document.querySelector(`[data-slot="${slot}"]`)
+        return node !== null && (node as unknown as Record<string, unknown>).__serchProbe === slot
+      }),
+    FRAME as unknown as string[])
+
+    for (const slot of FRAME) {
+      if (!alive.includes(slot)) {
+        failures.push(`${slot}: пересобран при переходе на ${to}, а обязан пережить его`)
+      }
+    }
+  }
+
+  expect(failures, failures.join('\n')).toEqual([])
+})
+
+/**
  * Меню профиля раскрывается, а не возникает готовым.
  *
  * ═══════════════════════════════════════════════════════════════════════════

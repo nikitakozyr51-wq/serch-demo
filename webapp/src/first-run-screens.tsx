@@ -5,7 +5,7 @@ import type { ReactNode } from "react"
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { useSession } from "@/features/auth"
-import { CabinetPage, CabinetShell, useCabinetNav } from "@/features/cabinet"
+import { CabinetPage, useCabinetNav } from "@/features/cabinet"
 import { plural } from "@/features/listings"
 import { useWorkspace } from "@/features/workspace"
 
@@ -119,7 +119,8 @@ export function FirstSearchPage() {
   const find = () => void navigate({ to: "/search" })
 
   return (
-    <CabinetShell activeId="search">
+    <>
+      {/* Каркас кабинета поднят на маршрут: экран отдаёт только тело. */}
       <CabinetPage rhythm="sparse">
         {trial === 0 ? null : (
           <TrialNotice>
@@ -179,7 +180,7 @@ export function FirstSearchPage() {
           </div>
         </section>
       </CabinetPage>
-    </CabinetShell>
+    </>
   )
 }
 
@@ -260,7 +261,8 @@ export function AgencyEmptyPage() {
   const trial = session?.trial ?? 0
 
   return (
-    <CabinetShell activeId="">
+    <>
+      {/* Каркас кабинета поднят на маршрут: экран отдаёт только тело. */}
       <CabinetPage>
         <ScreenIntro
           title={agency === "" ? "Агентство создано" : `Агентство «${agency}» создано`}
@@ -311,7 +313,7 @@ export function AgencyEmptyPage() {
           />
         </div>
       </CabinetPage>
-    </CabinetShell>
+    </>
   )
 }
 
@@ -420,7 +422,8 @@ export function SecondEmployeePage() {
             : `Обнуляется в 00:00. Изменить может только ${owner.name}.`
 
   return (
-    <CabinetShell activeId="">
+    <>
+      {/* Каркас кабинета поднят на маршрут: экран отдаёт только тело. */}
       <CabinetPage>
         <ScreenIntro
           title={title}
@@ -469,6 +472,6 @@ export function SecondEmployeePage() {
           </Button>
         </div>
       </CabinetPage>
-    </CabinetShell>
+    </>
   )
 }

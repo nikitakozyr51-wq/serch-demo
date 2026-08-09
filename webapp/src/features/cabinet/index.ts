@@ -14,6 +14,7 @@ export { CommandPalette } from './CommandPalette'
 export { HotkeysDialog } from './dialogs'
 export { CabinetPage, CabinetShell } from './CabinetShell'
 export type { CabinetShellProps } from './CabinetShell'
+export { CabinetFrame } from './CabinetFrame'
 export { CabinetSidebar } from './CabinetSidebar'
 export type { CabinetSidebarProps, NavEntry } from './CabinetSidebar'
 export {

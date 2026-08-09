@@ -7,7 +7,7 @@ import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { AgencyChip, AgencyEmpty, DataTable, NoticeBar } from "@/features/agency"
 import { DISCLOSURE_PRICE, useSession, useSessionActions } from "@/features/auth"
-import { CabinetPage, CabinetShell } from "@/features/cabinet"
+import { CabinetPage } from "@/features/cabinet"
 import { FillBar, groupDigits, plural } from "@/features/listings"
 import {
   SUBJECTIVE_REFUND_LIMIT,
@@ -278,7 +278,8 @@ function BalanceShell({
   const ask = useExit(asking)
 
   return (
-    <CabinetShell activeId="balance">
+    <>
+      {/* Каркас кабинета поднят на маршрут: экран отдаёт только тело. */}
       <CabinetPage>
         <div className="flex min-h-7 w-full shrink-0 items-center gap-3">
           <Typography variant="panelTitle" tone="default" as="h1">
@@ -403,7 +404,7 @@ function BalanceShell({
           />
         ) : null}
       </CabinetPage>
-    </CabinetShell>
+    </>
   )
 }
 
@@ -1136,7 +1137,8 @@ export function BalanceTopUpPage() {
     : "Счёт выставляется на юридическое лицо агентства. Реквизиты берутся из настроек агентства."
 
   return (
-    <CabinetShell activeId="balance">
+    <>
+      {/* Каркас кабинета поднят на маршрут: экран отдаёт только тело. */}
       <CabinetPage>
         <div className="flex min-h-7 w-full shrink-0 items-center gap-3">
           <Typography variant="panelTitle" tone="default" as="h1">
@@ -1345,6 +1347,6 @@ export function BalanceTopUpPage() {
           />
         ) : null}
       </CabinetPage>
-    </CabinetShell>
+    </>
   )
 }

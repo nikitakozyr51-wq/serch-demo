@@ -19,7 +19,7 @@ import {
   useWorkspace,
   type Collection,
 } from "@/features/workspace"
-import { CabinetPage, CabinetShell } from "@/features/cabinet"
+import { CabinetPage } from "@/features/cabinet"
 import { MarketDeviation } from "@/features/listings"
 
 /**
@@ -57,7 +57,8 @@ function CollectionsShell({
   children: ReactNode
 }) {
   return (
-    <CabinetShell activeId="collections">
+    <>
+      {/* Каркас кабинета поднят на маршрут: экран отдаёт только тело. */}
       <CabinetPage>
         <div className="flex h-8 w-full shrink-0 items-center gap-3">
           <Typography variant="panelTitle" tone="default" as="h1">
@@ -71,7 +72,7 @@ function CollectionsShell({
         </div>
         <>{children}</>
       </CabinetPage>
-    </CabinetShell>
+    </>
   )
 }
 

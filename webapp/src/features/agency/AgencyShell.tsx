@@ -1,15 +1,7 @@
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { Typography } from "@/components/typography"
-import { useSession } from "@/features/auth"
-import {
-  CabinetHeader,
-  CabinetOverlays,
-  CabinetSidebar,
-  requestPalette,
-  useCabinetNav,
-} from "@/features/cabinet"
 import { cn } from "@/lib/utils"
 
 /**
@@ -60,39 +52,23 @@ type AgencyShellProps = {
 }
 
 function AgencyShell({ activeTab, title, note, action, children }: AgencyShellProps) {
-  const session = useSession()
-  const navigate = useNavigate()
-  const nav = useCabinetNav()
-
   return (
-    <div className="flex h-svh w-full flex-col bg-bg">
-      {/* Шапка берёт деньги и инициалы из сеанса, как и весь остальной
-          кабинет. Раньше здесь стояли 8 610 ₽ и «ИС» константами: человек
-          с нулём на счету переходил в «Агентство» и видел чужие деньги —
-          два разных числа на соседних экранах. */}
-      <CabinetHeader
-        balance={session?.balance ?? 0}
-        trial={session && session.trial > 0 ? session.trial : undefined}
-        initials={session?.initials ?? "ИС"}
-        // Раздел «Агентство» открыт только руководителю: агент сюда
-        // не попадает вовсе, пункта меню у него нет.
-        owner
-        onTopUp={() => void navigate({ to: "/balance/top-up" })}
-        onSearch={requestPalette}
-      />
+    /*
+      ЗДЕСЬ БОЛЬШЕ НЕТ ШАПКИ И БОКОВОГО МЕНЮ — И ЭТО ГЛАВНАЯ ПРАВКА ФАЙЛА.
 
-      <div className="flex min-h-0 flex-1">
-        {/* Меню берётся из общего источника, а не из констант файла
-            навигации: раньше здесь стояли шесть чужих поисков без адреса,
-            и ни один из них не нажимался. */}
-        <CabinetSidebar
-          items={nav.items}
-          savedSearches={nav.savedSearches}
-          agencySearches={nav.agencySearches}
-          activeId="agency"
-        />
+      ═══════════════════════════════════════════════════════════════════════
 
-        <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
+      Раздел «Агентство» держал ВТОРОЙ каркас кабинета: свою копию шапки
+      и своё боковое меню. Из-за этого переход «Сегодня → Агентство» менял
+      не содержимое, а весь кабинет целиком — React видел в одной позиции
+      дерева другой компонент и сносил поддерево вместе с шапкой, счётчиком
+      денег и списком поисков.
+
+      Теперь каркас один и живёт на маршруте (`features/cabinet/CabinetFrame`).
+      `AgencyShell` остался тем, чем он и был по сути, — полосой вкладок
+      раздела и заголовком над ней.
+    */
+    <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
           {/*
             Строка заголовка — `min-h`, а не `h`.
 
@@ -152,14 +128,10 @@ function AgencyShell({ activeTab, title, note, action, children }: AgencyShellPr
           </div>
           )}
 
-          <>{children}</>
-        </div>
-      </div>
-
-      {/* Те же два окна, что на остальных экранах. Карта клавиш обещает
-          «⌘K и ? на любом экране кабинета», а семь экранов агентства
-          собраны на своём каркасе — и обещание на них не работало. */}
-      <CabinetOverlays />
+      {/* Палитра и карта клавиш переехали в общий каркас вместе с шапкой.
+          Держать их здесь второй копией больше незачем — обещание «⌘K
+          на любом экране кабинета» теперь выполняется одним узлом. */}
+      <>{children}</>
     </div>
   )
 }

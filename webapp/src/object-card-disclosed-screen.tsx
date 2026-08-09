@@ -382,7 +382,7 @@ export function ObjectCardDisclosedPage() {
    * Приходит параметром с нераскрытой карточки. Номер собирается из адреса,
    * поэтому у каждого объекта он свой — а не один на всю базу, как было.
    */
-  const { at } = useSearch({ from: "/object/disclosed", shouldThrow: false }) ?? { at: undefined }
+  const { at } = useSearch({ from: "/cabinet/object/disclosed", shouldThrow: false }) ?? { at: undefined }
   const [allSimilar, setAllSimilar] = useState(false)
   const address = at ?? FALLBACK_ADDRESS
   const row = ALL_ROWS.find((item) => item.address === address)

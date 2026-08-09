@@ -21,7 +21,7 @@ import {
   useWorkspace,
   type SavedSearch,
 } from "@/features/workspace"
-import { CabinetPage, CabinetShell } from "@/features/cabinet"
+import { CabinetPage } from "@/features/cabinet"
 import {
   CountPair,
   MarketDeviation,
@@ -295,7 +295,8 @@ export function TodayScreenPage() {
   const nothing = callbacks.length === 0 && taken.length === 0
 
   return (
-    <CabinetShell activeId="today">
+    <>
+      {/* Каркас кабинета поднят на маршрут: экран отдаёт только тело. */}
       <CabinetPage>
         <div className="flex w-full flex-col gap-4">
           <div className="flex h-8 w-full items-center gap-3">
@@ -429,6 +430,6 @@ export function TodayScreenPage() {
           </>
         )}
       </CabinetPage>
-    </CabinetShell>
+    </>
   )
 }
