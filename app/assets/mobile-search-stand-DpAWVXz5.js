@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-B-9mzPXz.js";import{r as t}from"./react-vendor-CpDPhtGc.js";import{MobileSearchScreenPage as n,t as r}from"./mobile-search-screen-oahxSNTm.js";function i(){return(0,a.jsx)(n,{dataset:`measured`})}var a;e((()=>{r(),a=t()}))();export{i as MobileSearchStandPage};
