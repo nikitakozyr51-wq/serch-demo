@@ -4,7 +4,7 @@ import { useMemo } from "react"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { DISCLOSURE_PRICE, useSession } from "@/features/auth"
-import { MobileBottomNav, MobileHeader, PhoneFrame } from "@/features/cabinet"
+import { MobileBottomNav, MobileHeader, PhoneFrame, useMobileFramed } from "@/features/cabinet"
 import { MobileListingRow, plural, photoFor } from "@/features/listings"
 import { useWorkspace } from "@/features/workspace"
 
@@ -43,6 +43,9 @@ export function MobileSearchScreenPage({
 }: {
   dataset?: "all" | "measured"
 }) {
+  // Внутри каркаса нижнюю навигацию рисует он; на стенде каркаса нет,
+  // и экран рисует её сам — иначе кадр `waJiE` меряется без неё.
+  const framed = useMobileFramed()
   const navigate = useNavigate()
   const session = useSession()
   const workspace = useWorkspace()
@@ -149,7 +152,11 @@ export function MobileSearchScreenPage({
         </div>
       </div>
 
-      <MobileBottomNav activeId="search" />
+      {/* В продукте нижнюю навигацию рисует постоянный каркас маршрута: она
+          обязана пережить переключение вкладки, а не умирать вместе с экраном.
+          На стенде каркаса нет — там телефон нарисован коробкой 390, и полоса
+          из каркаса вышла бы за её пределы. Тогда её рисует экран, как раньше. */}
+      {framed ? null : <MobileBottomNav activeId="search" />}
     </PhoneFrame>
   )
 }

@@ -2,6 +2,7 @@ import { useRouterState } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { cn } from "@/lib/utils"
+import { useMobileFramed } from "./mobile-framed"
 
 /**
  * Кадр телефона: рамка на стенде, полноэкранная страница на телефоне.
@@ -61,14 +62,20 @@ function PhoneFrame({
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const stand = pathname.startsWith("/screen/")
+  const framed = useMobileFramed()
 
   // `relative` обязателен: лист снизу лежит абсолютом поверх экрана,
   // а не в потоке.
   const shell = cn("relative flex flex-col overflow-hidden", SURFACE[surface])
 
   if (!stand) {
+    // Внутри постоянного каркаса высоту задаёт он, а не экран: два `h-svh`
+    // подряд вытолкнули бы нижнюю навигацию за нижний край окна.
     return (
-      <div data-slot={slot} className={cn(shell, "h-svh w-full")}>
+      <div
+        data-slot={slot}
+        className={cn(shell, "w-full", framed ? "min-h-0 flex-1" : "h-svh")}
+      >
         {children}
       </div>
     )

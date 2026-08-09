@@ -15,6 +15,8 @@ export { HotkeysDialog } from './dialogs'
 export { CabinetPage, CabinetShell } from './CabinetShell'
 export type { CabinetShellProps } from './CabinetShell'
 export { CabinetFrame } from './CabinetFrame'
+export { MobileFrame } from './MobileFrame'
+export { useMobileFramed } from './mobile-framed'
 export { CabinetSidebar } from './CabinetSidebar'
 export type { CabinetSidebarProps, NavEntry } from './CabinetSidebar'
 export {

@@ -177,7 +177,10 @@ const statesScreenRoute = createRoute({
 // МОБАЙЛ · Поиск и выдача, 390 × 844. Отдельный маршрут, а не адаптив:
 // это другая вёрстка с другим порядком фактов, а не сжатая десктопная.
 const mobileSearchRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  // Стенд мобильной выдачи — ребёнок мобильного каркаса, как и продуктовая
+  // вкладка: нижнюю навигацию теперь рисует каркас, и без него стенд мерил
+  // бы экран без неё. Кадр `waJiE` нарисован С навигацией.
+  getParentRoute: () => mobileLayoutRoute,
   path: '/screen/mobile',
   // Стенд показывает три замеренные строки и только их: снимок для сверки
   // обязан быть одинаковым сегодня и через месяц. Продуктовый `/m/search`
@@ -488,6 +491,35 @@ const cabinetLayoutRoute = createRoute({
 })
 
 /**
+ * Безадресный слой мобильного кабинета: тело и нижняя навигация.
+ *
+ * Та же операция, что у десктопного каркаса, и по той же причине: навигация
+ * была вмонтирована в каждый экран и умирала на каждом переключении вкладки.
+ * Подробности — в `features/cabinet/MobileFrame.tsx`.
+ */
+const mobileLayoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'mobile',
+  component: lazyRouteComponent(() => import('./features/cabinet'), 'MobileFrame'),
+})
+
+/** Экран одной из пяти мобильных вкладок: рисуется внутри общего каркаса. */
+function mobileTabRoute<TModule extends Record<string, unknown>, const TPath extends string>(
+  path: TPath,
+  load: () => Promise<TModule>,
+  name: keyof TModule & string,
+  extra?: { validateSearch: (search: Record<string, unknown>) => Record<string, unknown> },
+) {
+  return createRoute({
+    getParentRoute: () => mobileLayoutRoute,
+    path,
+    ...(extra ?? {}),
+    beforeLoad: guardOf(path),
+    component: lazyRouteComponent(load, name),
+  })
+}
+
+/**
  * Экран, который рисуется ВНУТРИ каркаса кабинета.
  *
  * Отличается от `productRoute` ровно одним — родителем. Всё остальное
@@ -696,7 +728,6 @@ const authProductRoutes = [
  * рядом с кадром Pencil — иначе сверять их было бы нечем.
  */
 const mobileRoutes = [
-  productRoute('/m/today', () => import('./mobile-today-screens'), 'MobileTodayPage'),
   /**
    * Запись исхода на телефоне знает, о каком объекте речь.
    *
@@ -743,23 +774,6 @@ const mobileRoutes = [
    * не рука, а сверка: у КАЖДОГО адреса из пары обязан быть маршрут.
    * Проверка ниже теперь держит это правило.
    */
-  createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/m/search',
-    validateSearch: (search: Record<string, unknown>): { at?: string; saved?: string } => ({
-      ...(typeof search.at === 'string' ? { at: search.at } : {}),
-      ...(typeof search.saved === 'string' ? { saved: search.saved } : {}),
-    }),
-    beforeLoad: () => {
-      if (!hasSession()) {
-        throw redirect({ to: loginPath(), search: { returnTo: undefined }, replace: true })
-      }
-    },
-    component: lazyRouteComponent(
-      () => import('./mobile-search-screen'),
-      'MobileSearchScreenPage',
-    ),
-  }),
   /**
    * Карточка объекта на телефоне — того, на который нажали.
    *
@@ -779,7 +793,6 @@ const mobileRoutes = [
   productRoute('/m/similar', () => import('./mobile-object-screens'), 'MobileSimilarListPage'),
   productRoute('/m/taken', () => import('./mobile-object-screens'), 'MobileTakenByColleaguesPage'),
 
-  productRoute('/m/balance', () => import('./mobile-balance-screens'), 'MobileBalancePage'),
   productRoute('/m/balance/refunds', () => import('./mobile-balance-screens'), 'MobileBalanceRefundsPage'),
   productRoute('/m/balance/top-ups', () => import('./mobile-balance-screens'), 'MobileBalanceTopUpsPage'),
   productRoute('/m/balance/documents', () => import('./mobile-balance-screens'), 'MobileBalanceDocumentsPage'),
@@ -797,12 +810,10 @@ const mobileRoutes = [
   productRoute('/m/agency/invite', () => import('./mobile-agency-people-screens'), 'MobileInviteAgentPage'),
   productRoute('/m/agency/plan', () => import('./mobile-agency-people-screens'), 'MobilePlanPage'),
 
-  productRoute('/m/collections', () => import('./mobile-collections-screens'), 'MobileCollectionsPage'),
   productRoute('/m/collections/inside', () => import('./mobile-collections-screens'), 'MobileCollectionInsidePage'),
   productRoute('/m/collections/new', () => import('./mobile-collections-screens'), 'MobileNewCollectionPage'),
   productRoute('/m/collections/client', () => import('./mobile-collections-screens'), 'MobileClientCollectionPage'),
 
-  productRoute('/m/more', () => import('./mobile-more-screens'), 'MobileMorePage'),
   productRoute('/m/profile', () => import('./mobile-more-screens'), 'MobileProfilePage'),
   productRoute('/m/notifications', () => import('./mobile-more-screens'), 'MobileNotificationSettingsPage'),
   productRoute('/m/notifications/center', () => import('./mobile-more-screens'), 'MobileNotificationCenterPage'),
@@ -906,13 +917,45 @@ const standRoutes = [
   dialogsStandRoute,
   kitchenSinkRoute,
   statesScreenRoute,
-  mobileSearchRoute,
   callModeRoute,
   mobileCallRoute,
   ...authScreenRoutes,
   ...balanceRoutes,
   ...collectionRoutes,
   screenMapRoute,
+]
+
+
+/**
+ * Пять мобильных вкладок — дети общего каркаса.
+ *
+ * Вынесены из общего списка мобильных маршрутов не по смыслу, а по родителю:
+ * нижняя навигация живёт в каркасе, и только эти пять её показывают.
+ * Внутренние экраны телефона остаются детьми корня и несут навигацию сами.
+ */
+const mobileTabRoutes = [
+  mobileSearchRoute,
+  mobileTabRoute('/m/today', () => import('./mobile-today-screens'), 'MobileTodayPage'),
+  mobileTabRoute('/m/balance', () => import('./mobile-balance-screens'), 'MobileBalancePage'),
+  mobileTabRoute('/m/collections', () => import('./mobile-collections-screens'), 'MobileCollectionsPage'),
+  mobileTabRoute('/m/more', () => import('./mobile-more-screens'), 'MobileMorePage'),
+  createRoute({
+    getParentRoute: () => mobileLayoutRoute,
+    path: '/m/search',
+    validateSearch: (search: Record<string, unknown>): { at?: string; saved?: string } => ({
+      ...(typeof search.at === 'string' ? { at: search.at } : {}),
+      ...(typeof search.saved === 'string' ? { saved: search.saved } : {}),
+    }),
+    beforeLoad: () => {
+      if (!hasSession()) {
+        throw redirect({ to: loginPath(), search: { returnTo: undefined }, replace: true })
+      }
+    },
+    component: lazyRouteComponent(
+      () => import('./mobile-search-screen'),
+      'MobileSearchScreenPage',
+    ),
+  }),
 ]
 
 const routeTree = rootRoute.addChildren([
@@ -927,6 +970,12 @@ const routeTree = rootRoute.addChildren([
    * Собирается здесь, а не в `productRouteTree`, только потому, что стенды
    * кабинета объявлены ниже по файлу: порядок объявлений, а не смысл.
    */
+  /**
+   * Мобильные вкладки — своим поддеревом под своим каркасом.
+   *
+   * Нижняя навигация живёт в нём и переживает переключение вкладки.
+   */
+  mobileLayoutRoute.addChildren(mobileTabRoutes),
   cabinetLayoutRoute.addChildren([
     ...cabinetRoutes,
     // Стенды кабинета — тоже его дети: иначе они рисуются без шапки и меню

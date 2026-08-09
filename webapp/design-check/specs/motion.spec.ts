@@ -421,6 +421,47 @@ test('каркас кабинета переживает смену раздел
 })
 
 /**
+ * Нижняя навигация телефона переживает переключение вкладки.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Та же проверка, что у десктопного каркаса, и та же болезнь: навигация была
+ * вмонтирована в каждый мобильный экран — тринадцать копий — и умирала вместе
+ * с ним. На телефоне это заметнее: полоса занимает низ экрана и мигала прямо
+ * под пальцем, которым по ней и бьют.
+ *
+ * Мерится тождество узла, а не внешний вид.
+ */
+test('нижняя навигация телефона переживает переключение вкладки', async ({ page }) => {
+  await seedSession(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/m/today')
+  await page.waitForSelector('[data-slot="mobile-bottom-nav"]')
+
+  await page.evaluate(() => {
+    const node = document.querySelector('[data-slot="mobile-bottom-nav"]')
+    if (node) (node as unknown as Record<string, unknown>).__serchProbe = 'nav'
+  })
+
+  const failures: string[] = []
+
+  for (const to of ['/m/collections', '/m/balance', '/m/more']) {
+    await page.click(`[data-slot="mobile-tab"][href$="${to}"]`)
+    await page.waitForURL((url) => url.pathname.endsWith(to))
+    await page.waitForSelector('[data-slot="mobile-bottom-nav"]')
+
+    const alive = await page.evaluate(() => {
+      const node = document.querySelector('[data-slot="mobile-bottom-nav"]')
+      return node !== null && (node as unknown as Record<string, unknown>).__serchProbe === 'nav'
+    })
+
+    if (!alive) failures.push(`навигация пересобрана при переходе на ${to}`)
+  }
+
+  expect(failures, failures.join('\n')).toEqual([])
+})
+
+/**
  * Меню профиля раскрывается, а не возникает готовым.
  *
  * ═══════════════════════════════════════════════════════════════════════════

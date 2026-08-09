@@ -405,7 +405,9 @@ export function MobileTodayPage() {
         <div aria-hidden className="min-h-0 flex-1" />
       </div>
 
-      <MobileBottomNav activeId="today" />
+      {/* Нижнюю навигацию рисует постоянный каркас маршрута: она обязана
+          пережить переключение вкладки, а не умирать вместе с экраном.
+          См. `features/cabinet/MobileFrame.tsx`. */}
     </PhoneStand>
   )
 }

@@ -7,6 +7,7 @@ import type { PointerEvent, ReactNode } from "react"
 import { Typography } from "@/components/typography"
 import { cn } from "@/lib/utils"
 import { MobileBottomNav } from "./MobileBottomNav"
+import { useMobileFramed } from "./mobile-framed"
 
 /**
  * Общие части кабинета на телефоне: шапка раздела, пустое состояние, лист снизу
@@ -88,10 +89,23 @@ function MobileScreen({
   padded?: boolean
   children: ReactNode
 }) {
+  /**
+   * Внутри постоянного каркаса экран не корень, а тело.
+   *
+   * Тогда высоту задаёт каркас, а навигацию рисует он же — вторая копия
+   * внизу была бы просто второй полосой. Вне каркаса всё как было: экран
+   * занимает окно целиком и несёт навигацию сам. Так живут внутренние
+   * экраны, до которых очередь ещё не дошла.
+   */
+  const framed = useMobileFramed()
+
   return (
     <div
       data-slot="mobile-screen"
-      className="flex h-svh w-full flex-col overflow-hidden bg-bg"
+      className={cn(
+        "flex w-full flex-col overflow-hidden bg-bg",
+        framed ? "min-h-0 flex-1" : "h-svh",
+      )}
     >
       <>{header}</>
       <div
@@ -102,7 +116,7 @@ function MobileScreen({
       >
         <>{children}</>
       </div>
-      <MobileBottomNav activeId={activeTab} />
+      {framed ? null : <MobileBottomNav activeId={activeTab} />}
     </div>
   )
 }
