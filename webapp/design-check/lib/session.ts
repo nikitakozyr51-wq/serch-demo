@@ -49,6 +49,21 @@ export async function seedSession(page: Page) {
       JSON.stringify({ [account.email]: account }),
     )
     window.localStorage.setItem('serch.demo.session', JSON.stringify(account))
+    /*
+      Обучение отмечается пройденным.
+
+      Оно всплывает само на первом входе — это его смысл, — и для проверок
+      это означает затемнение поверх каждого экрана: измеряется не продукт,
+      а тур над ним. Десять слоёв упали ровно на этом, и упали правильно.
+
+      Отметка ставится тем же ключом, что и у человека: проверка входит
+      как сотрудник, который продукт уже знает. Само обучение при этом
+      не остаётся без присмотра — у него свой слой, где оно и проверяется.
+    */
+    window.localStorage.setItem(
+      `serch.tour.${account.email}`,
+      JSON.stringify({ step: 0, done: true }),
+    )
   }, ACCOUNT)
 }
 
@@ -189,6 +204,13 @@ export async function seedAgency(page: Page, spec: AgencySpec) {
       // не находит человека по почте.
       window.localStorage.setItem('serch.accounts', JSON.stringify({ [email]: owner }))
       window.localStorage.setItem('serch.demo.session', JSON.stringify(owner))
+      // Обучение отмечается пройденным по той же причине, что и в
+      // `seedSession`: иначе оно всплывает поверх экрана, и проверка
+      // меряет тур, а не продукт. Само обучение проверяется своим слоем.
+      window.localStorage.setItem(
+        `serch.tour.${email}`,
+        JSON.stringify({ step: 0, done: true }),
+      )
     },
     { email: ACCOUNT.email, owner: ACCOUNT, plan: spec },
   )
