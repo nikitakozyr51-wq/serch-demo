@@ -1,9 +1,11 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router"
+import { COLLECTION_OFF } from "@/collection-off-text"
 import { useId, useState } from "react"
 import { Bookmark, Plus, Share2 } from "lucide-react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
+import { CollectionOffReason } from "@/collection-off-parts"
 import { ALL_ROWS } from "@/data/search-rows"
 import { useSession } from "@/features/auth"
 import { MobileEmptyState, MobileScreen, MobileSectionHeader, MobileSheet } from "@/features/cabinet"
@@ -577,6 +579,105 @@ export function MobileNewCollectionPage() {
 }
 
 /**
+ * Шапка публичной страницы на телефоне: 56, белая, волосяная линия снизу.
+ *
+ * Одна на два состояния — живую подборку (`MHLlO`) и отключённую (`g4nnt`).
+ * Скелет один: логотип с точкой зазором 6, распорка, подпись 12 справа.
+ * Различается только подпись, и она приехала параметром, а не второй копией
+ * шапки: две копии расходятся по первой же правке.
+ *
+ * Логотип идёт `span`, а не заголовком: заголовок на странице один, и это
+ * название подборки или «Подборка закрыта».
+ */
+function MobilePublicHeader({ caption }: { caption: string }) {
+  return (
+    <header
+      data-slot="client-collection-header"
+      className="flex h-header w-full shrink-0 items-center gap-3 bg-surface px-4 shadow-[inset_0_-1px_0_var(--line-2)]"
+    >
+      <div className="flex items-center gap-1.5">
+        <Typography variant="panelTitle" tone="default" as="span">
+          Сёрчь
+        </Typography>
+        <span aria-hidden className="size-1.5 rounded-full bg-accent-bright" />
+      </div>
+      <div className="h-px flex-1" />
+      {caption === "" ? null : (
+        <Typography variant="metaText" tone="dense">
+          {caption}
+        </Typography>
+      )}
+    </header>
+  )
+}
+
+/**
+ * МОБАЙЛ · Подборка отключена (`g4nnt`).
+ *
+ * Шапка 56, тело полями [24, 16, 32, 16] и зазором 24: заголовок с лидом,
+ * кнопка во всю ширину, карточка тёплой заливкой радиусом 16 полями 16
+ * и правовая строка последней.
+ *
+ * **Это тот же ответ, что на компьютере, и слово в слово тот же текст** —
+ * он лежит в `collection-off-parts.tsx`. Раньше два размера отвечали
+ * по-разному: компьютер говорил «Подборка больше не публикуется» и называл
+ * агентство, телефон — «Подборка не открывается» и не называл. Человек,
+ * открывший одну ссылку с ноутбука и с телефона, читал два разных ответа.
+ *
+ * **Ни имени агентства, ни имени агента, ни телефона, ни нижней полосы
+ * с подписью.** Страницу видит человек вне агентства, и ссылку ему могли
+ * переслать. Живая подборка и мёртвая обязаны молчать одинаково: если
+ * закрытая страница называет агентство, перебором чужих адресов читается,
+ * кто в «Сёрчи» работает.
+ *
+ * **Расхождение с файлом, названное вслух.** В кадре заголовок набран 26,
+ * лид 15, подпись кнопки 17 — это ступени телефонной раскладки дизайнера,
+ * а лестница продукта закрыта восемью: 11 · 12 · 13 · 14 · 16 · 20 · 28 · 40.
+ * Взяты ближайшие ступени 28, 14 и 16. Геометрия при этом сохранена точно:
+ * высота кнопки 48, боковое поле 36, поля и зазоры как в файле.
+ *
+ * В кадре у карточки нет строки про почту поддержки, которая есть
+ * на компьютере, — воспроизведено как в файле.
+ */
+export function MobileCollectionOffPage() {
+  return (
+    <div data-slot="mobile-collection-off" className="flex min-h-svh w-full flex-col bg-bg">
+      <MobilePublicHeader caption={COLLECTION_OFF.caption} />
+
+      <div className="flex w-full flex-1 flex-col gap-6 px-4 pt-6 pb-8">
+        <div className="flex w-full flex-col gap-2.5">
+          <Typography variant="cardPrice" tone="default" as="h1">
+            {COLLECTION_OFF.title}
+          </Typography>
+          <Typography variant="uiText" tone="secondary">
+            {COLLECTION_OFF.lead}
+          </Typography>
+        </div>
+
+        {/* Во всю ширину: единственное действие экрана, и на 390 у него нет
+            соседа, с которым пришлось бы делить строку. */}
+        <Button variant="primary" size="lg" block data-action="открыт рассказ о «Сёрчи»">
+          {COLLECTION_OFF.action}
+        </Button>
+
+        <div className="flex w-full flex-col gap-3.5 rounded-2xl bg-warm p-4">
+          <Typography variant="columnHeader" tone="dense">
+            {COLLECTION_OFF.reasonsLabel}
+          </Typography>
+          {COLLECTION_OFF.reasons.map((reason) => (
+            <CollectionOffReason key={reason.title} title={reason.title} text={reason.text} />
+          ))}
+        </div>
+
+        <Typography variant="metaText" tone="dense">
+          {COLLECTION_OFF.legal}
+        </Typography>
+      </div>
+    </div>
+  )
+}
+
+/**
  * МОБАЙЛ · Подборка для клиента (`MHLlO`).
  *
  * Публичная страница вне кабинета: шапка 56 с логотипом и именем агентства,
@@ -600,7 +701,7 @@ export function MobileNewCollectionPage() {
  * и подборку выбирает он. Демонстрационный адрес хвоста не несёт, поэтому
  * страница берёт подборку из параметра `id`, а без него — последнюю, у которой
  * ссылка открыта. Подборка без ссылки не открывается вовсе: ровно это и значит
- * «ссылку можно отключить».
+ * «ссылку можно отключить», и ответом на такую ссылку идёт `g4nnt`.
  */
 export function MobileClientCollectionPage() {
   const workspace = useWorkspace()
@@ -615,102 +716,86 @@ export function MobileClientCollectionPage() {
   const agency = session?.agency ?? ""
   const agent = session?.name ?? ""
 
+  /**
+   * Ссылку выключили или её никогда не было — целиком другой экран.
+   *
+   * Раньше закрытое состояние жило внутри этой страницы и наследовало от неё
+   * шапку с именем агентства и нижнюю полосу с именем агента и кнопкой
+   * «Написать». То есть мёртвая ссылка выдавала ровно те два имени, которых
+   * на ней быть не должно. Теперь ответом идёт отдельный кадр, у которого
+   * своя шапка и нет полосы вовсе.
+   *
+   * Случаи «подборки нет» и «подборка закрыта» не различаются намеренно:
+   * разный ответ на чужой `id` — это и есть способ узнать перебором, какие
+   * подборки у агентства существуют.
+   */
+  if (collection === undefined || !collection.linked) return <MobileCollectionOffPage />
+
   return (
     <div
       data-slot="mobile-client-collection"
       className="flex min-h-svh w-full flex-col bg-bg"
     >
-      <header
-        data-slot="client-collection-header"
-        className="flex h-header w-full shrink-0 items-center gap-3 bg-surface px-4 shadow-[inset_0_-1px_0_var(--line-2)]"
-      >
-        <div className="flex items-center gap-1.5">
-          <Typography variant="panelTitle" tone="default">
-            Сёрчь
-          </Typography>
-          <span aria-hidden className="size-1.5 rounded-full bg-accent-bright" />
-        </div>
-        <div className="h-px flex-1" />
-        {/* Имя агентства, а не агента: клиент пришёл по ссылке и должен
-            понимать, чья это страница, ещё до того, как долистает до подписи. */}
-        {agency === "" ? null : (
-          <Typography variant="metaText" tone="dense">
-            {agency}
-          </Typography>
-        )}
-      </header>
+      {/* Имя агентства, а не агента: клиент пришёл по ссылке и должен
+          понимать, чья это страница, ещё до того, как долистает до подписи. */}
+      <MobilePublicHeader caption={agency} />
 
-      {collection === undefined || !collection.linked ? (
-        // Ссылку выключили или её никогда не было. Человек на том конце
-        // не виноват, что она устарела, и видит объяснение, а не пустую
-        // страницу и не ошибку. Тот же ответ, что на компьютере.
-        <div className="flex w-full flex-1 flex-col items-center justify-center gap-3 px-6 py-12">
-          <Typography variant="panelTitle" tone="default" as="h1" align="center">
-            Подборка не открывается
+      <div className="flex w-full flex-1 flex-col gap-7 px-4 py-6">
+        <div className="flex w-full flex-col gap-2">
+          <Typography variant="cardPrice" tone="default" as="h1">
+            {collection.name}
           </Typography>
-          <Typography variant="uiText" tone="secondary" align="center">
-            Доступ по этой ссылке закрыт. Если подборка нужна, напишите агенту —
-            он откроет её заново или пришлёт новую.
+          <Typography variant="uiText" tone="secondary">
+            {`${objectsNote(objects.length)}, отобранных для вас`}
           </Typography>
         </div>
-      ) : (
-        <div className="flex w-full flex-1 flex-col gap-7 px-4 py-6">
-          <div className="flex w-full flex-col gap-2">
-            <Typography variant="cardPrice" tone="default" as="h1">
-              {collection.name}
-            </Typography>
-            <Typography variant="uiText" tone="secondary">
-              {`${objectsNote(objects.length)}, отобранных для вас`}
-            </Typography>
-          </div>
 
-          <div className="flex w-full flex-col gap-7">
-            {objects.map((object) => (
-              <div
-                key={object.address}
-                data-slot="client-collection-object"
-                className="flex w-full flex-col gap-3"
-              >
-                <div className="h-60 w-full overflow-hidden rounded-2xl">
-                  <ListingPhoto src={photoFor(object.address)} alt={object.address} size="large" reason="no-photos" />
-                </div>
+        <div className="flex w-full flex-col gap-7">
+          {objects.map((object) => (
+            <div
+              key={object.address}
+              data-slot="client-collection-object"
+              className="flex w-full flex-col gap-3"
+            >
+              <div className="h-60 w-full overflow-hidden rounded-2xl">
+                <ListingPhoto src={photoFor(object.address)} alt={object.address} size="large" reason="no-photos" />
+              </div>
 
-                <div className="flex w-full flex-col gap-1">
-                  <div className="flex w-full items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <Typography variant="panelTitle" tone="default" as="h2">
-                        {object.address}
-                      </Typography>
-                    </div>
-                    {/* Цена той же ступенью, что адрес: клиенту они равны,
-                        и ни одна не важнее другой. */}
-                    <Typography variant="panelTitle" tone="default" as="span" align="end">
-                      {object.price}
+              <div className="flex w-full flex-col gap-1">
+                <div className="flex w-full items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Typography variant="panelTitle" tone="default" as="h2">
+                      {object.address}
                     </Typography>
                   </div>
-                  <Typography variant="denseText" tone="dense">
-                    {object.clientMeta}
-                  </Typography>
-                  <Typography variant="denseText" tone="dense">
-                    {object.metro}
+                  {/* Цена той же ступенью, что адрес: клиенту они равны,
+                      и ни одна не важнее другой. */}
+                  <Typography variant="panelTitle" tone="default" as="span" align="end">
+                    {object.price}
                   </Typography>
                 </div>
+                <Typography variant="denseText" tone="dense">
+                  {object.clientMeta}
+                </Typography>
+                <Typography variant="denseText" tone="dense">
+                  {object.metro}
+                </Typography>
               </div>
-            ))}
-          </div>
-
-          <Typography variant="metaText" tone="dense">
-            Телефон собственника на этой странице не показывается. По любому объекту
-            звоните своему агенту.
-          </Typography>
-
-          {/* Адрес страницы напечатан текстом: ссылка живёт своей жизнью после
-              пересылки, и человек, которому её переслали, видит, где он. */}
-          <Typography variant="metaText" tone="dense">
-            {`serch.ru/p/${collection.slug}`}
-          </Typography>
+            </div>
+          ))}
         </div>
-      )}
+
+        <Typography variant="metaText" tone="dense">
+          Телефон собственника на этой странице не показывается. По любому объекту
+          звоните своему агенту.
+        </Typography>
+
+        {/* Адрес страницы напечатан текстом: ссылка живёт своей жизнью после
+            пересылки, и человек, которому её переслали, видит, где он. */}
+        <Typography variant="metaText" tone="dense">
+          {`serch.ru/p/${collection.slug}`}
+        </Typography>
+      </div>
 
       {/* Полоса липкая, а не прижатая: страница длинная, и агент с кнопкой
           обязаны быть под пальцем на любом объекте, а не только в конце. */}

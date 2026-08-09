@@ -5,9 +5,17 @@ import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { useSession } from "@/features/auth"
-import { AgencyChip, AgencyEmpty, AgencyShell, DataTable, FormField } from "@/features/agency"
+import {
+  AgencyChip,
+  AgencyEmpty,
+  AgencyShell,
+  DailyLimitDialog,
+  DataTable,
+  FormField,
+} from "@/features/agency"
 import { OwnerAvatar, groupDigits, plural } from "@/features/listings"
 import { formatMoment, paidDisclosures, useWorkspace } from "@/features/workspace"
+import { useExitValue } from "@/platform/motion"
 import { cn } from "@/lib/utils"
 
 /**
@@ -29,6 +37,11 @@ import { cn } from "@/lib/utils"
  * **Лимит покрашен по смыслу.** «без лимита» идёт приглушённым: это норма.
  * Число — графитом: у человека стоит ограничение, и руководитель должен
  * видеть это, не открывая карточку.
+ *
+ * **Лимит здесь же и меняется.** Ячейка «ЛИМИТ В ДЕНЬ» нажимается и открывает
+ * окно `C2B6w`. Это единственная нажимаемая цифра таблицы: раскрытия и деньги
+ * считает журнал, их не выставляют, — а лимит выставляет человек, и делает он
+ * это, глядя на соседние строки.
  *
  * **Отключённый сотрудник теряет доступ, но не уносит работу.** Раскрытые им
  * контакты, статусы и история касаний остаются агентству — за них заплачено.
@@ -115,6 +128,37 @@ export function AgencyStaffPage() {
   const navigate = useNavigate()
   const staff = useStaff()
 
+  /**
+   * Кому руководитель сейчас меняет дневной лимит.
+   *
+   * Окно `C2B6w` открывается из колонки «ЛИМИТ В ДЕНЬ», а не из карточки
+   * сотрудника: в карточке тот же выбор уже нарисован чипами (`t6b58y`),
+   * и второе место для того же действия там было бы лишним. А таблица —
+   * единственный экран, где лимиты видно рядом друг с другом, и решение
+   * «этому 25, этому 5» принимается именно здесь.
+   */
+  const [editing, setEditing] = useState<string | null>(null)
+
+  /** Окно уходит, а не пропадает: 120 мс держит его `useExitValue`. */
+  const dialog = useExitValue(editing)
+  const edited = staff.find((person) => person.id === dialog.value)
+
+  /**
+   * Лимиты, поменянные в этом сеансе.
+   *
+   * Сохранять их некуда: порта «поставить сотруднику лимит» в слое работы
+   * пока нет, а вписать число в журнал мимо него значило бы завести второй
+   * источник правды. Поэтому выбор живёт до перезагрузки — ровно так же, как
+   * чипы прав в карточке сотрудника и правила на экране настроек. Плашки
+   * «сохранено» здесь поэтому нет: врать о записи на сервер нечем, а новое
+   * число человек видит в той же строке, из которой открыл окно.
+   */
+  const [limits, setLimits] = useState<Record<string, number | null>>({})
+  const limitOf = (person: Staff): number | null => {
+    const changed = limits[person.id]
+    return changed === undefined ? person.limit : changed
+  }
+
   return (
     <AgencyShell
       activeTab="staff"
@@ -177,13 +221,40 @@ export function AgencyStaffPage() {
               <Typography key="role" variant="denseText" tone="default">
                 {person.owner ? "Руководитель" : "Агент"}
               </Typography>,
-              <Typography
+              // Лимит — единственное значение строки, которое руководитель
+              // меняет прямо отсюда. Поэтому ячейка нажимается, а остальные
+              // числа (раскрыто, потрачено) остаются текстом: их не выставляют,
+              // их считает журнал.
+              <button
                 key="limit"
-                variant="denseText"
-                tone={person.limit === null ? "dense" : "default"}
+                type="button"
+                data-slot="staff-limit"
+                aria-label={`Дневной лимит · ${person.name}`}
+                onClick={() => setEditing(person.id)}
+                /*
+                  Подложка без отрицательных полей, и это названное
+                  расхождение с кадром на восемь пикселей.
+
+                  В кадре значение стоит у левого края клетки 120. Чтобы
+                  подложка появлялась вокруг подписи, а подпись не сдвигалась,
+                  напрашивается поле 8 с отрицательным полем −8 — тот же приём,
+                  что у «Сбросить» в полоске фильтров. Но клетка здесь узкая
+                  и закреплённая: подложка вылезает за её край, и проверка
+                  переполнения ловит это как «нужно 128, есть 120».
+
+                  Выбрано меньшее из двух зол: подпись сдвигается на 8 внутрь,
+                  зато ничего не вылезает. Восемь пикселей заметны замером,
+                  а вылезающая подложка заметна глазом.
+                */
+                className="row-tap flex h-7 max-w-full cursor-pointer items-center rounded-md bg-transparent px-2 outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
               >
-                {person.limit === null ? "без лимита" : String(person.limit)}
-              </Typography>,
+                <Typography
+                  variant="denseText"
+                  tone={limitOf(person) === null ? "dense" : "default"}
+                >
+                  {limitOf(person) === null ? "без лимита" : String(limitOf(person))}
+                </Typography>
+              </button>,
               <Typography key="disclosed" variant="denseText" tone="default">
                 {String(person.disclosed)}
               </Typography>,
@@ -209,6 +280,19 @@ export function AgencyStaffPage() {
           но его объекты, статусы и история касаний остаются агентству.
         </Typography>
       </div>
+
+      {dialog.mounted && edited !== undefined ? (
+        <DailyLimitDialog
+          leaving={dialog.leaving}
+          person={edited.name}
+          limit={limitOf(edited)}
+          onClose={() => setEditing(null)}
+          onSave={(next) => {
+            setLimits((prev) => ({ ...prev, [edited.id]: next }))
+            setEditing(null)
+          }}
+        />
+      ) : null}
     </AgencyShell>
   )
 }

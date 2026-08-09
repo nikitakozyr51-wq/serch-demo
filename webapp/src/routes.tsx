@@ -392,6 +392,13 @@ const PUBLIC = new Set<string>([
   '/m/invite',
   '/m/access-closed',
   '/m/collections/client',
+  // Тупик протухшего приглашения и отключённая подборка открыты БЕЗ входа.
+  // Человек с мёртвой ссылкой в кабинет не входил, а клиент подборки —
+  // не сотрудник агентства вовсе. Без этого охрана уведёт обоих на вход,
+  // и экран, объясняющий, что случилось, не увидит никто.
+  '/invite/expired',
+  '/m/invite/expired',
+  '/m/collections/off',
   '/dialogs',
 ])
 
@@ -559,6 +566,17 @@ const authProductRoutes = [
    * Телефонный двойник `/m/invite` подставляется тем же `productRoute`,
    * поэтому маршрут собирается им, а не голым `createRoute`.
    */
+  /**
+   * Ссылка приглашения истекла — тупик, у которого есть выход.
+   *
+   * Живёт своим адресом, а не состоянием `/invite`: человек приходит
+   * по ссылке из письма, и ссылка либо рабочая, либо нет. Показывать
+   * ему форму приёма, которая всё равно откажет, значит заставить
+   * заполнить её впустую.
+   */
+  productRoute('/invite/expired', () => import('./invite-expired-screens'), 'InviteExpiredPage'),
+  productRoute('/m/invite/expired', () => import('./invite-expired-screens'), 'MobileInviteExpiredPage'),
+  productRoute('/m/collections/off', () => import('./mobile-collections-screens'), 'MobileCollectionOffPage'),
   productRoute('/invite', () => import('./auth-more-screens'), 'InvitePage', {
     validateSearch: (search: Record<string, unknown>): { token?: string } =>
       typeof search.token === 'string' ? { token: search.token } : {},

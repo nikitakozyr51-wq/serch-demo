@@ -1,10 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router"
+import { COLLECTION_OFF } from "@/collection-off-text"
 import { Copy, GripVertical, Link as LinkIcon } from "lucide-react"
 import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { TextField } from "@/components/controls/TextField"
+import { CollectionOffReason } from "@/collection-off-parts"
 import { ALL_ROWS } from "@/data/search-rows"
 import { AgencyEmpty, DataTable } from "@/features/agency"
 import { useSession } from "@/features/auth"
@@ -579,6 +581,55 @@ export function CollectionInsidePage() {
 }
 
 /**
+ * Шапка публичной страницы: 72, белая, с волосяной линией снизу.
+ *
+ * Одна на два состояния — живую подборку (`UX58q`) и отключённую (`fGEdr`).
+ * Скелет у них совпадает до значения: логотип с точкой, делитель, подпись,
+ * распорка и правая часть. Разное только то, что стоит справа, — поэтому
+ * различие и вынесено в `children`, а не в две копии шапки, которые потом
+ * разъедутся по одной правке.
+ *
+ * Логотип идёт `span`, а не заголовком: заголовок на странице один, и это
+ * название подборки (или «Подборка закрыта»). Слово «Сёрчь» в шапке —
+ * марка, а не оглавление, и в навигации по заголовкам ему не место.
+ */
+function PublicPageHeader({
+  caption,
+  children,
+}: {
+  /** Подпись за делителем. Пустая — исчезает вместе с делителем. */
+  caption: string
+  children?: ReactNode
+}) {
+  return (
+    <header
+      data-slot="public-page-header"
+      className="flex h-18 w-full shrink-0 items-center gap-4 border-b border-line-2 bg-surface px-12"
+    >
+      <div className="flex items-center gap-2">
+        <Typography variant="panelTitle" tone="default" as="span">
+          Сёрчь
+        </Typography>
+        <span aria-hidden className="size-1.5 rounded-full bg-accent-bright" />
+      </div>
+      {/* Имени агентства без сеанса взять неоткуда, и строка тогда исчезает
+          вместе с разделителем: «подборка от агентства » с пустотой на конце
+          хуже, чем её отсутствие. */}
+      {caption === "" ? null : (
+        <>
+          <span aria-hidden className="h-5 w-px bg-line-2" />
+          <Typography variant="denseText" tone="dense">
+            {caption}
+          </Typography>
+        </>
+      )}
+      <div className="h-px flex-1" />
+      {children === undefined ? null : <>{children}</>}
+    </header>
+  )
+}
+
+/**
  * ПУБЛИЧНОЕ · Подборка для клиента.
  *
  * Живёт вне кабинета: своя шапка 72 с именем агента и его телефоном.
@@ -600,27 +651,24 @@ export function PublicCollectionPage() {
   const agency = session?.agency ?? ""
   const agent = session?.name ?? ""
 
+  /**
+   * Ссылки нет, она чужая или её выключили — ответ один и тот же кадр.
+   *
+   * Раньше страница различала два случая: подборки не нашлось — пустое
+   * состояние «Подборка не открывается»; подборка нашлась, но `linked`
+   * снят — страница всё равно показывалась целиком, то есть отключение
+   * ссылки на компьютере не работало вовсе.
+   *
+   * Теперь оба случая ведут в `CollectionOffPage`, и это не только починка.
+   * Клиент, подставляющий чужие `id` в адрес, не должен различать «такой
+   * подборки нет» и «есть, но закрыта»: разница в ответе — это и есть способ
+   * узнать, какие подборки у агентства существуют. Ответ обязан быть один.
+   */
+  if (collection === null || !collection.linked) return <CollectionOffPage />
+
   return (
     <div className="flex min-h-svh w-full flex-col bg-bg">
-      <div className="flex h-18 w-full shrink-0 items-center gap-4 border-b border-line-2 bg-surface px-12">
-        <div className="flex items-center gap-2">
-          <Typography variant="panelTitle" tone="default">
-            Сёрчь
-          </Typography>
-          <span aria-hidden className="size-1.5 rounded-full bg-accent-bright" />
-        </div>
-        {/* Имени агентства без сеанса взять неоткуда, и строка тогда исчезает
-            вместе с разделителем: «подборка от агентства » с пустотой на конце
-            хуже, чем её отсутствие. */}
-        {agency === "" ? null : (
-          <>
-            <span aria-hidden className="h-5 w-px bg-line-2" />
-            <Typography variant="denseText" tone="dense">
-              {`подборка от агентства «${agency}»`}
-            </Typography>
-          </>
-        )}
-        <div className="h-px flex-1" />
+      <PublicPageHeader caption={agency === "" ? "" : `подборка от агентства «${agency}»`}>
         <div className="flex flex-col gap-0.5">
           <Typography variant="numericDense" tone="default">
             {agent === "" ? "—" : agent}
@@ -635,112 +683,150 @@ export function PublicCollectionPage() {
         <Button variant="primary" size="md" data-action="начата переписка с агентом">
           Написать агенту
         </Button>
-      </div>
+      </PublicPageHeader>
 
       <div className="flex w-full flex-col gap-6 p-12">
-        {collection === null ? (
-          <AgencyEmpty
-            title="Подборка не открывается"
-            text="Ссылка ведёт на подборку, которой здесь нет: её могли отключить или прислать новую. Напишите агенту — он откроет доступ заново."
-          />
-        ) : (
-          <>
-            <div className="flex w-full flex-col gap-2">
-              <Typography variant="cardPrice" tone="default" as="h1">
-                {collection.name}
-              </Typography>
-              {/* Второй строкой — правило страницы, а не пересказ состава:
-                  сколько здесь объектов, клиент видит сам, а вот почему нигде
-                  нет телефона собственника — нет. */}
-              <Typography variant="uiText" tone="secondary">
-                Телефоны собственников скрыты: по любому объекту пишите агенту.
-              </Typography>
-            </div>
+        <div className="flex w-full flex-col gap-2">
+          <Typography variant="cardPrice" tone="default" as="h1">
+            {collection.name}
+          </Typography>
+          {/* Второй строкой — правило страницы, а не пересказ состава:
+              сколько здесь объектов, клиент видит сам, а вот почему нигде
+              нет телефона собственника — нет. */}
+          <Typography variant="uiText" tone="secondary">
+            Телефоны собственников скрыты: по любому объекту пишите агенту.
+          </Typography>
+        </div>
 
-            {/* Ссылку могли создать до того, как в подборку положили первый
-                объект. Клиент в этом случае не должен смотреть на пустое
-                место: страница говорит, что смотреть пока нечего. */}
-            {collection.items.length === 0 ? (
-              <Typography variant="uiText" tone="secondary">
-                В подборке пока нет объектов. Агент добавит их и пришлёт ссылку
-                ещё раз — она останется той же.
-              </Typography>
-            ) : null}
+        {/* Ссылку могли создать до того, как в подборку положили первый
+            объект. Клиент в этом случае не должен смотреть на пустое
+            место: страница говорит, что смотреть пока нечего. */}
+        {collection.items.length === 0 ? (
+          <Typography variant="uiText" tone="secondary">
+            В подборке пока нет объектов. Агент добавит их и пришлёт ссылку
+            ещё раз — она останется той же.
+          </Typography>
+        ) : null}
 
-            {/* Карточка не открывается. Публичной страницы объекта в продукте
-                нет, а выдумать ей адрес значило бы пообещать клиенту экран,
-                которого никто не рисовал. Карточка здесь — рассказ, а не вход. */}
-            <div className="grid w-full grid-cols-3 gap-6">
-              {collection.items.map((address) => {
-                const listing = ALL_ROWS.find((row) => row.address === address)
+        {/* Карточка не открывается. Публичной страницы объекта в продукте
+            нет, а выдумать ей адрес значило бы пообещать клиенту экран,
+            которого никто не рисовал. Карточка здесь — рассказ, а не вход. */}
+        <div className="grid w-full grid-cols-3 gap-6">
+          {collection.items.map((address) => {
+            const listing = ALL_ROWS.find((row) => row.address === address)
 
-                return (
-                  <div
-                    key={address}
-                    data-slot="public-card"
-                    className="flex flex-col gap-3 overflow-hidden rounded-2xl bg-surface p-4"
-                  >
-                    <div aria-hidden className="h-53.5 w-full rounded-xl bg-warm" />
-                    <div className="flex w-full items-center gap-2">
-                      <Typography variant="panelTitle" tone="default">
-                        {listing?.price ?? "—"}
-                      </Typography>
-                      {listing === undefined ? null : (
-                        <MarketDeviation percent={listing.deviation} />
-                      )}
-                    </div>
-                    <Typography variant="rowPrice" tone="default">
-                      {address}
-                    </Typography>
-                    {listing === undefined ? null : (
-                      <Typography variant="denseText" tone="dense">
-                        {listing.meta.replace(/^·\s*/, "")}
-                      </Typography>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        )}
+            return (
+              <div
+                key={address}
+                data-slot="public-card"
+                className="flex flex-col gap-3 overflow-hidden rounded-2xl bg-surface p-4"
+              >
+                <div aria-hidden className="h-53.5 w-full rounded-xl bg-warm" />
+                <div className="flex w-full items-center gap-2">
+                  <Typography variant="panelTitle" tone="default">
+                    {listing?.price ?? "—"}
+                  </Typography>
+                  {listing === undefined ? null : (
+                    <MarketDeviation percent={listing.deviation} />
+                  )}
+                </div>
+                <Typography variant="rowPrice" tone="default">
+                  {address}
+                </Typography>
+                {listing === undefined ? null : (
+                  <Typography variant="denseText" tone="dense">
+                    {listing.meta.replace(/^·\s*/, "")}
+                  </Typography>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
 }
 
 /**
- * Подборка отключена.
+ * СОСТОЯНИЕ · Подборка отключена (`fGEdr`).
  *
- * Ссылку можно выключить, и тогда клиент видит не пустую страницу и не ошибку,
- * а объяснение с именем агентства: подборка больше не публикуется, свяжитесь
- * с агентом. Ссылка живёт своей жизнью после пересылки, и человек на том конце
- * не виноват, что она устарела.
+ * Шапка 72 как на живой публичной странице, тело полями 48 и зазором 48:
+ * слева колонка отказа шириной по остатку (896 на 1440), справа карточка 400
+ * тёплой заливкой, радиус 16, поля 28.
  *
- * Имя агентства приходит из сеанса. Без сеанса его нет, и предложение теряет
- * имя, а не получает чужое: «Агентство закрыло доступ» — правда в любом
- * случае, а названное наугад агентство — нет.
+ * **Это единственный кадр продукта, который видит человек, не имеющий
+ * к агентству никакого отношения.** Ссылку ему переслали, и она уже мёртвая.
+ * Поэтому страница устроена наоборот привычному: она ничего не спрашивает,
+ * ничего не предлагает сделать с подборкой и ничего не рассказывает про неё.
+ *
+ * **Ни имени агентства, ни имени агента, ни телефона.** Прежняя версия этого
+ * экрана называла агентство из сеанса — и была неправа дважды. Во-первых,
+ * сеанс на этой странице чужой: она открывается вне кабинета, и агентство
+ * в ней — это агентство того, кто сейчас сидит в браузере, а не того, кто
+ * собрал подборку. Во-вторых, отключённая ссылка обязана молчать: если
+ * мёртвый адрес называет агентство, а несуществующий — нет, перебором адресов
+ * читается, кто в «Сёрчи» работает. Телефона собственника на публичной
+ * странице нет ни в каком виде — здесь нет и телефона агента.
+ *
+ * Правая карточка отвечает на три вопроса подряд, потому что человек задаёт
+ * их именно в этом порядке: что случилось, что теперь делать и не остались ли
+ * где-то его данные. Третий вопрос не выдуман — подборка открывается без
+ * регистрации, и сказать об этом вслух дешевле, чем не сказать.
  */
 export function CollectionOffPage() {
-  const agency = useSession()?.agency ?? ""
-
   return (
-    <div className="flex min-h-svh w-full flex-col items-center justify-center gap-4 bg-bg px-12">
-      <Typography variant="cardPrice" tone="default" as="h1">
-        Подборка больше не публикуется
-      </Typography>
-      <div className="w-130 text-center">
-        <Typography variant="uiText" tone="secondary" align="center">
-          {agency === ""
-            ? "Агентство закрыло доступ по этой ссылке. Если подборка нужна, напишите агенту — он откроет её заново или пришлёт новую."
-            : `Агентство «${agency}» закрыло доступ по этой ссылке. Если подборка нужна, напишите агенту — он откроет её заново или пришлёт новую.`}
+    <div data-slot="collection-off" className="flex min-h-svh w-full flex-col bg-bg">
+      <PublicPageHeader caption={COLLECTION_OFF.caption}>
+        <Typography variant="metaText" tone="dense">
+          {COLLECTION_OFF.operator}
         </Typography>
+      </PublicPageHeader>
+
+      {/* Ряд, а не колонка: в файле отказ и объяснение стоят рядом и оба
+          прижаты к верху тела. Карточка держит 400 и не сжимается — колонка
+          отказа отдаёт ей эту ширину, а остаток забирает себе. */}
+      <div className="flex w-full flex-1 items-start gap-12 p-12">
+        {/* `items-start`: иначе кнопка растянулась бы во всю колонку в 896.
+            В файле она шириной по подписи. */}
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-5">
+          <Typography variant="cardPrice" tone="default" as="h1">
+            {COLLECTION_OFF.title}
+          </Typography>
+          {/* Строка меры 640 при колонке 896: длинная строка читается хуже
+              короткой, и в файле оба абзаца обрезаны именно этой шириной. */}
+          <div className="max-w-160">
+            <Typography variant="uiText" tone="secondary">
+              {COLLECTION_OFF.lead}
+            </Typography>
+          </div>
+          {/* Кнопка ведёт наружу, на рассказ о сервисе, и экрана для него
+              в продукте нет. Действие названо и не рисует ничего — так же,
+              как «Написать агенту» на живой странице. */}
+          <Button variant="primary" size="lg" data-action="открыт рассказ о «Сёрчи»">
+            {COLLECTION_OFF.action}
+          </Button>
+          <div className="max-w-160">
+            <Typography variant="metaText" tone="dense">
+              {COLLECTION_OFF.legal}
+            </Typography>
+          </div>
+        </div>
+
+        <aside className="flex w-100 shrink-0 flex-col gap-3.5 rounded-2xl bg-warm p-7">
+          <Typography variant="columnHeader" tone="dense">
+            {COLLECTION_OFF.reasonsLabel}
+          </Typography>
+          {COLLECTION_OFF.reasons.map((reason) => (
+            <CollectionOffReason key={reason.title} title={reason.title} text={reason.text} />
+          ))}
+          {/* Почта стоит последней строкой и текстом, а не ссылкой: у продукта
+              нет ни формы обращения, ни экрана поддержки, и `mailto` открыл бы
+              человеку почтовую программу, которой он не просил. */}
+          <Typography variant="metaText" tone="dense">
+            {COLLECTION_OFF.help}
+          </Typography>
+        </aside>
       </div>
-      {/* То же, что на публичной странице: переписки нет ни экраном, ни окном.
-          Человек, которому переслали устаревшую ссылку, читает объяснение
-          с именем агентства — оно и есть ответ, а не кнопка. */}
-      <Button variant="primary" size="lg" data-action="начата переписка с агентом">
-        Написать агенту
-      </Button>
     </div>
   )
 }

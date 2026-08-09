@@ -1,4 +1,5 @@
 import { useNavigate, useSearch } from "@tanstack/react-router"
+import { RefundSentDialog } from "@/money-confirmations"
 import { Check, Copy, Phone } from "lucide-react"
 import { motion } from "motion/react"
 import { useState } from "react"
@@ -7,10 +8,10 @@ import { Button } from "@/components/controls/Button"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
-import { demoPhone, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
+import { DISCLOSURE_PRICE, demoPhone, useOwnAgency, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
 import { ListingPhoto, TitledBlock, groupDigits, photosFor } from "@/features/listings"
-import { notifyDone, notifyError } from "@/platform/notify"
+import { notifyError } from "@/platform/notify"
 import { Reveal, SPRING } from "@/platform/motion"
 import { disclosureOf, formatMoment, useWorkspace, type Workspace } from "@/features/workspace"
 import {
@@ -358,6 +359,20 @@ export function ObjectCardDisclosedPage() {
   /** Чем кончился звонок. Пока не отмечено — ни один чип не выбран. */
   const [result, setResult] = useState<ResultId | null>(null)
 
+  /**
+   * Возврат денег показывается ОКНОМ, а не всплывающим сообщением.
+   *
+   * Так записано в `platform/notify` и записано не из вкуса: сообщение
+   * живёт четыре секунды и уезжает. Деньги вернулись на общий счёт
+   * агентства — это факт, который человек обязан увидеть целиком
+   * и по своей воле закрыть, а не поймать краем глаза.
+   *
+   * Кадр `LFBew`.
+   */
+  const [refundDone, setRefundDone] = useState<
+    { amount: number; address: string; objective: boolean } | null
+  >(null)
+
   /** За какие контакты агентство уже платило: у этих строк открытие стоит 0 ₽. */
   const opened = session?.disclosed ?? []
 
@@ -426,7 +441,8 @@ export function ObjectCardDisclosedPage() {
     if (id !== "defect") return
 
     const outcome = actions.refund(address, "Ответил не собственник", false)
-    if (outcome === "ok") notifyDone("Вернули 199 ₽ на счёт агентства")
+    if (outcome === "ok")
+                setRefundDone({ amount: DISCLOSURE_PRICE, address, objective: false })
     else if (outcome === "already") notifyError("За этот контакт возврат уже брали")
     else if (outcome === "limit")
       notifyError("Двенадцать спорных возвратов за месяц уже взяты — напишите в поддержку")
@@ -723,6 +739,15 @@ export function ObjectCardDisclosedPage() {
           })}
         </div>
       </div>
+      {/* Возврат денег — окно, а не сообщение: см. `refundDone` выше. */}
+      {refundDone === null ? null : (
+        <RefundSentDialog
+          amount={refundDone.amount}
+          address={refundDone.address}
+          objective={refundDone.objective}
+          onClose={() => setRefundDone(null)}
+        />
+      )}
     </CardShell>
   )
 }

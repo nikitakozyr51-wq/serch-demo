@@ -1,4 +1,5 @@
 import { Copy, Phone, X } from "lucide-react"
+import { RefundSentDialog } from "@/money-confirmations"
 import { useMemo, useState, type ReactNode } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 
@@ -7,7 +8,7 @@ import { Checkbox } from "@/components/controls/Checkbox"
 import { SelectChip } from "@/components/controls/SelectChip"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
-import { demoPhone, initialsOf, useSession, useSessionActions } from "@/features/auth"
+import { DISCLOSURE_PRICE, demoPhone, initialsOf, useSession, useSessionActions } from "@/features/auth"
 import { useHotkeys } from "@/features/cabinet"
 import { notifyDone, notifyError } from "@/platform/notify"
 import {
@@ -210,6 +211,20 @@ function touchDetail(
 export function CallModeScreenPage() {
   const navigate = useNavigate()
   const [result, setResult] = useState<string | null>("В работе")
+
+  /**
+   * Возврат денег показывается ОКНОМ, а не всплывающим сообщением.
+   *
+   * Так записано в `platform/notify` и записано не из вкуса: сообщение
+   * живёт четыре секунды и уезжает. Деньги вернулись на общий счёт
+   * агентства — это факт, который человек обязан увидеть целиком
+   * и по своей воле закрыть, а не поймать краем глаза.
+   *
+   * Кадр `LFBew`.
+   */
+  const [refundDone, setRefundDone] = useState<
+    { amount: number; address: string; objective: boolean } | null
+  >(null)
   /** Заметка о звонке. Обнуляется вместе с панелью при переходе к следующему. */
   const [note, setNote] = useState("Третий заход. В 14:20 и 15:05 не взял трубку.")
   /**
@@ -949,8 +964,9 @@ export function CallModeScreenPage() {
           <button
             type="button"
             onClick={() => {
-              const outcome = actions.refund(address, "Ответил не собственник", true)
-              if (outcome === "ok") notifyDone("Вернули 199 ₽ на счёт агентства")
+              const outcome = actions.refund(address, "Ответил не собственник", false)
+              if (outcome === "ok")
+                setRefundDone({ amount: DISCLOSURE_PRICE, address, objective: false })
               else if (outcome === "already") notifyError("За этот контакт возврат уже брали")
               else notifyError("Возврат оформляется за оплаченное раскрытие")
             }}
@@ -1015,6 +1031,15 @@ export function CallModeScreenPage() {
           </div>
         </div>
       </div>
+      {/* Возврат денег — окно, а не сообщение: см. `refundDone` выше. */}
+      {refundDone === null ? null : (
+        <RefundSentDialog
+          amount={refundDone.amount}
+          address={refundDone.address}
+          objective={refundDone.objective}
+          onClose={() => setRefundDone(null)}
+        />
+      )}
     </div>
   )
 }

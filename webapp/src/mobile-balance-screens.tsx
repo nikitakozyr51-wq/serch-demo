@@ -1,11 +1,11 @@
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link, useNavigate, useRouter } from "@tanstack/react-router"
 import { ArrowDownToLine, Download, FileText, Undo2, Wallet } from "lucide-react"
 import { useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { DISCLOSURE_PRICE, useSession } from "@/features/auth"
+import { DISCLOSURE_PRICE, useSession, useSessionActions } from "@/features/auth"
 import { MobileEmptyState, MobileScreen, MobileSectionHeader, MobileSheet } from "@/features/cabinet"
 import { groupDigits, plural } from "@/features/listings"
 import {
@@ -17,6 +17,12 @@ import {
   type Workspace,
 } from "@/features/workspace"
 import { cn } from "@/lib/utils"
+import {
+  RefundLimitSheet,
+  RefundSentSheet,
+  TopUpDoneSheet,
+} from "@/money-confirmations"
+import { notifyError } from "@/platform/notify"
 
 /**
  * Деньги агентства на телефоне: шесть экранов одного раздела.
@@ -899,8 +905,18 @@ function MethodChip({
 export function MobileTopUpPage() {
   const balance = useBalance()
   const legalEntity = useLegalEntity()
+  const { topUp } = useSessionActions()
   const [amount, setAmount] = useState(20000)
   const [method, setMethod] = useState("Счёт юрлицу")
+
+  /**
+   * Сколько зачислили — или `null`, пока не зачисляли.
+   *
+   * Сумма запоминается в момент нажатия: список сумм остаётся живым под
+   * затемнением, и случайное касание сменило бы число в подтверждении
+   * на то, которого человек не вносил.
+   */
+  const [credited, setCredited] = useState<number | null>(null)
 
   return (
     <MobileScreen
@@ -955,26 +971,72 @@ export function MobileTopUpPage() {
 
         <div className="flex-1" />
 
-        {/* Счёт — это файл для бухгалтера, а не экран продукта: показывать
-            после нажатия нечего, и деньги на счёт от скачивания не приходят.
-            Действие названо. Подпись кнопки остаётся счётом и при выборе
-            «Картой» — оплаты картой в файле не нарисовано, см. отчёт. */}
+        {/* Подпись кнопки остаётся счётом и при выборе «Картой» — оплаты
+            картой в файле не нарисовано, см. отчёт.
+
+            Единственная кнопка этого файла на `onClick`, а не на `pressProps`.
+            Остальные отвечают по касанию, потому что отклик в сто миллисекунд
+            читается как поломка; здесь касание списывает и зачисляет деньги,
+            и палец, начавший прокрутку с кнопки, не имеет права их двинуть. */}
         <Button
           variant="primary"
           size="lg"
           block
-          data-action="скачать счёт на пополнение"
+          onClick={() => {
+            // Способ уходит в журнал теми же словами, что и на компьютере:
+            // список пополнений сравнивает строку с «карта», и «Картой»
+            // из подписи чипа превратилась бы там в счёт на юрлицо.
+            topUp(amount, method === "Картой" ? "карта" : "счёт на юрлицо")
+            setCredited(amount)
+          }}
         >
           {`Скачать счёт на ${groupDigits(amount)} ₽`}
         </Button>
       </MoneyBody>
+
+      {/* МОБАЙЛ · Баланс пополнен (`l9WNps`). Лист, а не сообщение: деньги
+          оставляют постоянный след, и подтверждение ждёт, пока его прочтут. */}
+      {credited === null ? null : <TopUpDoneSheet amount={credited} />}
     </MobileScreen>
   )
 }
 
 /* ── МОБАЙЛ · Заявка на возврат (`B8BQ8`) ─────────────────────────────────── */
 
-const REASONS = ["Номера не существует", "Оказался посредник", "Объект уже продан"]
+/**
+ * Три причины возврата — и у каждой своя цена для агентства.
+ *
+ * **«Оказался посредник» — суждение агента, а не брак данных.** Номера,
+ * которого не существует, и объекта, который уже продан, в базе быть не
+ * должно: ошибся продукт, и такой возврат в лимит не считается. А кто именно
+ * взял трубку — вывод человека, проверить его нечем, и потому спорные
+ * возвраты ограничены двенадцатью за тридцать дней. Ровно так этот список
+ * разделён в шапке вкладки возвратов: «объективные причины в лимит не
+ * считаются: номер не существует, объект продан, согласие отозвано».
+ *
+ * До этого разделения все три уходили объективными, и кадр «Лимит возвратов
+ * исчерпан» (`exztG`) было нечем показать: до него нельзя было дойти.
+ */
+const REASONS = [
+  { label: "Номера не существует", objective: true },
+  { label: "Оказался посредник", objective: false },
+  { label: "Объект уже продан", objective: true },
+] as const
+
+type RefundReason = (typeof REASONS)[number]
+
+/**
+ * Чем кончилась отправка заявки — тем, что вернул журнал, а не тем, что
+ * решил экран.
+ *
+ * Сумма и адрес запоминаются здесь, а не читаются заново: после возврата
+ * то самое раскрытие помечено возвращённым, и поиск «последнего оплаченного
+ * без возврата» отдал бы уже следующее — то есть подтверждение назвало бы
+ * чужой объект.
+ */
+type RefundOutcome =
+  | { kind: "sent"; amount: number; address: string; objective: boolean }
+  | { kind: "limit" }
 
 /**
  * Причина возврата: строка 48 / r-12 с кружком 20.
@@ -1051,19 +1113,26 @@ function SheetQuietPill({ to, children }: { to: string; children: ReactNode }) {
  * уходя из истории: человек уже нашёл нужное раскрытие, и увести его на отдельный
  * экран значило бы заставить искать заново, если он передумает.
  *
- * Причин ровно три, все — объективный брак данных: номера нет, ответил посредник,
- * объект продан. «Не понравился разговор» в списке отсутствует намеренно: возврат
- * тут закрывается автоматически («объективная причина закрывается сразу»), и любая
- * субъективная причина сделала бы это невозможным.
+ * Причин ровно три: номера нет, ответил посредник, объект продан. «Не понравился
+ * разговор» в списке отсутствует намеренно — деньги возвращают за брак данных,
+ * а не за неудачный звонок. Две причины из трёх объективные и закрываются сразу,
+ * «посредник» — спорная и тратит одну из двенадцати попыток за месяц.
  *
  * Заголовок листа называет сумму — «Вернуть 199 ₽», — а не действие: человек
  * подтверждает не форму, а деньги. Сумма и объект берутся из журнала раскрытий:
  * адрес «Ленская ул., 10» и время «сегодня в 14:12», стоявшие здесь раньше,
  * были образцом текста из макета и не менялись никогда.
+ *
+ * **Ответ на отправку — лист, а не всплывающее сообщение.** Возврат двигает
+ * деньги агентства, и след от него обязан дождаться, пока его прочтут:
+ * `m0ATRJ`, когда деньги вернулись, и `exztG`, когда лимит спорных возвратов
+ * исчерпан и заявка ушла человеку на разбор.
  */
 export function MobileRefundRequestPage() {
   const workspace = useWorkspace()
   const now = useNow()
+  const router = useRouter()
+  const { refund } = useSessionActions()
 
   /**
    * Возврат оформляется за конкретное раскрытие, а не «вообще».
@@ -1076,7 +1145,33 @@ export function MobileRefundRequestPage() {
   const target = workspace.disclosures.find((item) => !item.trial && !item.refunded)
 
   /** Выбранная причина. Одна из трёх, по умолчанию первая — так в файле. */
-  const [reason, setReason] = useState(REASONS[0])
+  const [reason, setReason] = useState<RefundReason>(REASONS[0])
+  const [outcome, setOutcome] = useState<RefundOutcome | null>(null)
+
+  /**
+   * Ответ листа стоит ВЫШЕ проверки «есть ли что возвращать», и это не порядок
+   * ради порядка. После удачного возврата то раскрытие помечено возвращённым;
+   * если оно было последним оплаченным, `target` становится пустым — и человек
+   * вместо «Заявка отправлена» увидел бы «Возвращать пока нечего» за секунду
+   * до того, как деньги пришли.
+   */
+  if (outcome?.kind === "sent") {
+    return (
+      <RefundSentSheet
+        amount={outcome.amount}
+        address={outcome.address}
+        objective={outcome.objective}
+        // «Понятно» уводит туда, откуда пришли за возвратом: лист открыт
+        // поверх списка, и возвращать человека в форму заявки, которую он
+        // уже отправил, значит предлагать отправить её второй раз.
+        onClose={() => router.history.back()}
+      />
+    )
+  }
+
+  if (outcome?.kind === "limit") {
+    return <RefundLimitSheet onCancel={() => setOutcome(null)} />
+  }
 
   // Возвращать нечего — значит лист говорит об этом и предлагает единственный
   // осмысленный выход. Показывать три причины возврата над несуществующим
@@ -1095,7 +1190,10 @@ export function MobileRefundRequestPage() {
   return (
     <MobileSheet
       title={`Вернуть ${groupDigits(target.amount)} ₽`}
-      text={`${target.address} · раскрыто ${formatDay(target.at, now)}. Объективная причина закрывается сразу.`}
+      // Обе половины правила названы до выбора, а не после: спорная причина
+      // тратит одну из двенадцати попыток за месяц, и узнать об этом человек
+      // должен раньше, чем нажмёт, а не в подтверждении.
+      text={`${target.address} · раскрыто ${formatDay(target.at, now)}. Объективная причина закрывается сразу, спорная считается в лимит.`}
     >
       {/*
         Обе группы отданы одним ребёнком: контейнер листа держит зазор 8, а между
@@ -1104,24 +1202,57 @@ export function MobileRefundRequestPage() {
       */}
       <div className="flex w-full flex-col gap-5">
         <div role="radiogroup" aria-label="Причина возврата" className="flex w-full flex-col gap-2">
-          {REASONS.map((label) => (
+          {REASONS.map((item) => (
             <ReasonRow
-              key={label}
-              label={label}
-              selected={label === reason}
-              onPress={() => setReason(label)}
+              key={item.label}
+              label={item.label}
+              selected={item.label === reason.label}
+              onPress={() => setReason(item)}
             />
           ))}
         </div>
 
         <div className="flex w-full flex-col gap-2">
-          {/* Заявку принимает сервер, которого за демонстрацией нет.
-              Экрана «заявка принята» в файле тоже нет. Действие названо. */}
+          {/*
+            Отправка на `onClick`, а не на `pressProps`: остальной файл отвечает
+            по касанию ради скорости, но здесь касание двигает деньги, и палец,
+            начавший прокрутку с кнопки, не имеет права их вернуть.
+
+            Проверки живут в журнале, а не здесь: «за это уже возвращали» и
+            «лимит исчерпан» знает только он, а четыре экрана с четырьмя копиями
+            условия разъехались бы на пятом.
+          */}
           <Button
             variant="primary"
             size="lg"
             block
-            data-action={`заявка на возврат: ${reason}`}
+            onClick={() => {
+              const result = refund(target.address, reason.label, reason.objective)
+
+              if (result === "ok") {
+                setOutcome({
+                  kind: "sent",
+                  amount: target.amount,
+                  address: target.address,
+                  objective: reason.objective,
+                })
+                return
+              }
+
+              if (result === "limit") {
+                setOutcome({ kind: "limit" })
+                return
+              }
+
+              // «Уже возвращали» и «нечего возвращать» — не подтверждение
+              // денежного действия, а отказ: денег никто не двигал. Сообщением
+              // об ошибке ему быть можно, и оно держится, пока его не закроют.
+              notifyError(
+                result === "already"
+                  ? "За этот контакт возврат уже брали"
+                  : "Возврат оформляется за оплаченное раскрытие",
+              )
+            }}
           >
             Отправить заявку
           </Button>

@@ -1,10 +1,11 @@
 import { Link, useNavigate } from "@tanstack/react-router"
-import { Fragment, useId, useState } from "react"
+import { Fragment, useId, useRef, useState } from "react"
 import { Mail, Users } from "lucide-react"
-import type { ComponentPropsWithoutRef, ReactNode } from "react"
+import type { ComponentPropsWithoutRef, PointerEvent, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
+import { DAILY_LIMITS, dailyLimitCost, dailyLimitWord } from "@/features/agency"
 import { useSession } from "@/features/auth"
 import {
   MobileBottomNav,
@@ -136,11 +137,15 @@ const DAY = 24 * 60 * 60 * 1000
  *
  * Безлимит бывает только у руководителя — это правило продукта, и в карточке
  * оно видно без открытия прав: `limit === null` и есть безлимит.
+ *
+ * Лимит приходит отдельным доводом, а не берётся из записи о человеке:
+ * руководитель меняет его тут же, листом снизу, и строка обязана показать
+ * новое число сразу, а не то, что лежало в журнале до нажатия.
  */
-function roleAndLimit(person: Person): string {
+function roleAndLimit(person: Person, limit: number | null): string {
   const role = person.role === "owner" ? "руководитель" : "агент"
-  const limit = person.limit === null ? "без лимита" : `дневной лимит ${person.limit} в сутки`
-  return `${role} · ${limit}`
+  const suffix = limit === null ? "без лимита" : `дневной лимит ${limit} в сутки`
+  return `${role} · ${suffix}`
 }
 
 /**
@@ -205,11 +210,196 @@ function tallyOf(workspace: Workspace, person: Person, now: number) {
 }
 
 /**
+ * МОБАЙЛ · Сменить дневной лимит (`mCblr`).
+ *
+ * Лист снизу поверх карточки сотрудника: радиус 24 только сверху, поля
+ * [12, 20, 32, 20], зазор 20, хват 36 × 5. Внутри — заголовок 20/600,
+ * объяснение, три строки выбора по 60 с кружком 20 и сноска, всё с зазором 14;
+ * два действия во всю ширину внизу, главное сверху.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ПОЧЕМУ СВОЙ ЛИСТ, А НЕ ОБЩИЙ `MobileSheet`
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Общий лист — это целый экран со своим адресом: он занимает `h-svh` и
+ * закрывается возвратом в историю. Здесь лист лежит поверх карточки, внутри
+ * кадра 390 × 844, и закрывается состоянием карточки. В `h-svh` он уехал бы
+ * за нижний край рамки стенда — ровно та же причина, по которой свой лист
+ * собран в экранах поиска.
+ *
+ * **Хват тянется пальцем, а не притворяется.** Полоска 36 × 5 обещает, что
+ * лист можно смахнуть; лист, который на это не отвечает, человек считает
+ * сломанным. Порог 96 — примерно четверть высоты листа; ниже него лист
+ * возвращается на место за 200 мс.
+ *
+ * **Отмена стоит второй кнопкой, а не крестиком.** Смена чужого лимита —
+ * решение о чужих деньгах, и выйти из него нужно так же явно, как войти.
+ */
+function LimitSheet({
+  person,
+  limit,
+  onSave,
+  onClose,
+}: {
+  /** Чей лимит меняют. Имя стоит в заголовке: лимит не бывает «вообще». */
+  person: string
+  limit: number | null
+  onSave: (limit: number | null) => void
+  onClose: () => void
+}) {
+  const [chosen, setChosen] = useState<number | null>(limit)
+
+  const [drag, setDrag] = useState<number | null>(null)
+  const [arrived, setArrived] = useState(false)
+  const startRef = useRef(0)
+
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    startRef.current = event.clientY
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDrag(0)
+  }
+
+  // Тянуть можно только вниз: растянутого на пол-экрана листа в файле нет.
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (drag === null) return
+    setDrag(Math.max(0, event.clientY - startRef.current))
+  }
+
+  const onPointerUp = () => {
+    if (drag === null) return
+    if (drag > 96) onClose()
+    setDrag(null)
+  }
+
+  return (
+    <div
+      data-slot="limit-sheet-scrim"
+      // Затемнение только проявляется, без сдвига: приезжать здесь положено
+      // листу, а фону — гаснуть.
+      className="scrim-in absolute inset-0 z-10 flex flex-col justify-end bg-[#1e1e1e59]"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Дневной лимит раскрытий"
+        data-slot="limit-sheet"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        // Приезд снимается сразу по окончании: анимация с `fill-mode: both`
+        // держала бы `transform` навсегда, и лист перестал бы слушаться пальца.
+        onAnimationEnd={(event) => {
+          if (event.currentTarget === event.target) setArrived(true)
+        }}
+        style={
+          drag === null ? undefined : { transform: `translateY(${drag}px)`, transition: "none" }
+        }
+        className={cn(
+          "flex w-full touch-none flex-col gap-5 rounded-t-3xl bg-surface px-5 pt-3 pb-8",
+          arrived ? "transition-transform duration-200" : "sheet-in",
+        )}
+      >
+        <div className="flex w-full justify-center">
+          <span aria-hidden className="h-[5px] w-9 shrink-0 rounded-full bg-line-2" />
+        </div>
+
+        {/* Текст, выбор и сноска идут одной группой с зазором 14, а зазор 20
+            остаётся между группой, хватом и рядом действий. Так в кадре. */}
+        <div className="flex w-full flex-col gap-3.5">
+          <Typography variant="panelTitle" tone="default" as="h2">
+            <>{`Дневной лимит · ${person}`}</>
+          </Typography>
+          <Typography variant="uiText" tone="secondary">
+            <>
+              {`Сколько контактов агент может раскрыть за сутки. Счётчик обнуляется в 00:00, неизрасходованное не переносится. Сейчас ${dailyLimitWord(limit)}.`}
+            </>
+          </Typography>
+
+          <div
+            role="radiogroup"
+            aria-label="Дневной лимит раскрытий"
+            className="flex w-full flex-col gap-2"
+          >
+            {DAILY_LIMITS.map((option) => {
+              const active = option.value === chosen
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-slot="daily-limit-option"
+                  // Отклик на нажатие, а не на отпускание: выбор виден в тот
+                  // момент, когда палец коснулся строки.
+                  onPointerDown={() => setChosen(option.value)}
+                  // Строка 60 против 56 на большом экране: сюда попадают
+                  // пальцем. Граница собрана внутренней тенью, иначе рамка
+                  // добавила бы 61-й пиксель.
+                  className={cn(
+                    "row-tap flex h-15 w-full cursor-pointer items-center gap-3 rounded-lg px-4 text-left",
+                    "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+                    active
+                      ? "bg-warm shadow-[inset_0_0_0_1px_var(--border-control)]"
+                      : "bg-surface shadow-[inset_0_0_0_1px_var(--line-2)]",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-5 shrink-0 rounded-full border",
+                      active ? "border-fg bg-fg" : "border-line-3 bg-surface",
+                    )}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <Typography variant={active ? "controlLabel" : "uiText"} tone="default">
+                      <>{option.label}</>
+                    </Typography>
+                    <Typography variant="denseText" tone="dense">
+                      <>{option.note}</>
+                    </Typography>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Сноска на телефоне короче, чем на большом экране, — так в кадре.
+              Потолок дня в рублях дописан к ней и пересчитывается на каждое
+              нажатие: лимит здесь про чужие деньги, а не про число строк. */}
+          <Typography variant="metaText" tone="dense">
+            <>
+              {`Без лимита стоит снимать осознанно: каждое раскрытие тратит общий счёт агентства. ${dailyLimitCost(chosen)}`}
+            </>
+          </Typography>
+        </div>
+
+        <div className="flex w-full flex-col gap-2">
+          <Button variant="primary" size="lg" block onClick={() => onSave(chosen)}>
+            Сохранить лимит
+          </Button>
+          <Button variant="quiet" size="lg" block onClick={onClose}>
+            Отмена
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * МОБАЙЛ · Карточка сотрудника (`yDYOE`).
  *
  * Экран отвечает на один вопрос руководителя: что этот человек сделал
  * за месяц и стоит ли менять ему лимит. Поэтому вся середина — столбик
  * чисел, а два действия внизу прижаты к краю кадра распоркой.
+ *
+ * **Ответ на этот вопрос теперь можно дать не выходя с экрана.** «Изменить
+ * лимит» открывает лист `mCblr` поверх карточки: столбик чисел остаётся
+ * за затемнением, и решение принимается рядом с тем, из-за чего оно принято.
  *
  * **Возврата стрелкой здесь нет — есть слово «К списку».** На телефоне
  * в карточку приходят из списка сотрудников, и слово говорит, куда
@@ -232,6 +422,23 @@ export function MobilePersonPage() {
   const navigate = useNavigate()
 
   const person = workspace.people.find((item) => item.role === "agent")
+
+  /** Открыт ли лист смены лимита. */
+  const [sheet, setSheet] = useState(false)
+
+  /**
+   * Лимит, поменянный в этом сеансе.
+   *
+   * `undefined` — не трогали, и тогда показывается то, что лежит в журнале.
+   * Отличать «не трогали» от «поставили без лимита» приходится третьим
+   * значением: `null` здесь занят и означает именно безлимит.
+   *
+   * Записать выбор некуда: порта «поставить сотруднику лимит» в слое работы
+   * пока нет. Поэтому строка под именем меняется сразу, а плашки «сохранено»
+   * нет — врать о записи на сервер нечем.
+   */
+  const [limit, setLimit] = useState<number | null | undefined>(undefined)
+  const shownLimit = limit === undefined ? (person?.limit ?? null) : limit
 
   return (
     <PersonScreen
@@ -277,7 +484,7 @@ export function MobilePersonPage() {
                 {person.name}
               </Typography>
               <Typography variant="denseText" tone="dense">
-                {roleAndLimit(person)}
+                {roleAndLimit(person, shownLimit)}
               </Typography>
             </div>
           </div>
@@ -324,18 +531,13 @@ export function MobilePersonPage() {
           <div className="flex-1" />
 
           {/*
-            Оба действия названы в `data-action` и ничего не открывают: ни выбора
-            лимита, ни подтверждения отключения в файле не нарисовано. Придумать
-            их здесь значило бы придумать дизайн, а отключение сотрудника — не то
-            место, где угадывают: человек теряет доступ к общему счёту.
+            «Изменить лимит» открывает лист `mCblr`. «Отключить» по-прежнему
+            только названо: подтверждения отключения в файле не нарисовано,
+            а отключение сотрудника — не то место, где угадывают: человек
+            теряет доступ к общему счёту.
           */}
           <div className="flex w-full shrink-0 flex-col gap-4">
-            <Button
-              variant="primary"
-              size="lg"
-              block
-              data-action="Меняет дневной лимит раскрытий у сотрудника"
-            >
+            <Button variant="primary" size="lg" block onClick={() => setSheet(true)}>
               Изменить лимит
             </Button>
             {/*
@@ -357,6 +559,20 @@ export function MobilePersonPage() {
           </div>
         </div>
       )}
+
+      {/* Лист лежит поверх кадра абсолютом, а не внутри прокручиваемого тела:
+          затемнение обязано накрыть и шапку, и нижнюю навигацию. */}
+      {person !== undefined && sheet ? (
+        <LimitSheet
+          person={person.name}
+          limit={shownLimit}
+          onClose={() => setSheet(false)}
+          onSave={(next) => {
+            setLimit(next)
+            setSheet(false)
+          }}
+        />
+      ) : null}
     </PersonScreen>
   )
 }

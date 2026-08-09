@@ -1,4 +1,5 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router"
+import { RefundSentSheet } from "@/money-confirmations"
 import { useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 import {
@@ -15,10 +16,10 @@ import {
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
-import { useSession, useSessionActions } from "@/features/auth"
+import { DISCLOSURE_PRICE, useSession, useSessionActions } from "@/features/auth"
 import { MobileBottomNav, MobileEmptyState, MobileHeader, MobileSectionHeader, PhoneFrame } from "@/features/cabinet"
 import { ListingPhoto, MarketDeviation, photoFor, plural } from "@/features/listings"
-import { notifyDone, notifyError } from "@/platform/notify"
+import { notifyError } from "@/platform/notify"
 import {
   callbacksDue,
   formatDay,
@@ -517,6 +518,20 @@ const REMIND_DAYS: Record<string, number> = {
 
 export function MobileRecordPage() {
   const [outcome, setOutcome] = useState("meeting")
+
+  /**
+   * Возврат денег показывается ОКНОМ, а не всплывающим сообщением.
+   *
+   * Так записано в `platform/notify` и записано не из вкуса: сообщение
+   * живёт четыре секунды и уезжает. Деньги вернулись на общий счёт
+   * агентства — это факт, который человек обязан увидеть целиком
+   * и по своей воле закрыть, а не поймать краем глаза.
+   *
+   * Кадр `m0ATRJ`.
+   */
+  const [refundDone, setRefundDone] = useState<
+    { amount: number; address: string; objective: boolean } | null
+  >(null)
   const [answered, setAnswered] = useState("Собственник")
   const [remind, setRemind] = useState("через 3 дня")
   const navigate = useNavigate()
@@ -572,8 +587,9 @@ export function MobileRecordPage() {
     // заплатили, а собственника на том конце не оказалось. Деньги возвращает
     // та же единственная дверь, что и везде, с той же проверкой.
     if (outcome === "agent") {
-      const returned = actions.refund(at, "Ответил не собственник", true)
-      if (returned === "ok") notifyDone("Вернули 199 ₽ на счёт агентства")
+      const returned = actions.refund(at, "Ответил не собственник", false)
+      if (returned === "ok")
+        setRefundDone({ amount: DISCLOSURE_PRICE, address: at, objective: false })
       else if (returned === "already") notifyError("За этот контакт возврат уже брали")
     }
 
@@ -728,6 +744,15 @@ export function MobileRecordPage() {
           Сохранить
         </Button>
       </div>
+      {/* Возврат денег — лист, а не сообщение: см. `refundDone` выше. */}
+      {refundDone === null ? null : (
+        <RefundSentSheet
+          amount={refundDone.amount}
+          address={refundDone.address}
+          objective={refundDone.objective}
+          onClose={() => setRefundDone(null)}
+        />
+      )}
     </PhoneStand>
   )
 }
