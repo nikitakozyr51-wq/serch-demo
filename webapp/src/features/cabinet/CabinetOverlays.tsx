@@ -129,6 +129,9 @@ function CabinetOverlays() {
 
   return (
     <>
+      {/* Обучение первого входа. Стоит здесь, вместе с палитрой и картой
+          клавиш: те же два каркаса, тот же слой поверх любого экрана. */}
+
       {palette.mounted ? (
         <CommandPalette leaving={palette.leaving} onClose={() => setOpen("none")} />
       ) : null}

@@ -1,7 +1,8 @@
 import { Outlet, useRouterState } from '@tanstack/react-router'
 import { MotionConfig } from 'motion/react'
 
-import { usePlatformRoute } from '@/features/cabinet'
+import { usePlatformRoute, useOverlayOpen } from '@/features/cabinet'
+import { TourOverlay } from '@/features/tour'
 import { Notices } from '@/platform/notify'
 
 /**
@@ -19,6 +20,22 @@ import { Notices } from '@/platform/notify'
  */
 export function RootLayout() {
   usePlatformRoute()
+
+  /**
+   * Обучение живёт в корне, а не в каркасе кабинета.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Сначала оно стояло рядом с палитрой и картой клавиш — и пропадало
+   * на «Прозвоне»: тот экран полноэкранный и каркаса кабинета не несёт
+   * вовсе. Обучение обрывалось ровно на четырнадцатом шаге, который про
+   * прозвон и рассказывает.
+   *
+   * Здесь же оно переживает и смену экрана: шаги уводят человека по
+   * разделам, а окно обязано ехать вместе с ним, а не пересоздаваться
+   * на каждом адресе.
+   */
+  const overlayOpen = useOverlayOpen()
 
   /**
    * Смена экрана: проявление 160 мс.
@@ -68,6 +85,11 @@ export function RootLayout() {
       {/* Полка сообщений вне ключа: она обязана пережить смену экрана.
           Внутри она исчезала бы вместе с ним — «Скопировано» гасло бы
           ровно в тот момент, когда прозвон переходит к следующему объекту. */}
+      {/* Обучение молчит, пока открыто окно: палитра, карта клавиш или
+          диалог уже держат внимание, и второй слой поверх них — помеха.
+          Вне ключа адреса: шаги уводят по разделам, и окно едет с человеком. */}
+      <TourOverlay blocked={overlayOpen} />
+
       <Notices />
     </MotionConfig>
   )

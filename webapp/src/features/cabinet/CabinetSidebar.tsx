@@ -202,7 +202,9 @@ function CabinetSidebar({
       {/* Значки снизу другие и мельче: сохранённый поиск помечается воронкой,
           поиск агентства — людьми. Размер 14 против 16 у главных пунктов. */}
       {savedSearches === undefined ? null : (
-        <>
+        // Обёртка со своей меткой: обучение подсвечивает блок целиком —
+        // заголовок вместе со строками, — а не первую строку из него.
+        <div data-slot="saved-searches" className="flex w-full flex-col">
           <SectionLabel label="Сохранённые поиски" onAdd={onAddSearch} />
           {savedSearches.map((entry) => (
             <NavItem
@@ -213,7 +215,7 @@ function CabinetSidebar({
               onSelect={onSelect}
             />
           ))}
-        </>
+        </div>
       )}
 
       {agencySearches === undefined ? null : (

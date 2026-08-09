@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router"
+import { restartTour } from "@/features/tour"
 import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useRef, useState } from "react"
 
@@ -189,6 +190,21 @@ function AvatarMenu({ initials }: { initials: string }) {
           </MenuRow>
           <MenuRow to="/profile/login-policy" onClick={() => setOpen(false)}>
             Политика входа
+          </MenuRow>
+          {/*
+            Обучение зовётся отсюда, и это обещано в самом обучении:
+            последнее его окно говорит «позвать снова можно из меню
+            с вашими инициалами». Один раз и навсегда — ловушка: первый
+            вход человек часто проходит невнимательно, а второго шанса
+            у него до этой правки не было вовсе.
+          */}
+          <MenuRow
+            onClick={() => {
+              setOpen(false)
+              restartTour()
+            }}
+          >
+            Пройти обучение заново
           </MenuRow>
 
           <span aria-hidden className="my-1 h-px w-full bg-line-2" />
