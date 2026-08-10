@@ -182,7 +182,12 @@ const buttonVariants = cva(
           "bg-fg text-surface",
           "mouse:hover:bg-accent-deep active:bg-fg-press",
           "data-[demo=hover]:bg-accent-deep data-[demo=press]:bg-fg-press",
-          "focus-visible:outline-offset-2 data-[demo=focus]:outline-offset-2",
+          // Кольцо двойное, как у `primary`: сначала зазор 2 px фоном, затем
+          // 2 px графитом. Графитовое кольцо вплотную к графитовой кнопке
+          // сливается с ней и фокуса не показывает вовсе — зазор и делает
+          // его видимым. Замер доски: `2px #f9f9f9`, то есть цвет `bg`.
+          "focus-visible:outline-offset-2 focus-visible:shadow-[0_0_0_2px_var(--bg)]",
+          "data-[demo=focus]:outline-offset-2 data-[demo=focus]:shadow-[0_0_0_2px_var(--bg)]",
           "disabled:bg-warm disabled:text-text-dense",
         ],
         /**
