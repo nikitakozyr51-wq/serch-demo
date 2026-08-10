@@ -43,8 +43,8 @@ test('снимки: полигон контролов', async ({ page }) => {
   await mkdir(shotsDir, { recursive: true })
 
   await shoot('controls.png', (path) => page.locator('section').first().screenshot({ path }))
-  await shoot('button-primary.png', (path) =>
-    page.locator('[data-check="primary-48|rest"] [data-slot="button"]').screenshot({ path }),
+  await shoot('button-row-money.png', (path) =>
+    page.locator('[data-check="row-money-48|rest"] [data-slot="button"]').screenshot({ path }),
   )
   await shoot('listing-row.png', (path) =>
     page.locator('[data-check="listing-row|rest"]').screenshot({ path }),

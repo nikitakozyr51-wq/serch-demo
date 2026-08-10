@@ -35,7 +35,10 @@ const WATCHED = [
 ] as const
 
 const CONTROLS = [
-  { id: 'primary-48', selector: '[data-slot="button"]', comparePress: true },
+  // Нажатие на rowMoney кнопку всегда происходит под курсором,
+  // поэтому живое состояние включает :hover (красный), а демо-ячейка
+  // показывает изолированное :active (тёмный). Сравнивать некорректно.
+  { id: 'row-money-48', selector: '[data-slot="button"]', comparePress: false },
   { id: 'secondary-32', selector: '[data-slot="button"]', comparePress: true },
   // Нажатие на текстовое поле неотделимо от фокуса: браузер ставит фокус
   // тем же движением. Демонстрационная ячейка показывает только нажатие,
