@@ -1024,7 +1024,7 @@ function SearchScreenBody({
    * уже пуст — для этого случая в `platform/motion` лежит `useExitValue`:
    * он придерживает последнее непустое значение ровно на время ухода.
    */
-  const filters = useExit(open, 200)
+  const filters = useExit(open)
   const address = useExit(addressOpen)
   const picker = useExitValue(picking)
   const collectPicker = useExitValue(collecting)

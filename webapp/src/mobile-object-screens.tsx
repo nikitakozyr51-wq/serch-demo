@@ -1133,7 +1133,9 @@ export function MobileTakenByColleaguesPage() {
                   </Typography>
                 </Link>
               </div>
-              <Typography variant="denseText" tone="dense">
+              {/* Одна строка всегда: заметка в файле набрана строкой
+                  любой длины, перенос — то самое «разбрасывание». */}
+              <Typography variant="denseText" tone="dense" truncate>
                 {row.trace}
               </Typography>
             </div>

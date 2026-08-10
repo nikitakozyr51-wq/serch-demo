@@ -54,7 +54,7 @@ const ENOUGH = 8
 function MarketDeviation({ percent, comparables }: MarketDeviationProps) {
   if (comparables !== undefined && comparables < ENOUGH) {
     return (
-      <span data-slot="market-deviation" data-band="unknown" className="inline-flex h-5 items-center">
+      <span data-slot="market-deviation" data-band="unknown" className="inline-flex h-5 items-center whitespace-nowrap">
         <Typography variant="metaText" tone="dense">
           мало данных
         </Typography>
@@ -67,7 +67,7 @@ function MarketDeviation({ percent, comparables }: MarketDeviationProps) {
 
   if (isNeutral) {
     return (
-      <span data-slot="market-deviation" data-band="neutral" className="inline-flex h-5 items-center">
+      <span data-slot="market-deviation" data-band="neutral" className="inline-flex h-5 items-center whitespace-nowrap">
         <Typography variant="metaText" tone="dense">
           ≈ рынок
         </Typography>
@@ -81,7 +81,11 @@ function MarketDeviation({ percent, comparables }: MarketDeviationProps) {
     <span
       data-slot="market-deviation"
       data-band={isCheaper ? "cheaper" : "pricier"}
-      className="inline-flex h-5 items-center gap-1"
+      // Перенос здесь запрещён: в тесной строке чип уступает место целиком
+      // (лестница в `index.css`, `.deviation-shrink`), а не разваливается
+      // значением на две строки — как в файле, где переполненная строка
+      // оставляет один глиф.
+      className="inline-flex h-5 items-center gap-1 whitespace-nowrap"
     >
       <Typography variant="metaStrong" tone={tone}>
         {isCheaper ? "▼" : "▲"}

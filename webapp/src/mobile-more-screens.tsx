@@ -207,7 +207,10 @@ function MobileSettingRow({
               <StateChip tone={chip.tone}>{chip.label}</StateChip>
             )}
             {note === undefined ? null : (
-              <Typography variant="denseText" tone="dense">
+              /* Подпись в одну строку всегда — как в файле, где подпись
+                  набрана строкой и обрезается, а не переносится. На 320
+                  и 360 перенос подписи разваливал строку настройки. */
+              <Typography variant="denseText" tone="dense" truncate>
                 {note}
               </Typography>
             )}

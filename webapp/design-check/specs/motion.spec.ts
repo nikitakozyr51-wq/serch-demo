@@ -43,9 +43,17 @@ import { seedSession } from '../lib/session'
  * и они прямо названы ловушкой.
  */
 
-/** Диапазон кабинета в секундах. Ниже — подмена кадра, выше — порог Нильсена. */
+/**
+ * Диапазон кабинета в секундах.
+ *
+ * Ниже 0,12 — подмена кадра, движения не видно вовсе. Верхняя граница 0,26 —
+ * роль «Окно» из `docs/MOTION.md`: окно приезжает и уходит одним числом, и это
+ * число больше прежних 0,2. Владелец снял ограничение спеки после того, как
+ * назвал прежнее движение «неплавным»; сама граница осталась, потому что
+ * агент делает тридцать-пятьдесят переходов за смену.
+ */
 const MIN_S = 0.12
-const MAX_S = 0.2
+const MAX_S = 0.26
 
 /**
  * Кадры, объявленные в `index.css`.
@@ -215,6 +223,8 @@ test('окна приезжают переходом, а не подменой �
     }, selector)
 
   const shown: { name: string; selector: string }[] = []
+  /** Длительность прихода по узлам — с ней потом сверяется уход. */
+  const entered = new Map<string, number>()
 
   // Палитра открывается с клавиатуры на любом экране кабинета.
   await page.keyboard.press('Control+k')
@@ -244,6 +254,7 @@ test('окна приезжают переходом, а не подменой �
         `${node.name}: длительность ${animation.seconds} s вне диапазона кабинета ${MIN_S}–${MAX_S} s`,
       )
     }
+    entered.set(node.name, animation.seconds)
   }
 
   /**
@@ -282,6 +293,28 @@ test('окна приезжают переходом, а не подменой �
     failures.push('затемнение палитры: узел снят сразу, ухода нет')
   } else if (!leaving.endsWith('-out')) {
     failures.push(`затемнение палитры: при закрытии играет «${leaving}», а не кадр ухода`)
+  } else {
+    /*
+      ПРИХОД РАВЕН УХОДУ — правило роли «Окно» из `docs/MOTION.md`.
+
+      Это ровно тот дефект, который владелец назвал «уход фильтра выглядит
+      странно»: затемнение гасло за 0,12 с, а панель уезжала за 0,2, и последние
+      восемь сотых панель ехала по уже светлому экрану. Никто этого не задумывал
+      — просто затемнение и панель писали в разное время и числа не сверили.
+
+      Проверка сверяет их теперь вместо человека.
+    */
+    const exitSeconds = await page.evaluate(() => {
+      const node = document.querySelector('[data-slot="palette-scrim"]')
+      return node === null ? null : Number.parseFloat(getComputedStyle(node).animationDuration)
+    })
+    const enterSeconds = entered.get('затемнение палитры')
+
+    if (exitSeconds !== null && enterSeconds !== undefined && exitSeconds !== enterSeconds) {
+      failures.push(
+        `затемнение палитры: приход ${enterSeconds} s против ухода ${exitSeconds} s — у окна это одно число`,
+      )
+    }
   }
 
   expect(failures, failures.join('\n')).toEqual([])

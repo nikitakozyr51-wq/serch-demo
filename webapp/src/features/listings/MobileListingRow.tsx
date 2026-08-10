@@ -142,16 +142,22 @@ function MobileListingRow({
             {takenBy && !blocked ? <OwnerAvatar initials={takenBy} /> : null}
           </div>
 
-          <div className="flex w-full items-center gap-3">
-            <Typography variant="rowPrice" tone="default">
+          <div className="flex w-full items-center gap-2 [container-type:inline-size]">
+            {/* Этаж 2. Цена не переносится и не сжимается никогда —
+                в файле она единственный защищённый факт строки. Зазор 8
+                снят с фактического межпозиционного зазора файла (~9.3),
+                а не с номинальных 12: при 12 платная строка с полным
+                чипом не собирается даже на 390. Остаток места забирает
+                распорка, чип уступает первым. */}
+            <Typography variant="rowPrice" tone="default" className="shrink-0 whitespace-nowrap">
               {price}
             </Typography>
             {blocked ? null : (
-              <div className="flex h-6 items-center">
+              <div className="deviation-shrink flex h-6 shrink-0 items-center overflow-hidden">
                 <MarketDeviation percent={deviation} />
               </div>
             )}
-            <div className="h-px flex-1" />
+            <div className="h-px min-w-0 flex-1" />
             {blocked ? (
               // Третий уровень закона цвета: нельзя. Тёплая заливка,
               // обводка, капсула — форма та же, что на компьютере.
