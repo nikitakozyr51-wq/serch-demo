@@ -87,9 +87,9 @@ const funnel = [
               <span class="text-15 order-1 font-medium text-text-2 lg:w-[190px] lg:shrink-0">
                 {row.name}
               </span>
-              <span class="order-3 h-2 w-full min-w-0 rounded-bar-lg bg-track-neutral lg:order-2 lg:flex-1">
+              <span class="order-3 h-2 w-full min-w-0 rounded-full bg-track-neutral lg:order-2 lg:flex-1">
                 <span
-                  class:list={['block h-2 rounded-bar-lg', row.money ? 'bg-fg' : 'bg-text-2']}
+                  class:list={['block h-2 rounded-full', row.money ? 'bg-fg' : 'bg-text-2']}
                   style={`width: ${((row.fill / track) * 100).toFixed(2)}%`}
                 />
               </span>
