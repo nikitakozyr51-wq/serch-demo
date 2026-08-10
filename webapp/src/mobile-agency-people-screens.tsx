@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { Fragment, useState } from "react"
-import { Mail, Users } from "lucide-react"
+import { ChevronRight, CreditCard, Mail, Users } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
@@ -715,6 +715,37 @@ export function MobilePlanPage() {
           >
             Перейти на расширенный
           </Button>
+        </div>
+
+        {/*
+          Строка «Управление подпиской» — узел `O1B63V`, заведён 10.08.2026.
+
+          Экран говорил, сколько подписка стоит и как перейти на дороже,
+          и молчал о том, как её остановить или сменить карту. Продукт
+          списывает 3 000 ₽ первого числа каждого месяца; экран, который
+          рассказывает про списание и не даёт его прекратить, — это не
+          недоделка, а неприятная особенность.
+
+          Своего экрана за строкой в файле нет: смена карты идёт через
+          платёжного провайдера, остановка автосписания — заявкой. Строка
+          называет действие и ничего не рисует.
+        */}
+        <div className="flex w-full shrink-0 items-center gap-3 border-t border-line-2 pt-4">
+          <span
+            aria-hidden
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-warm"
+          >
+            <CreditCard className="size-5 shrink-0 text-text-2" strokeWidth={2} />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <Typography variant="settingTitle" tone="default">
+              Управление подпиской
+            </Typography>
+            <Typography variant="denseText" tone="dense">
+              сменить карту · остановить автосписание
+            </Typography>
+          </span>
+          <ChevronRight aria-hidden className="size-5 shrink-0 text-text-dense" strokeWidth={2} />
         </div>
       </div>
     </PersonScreen>

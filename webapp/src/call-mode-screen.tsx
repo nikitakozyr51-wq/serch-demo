@@ -22,7 +22,15 @@ import {
   useWorkspace,
   type CallOutcome,
 } from "@/features/workspace"
-import { MarketDeviation, OwnerAvatar, ownerStrengthWord, plural } from "@/features/listings"
+import {
+  ListingPhoto,
+  MarketDeviation,
+  OwnerAvatar,
+  ownerStrengthWord,
+  photosFor,
+  PhotoViewer,
+  plural,
+} from "@/features/listings"
 
 /**
  * КАБИНЕТ · Режим «Прозвон».
@@ -273,6 +281,10 @@ export function CallModeScreenPage() {
   const address = queue[position] ?? OBJECT_ADDRESS
   const listing = ALL_ROWS.find((item) => item.address === address)
   const phone = queue.length === 0 ? PHONE : demoPhone(address)
+  /** Кадры объекта, по которому сейчас звонят. Меняются вместе с очередью. */
+  const callShots = photosFor(address, 12)
+  /** Открыт ли просмотрщик кадров. */
+  const [viewing, setViewing] = useState(false)
   /** Запись о списании по этому объекту: дата, сумма и кто раскрыл. */
   const paid = disclosureOf(workspace, address)
   /**
@@ -557,7 +569,41 @@ export function CallModeScreenPage() {
       <div className="flex min-h-0 flex-1">
         {/* Объект: один широкий кадр, факты в строку, номер и скрипт. */}
         <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-7">
-          <div className="h-76 w-full shrink-0 rounded-2xl bg-line-1" />
+          {/*
+            Кадр объекта, по которому звонят.
+
+            Здесь стоял пустой прямоугольник `bg-line-1` — серая плита на треть
+            экрана. Она была не заглушкой, а дырой: заглушка говорит, почему
+            снимка нет, а плита не говорила ничего. Причём именно в прозвоне
+            снимок нужнее всего: агент держит трубку и должен видеть, о какой
+            квартире говорит, — переспросить не у кого.
+
+            Кадр нажимается и открывает просмотрщик, как в карточке объекта:
+            в разговоре спрашивают про кухню и окна, и листать нужно быстро.
+          */}
+          <button
+            type="button"
+            data-slot="call-photo"
+            aria-label={`Открыть кадры объекта ${address}`}
+            disabled={callShots.length === 0}
+            onClick={() => setViewing(true)}
+            className="h-76 w-full shrink-0 cursor-pointer overflow-hidden rounded-2xl bg-transparent p-0 outline-none disabled:cursor-default focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          >
+            <ListingPhoto
+              src={callShots[0]}
+              alt={`Кадр объекта ${address}`}
+              size="large"
+              reason="no-photos"
+            />
+          </button>
+          {viewing ? (
+            <PhotoViewer
+              shots={callShots}
+              startAt={0}
+              address={address}
+              onClose={() => setViewing(false)}
+            />
+          ) : null}
 
           {/*
             Объект слева — ТОТ, ПО КОТОРОМУ ЗВОНЯТ.

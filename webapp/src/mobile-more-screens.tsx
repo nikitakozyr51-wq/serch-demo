@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
-  Pencil,
   Phone,
   RotateCcw,
   Rows3,
@@ -23,6 +22,7 @@ import { Link, useNavigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
+import { StateChip, type StateTone } from "@/components/controls/StateChip"
 import { Typography } from "@/components/typography"
 import { useSession, useSessionActions } from "@/features/auth"
 import type { DemoSession } from "@/features/auth"
@@ -59,9 +59,29 @@ type MobileSettingRoute =
   | "/m/change-password"
 
 /**
- * Строка настройки на телефоне (`ESvsw`): 64, зазор 12, значок 20 слева,
- * название 16 и подпись 13 колонкой с зазором 4, значок 20 справа,
- * волосяная линия снизу.
+ * Строка настройки на телефоне (`ESvsw`, 12 экземпляров): 358 × 64, зазор 12,
+ * плитка значка 40 слева, название 16/500 и подпись 13/500 колонкой с зазором 4,
+ * шеврон 20 справа, волосяная линия снизу.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ЗНАЧОК ЛЕЖИТ В КРУГЛОЙ ПЛИТКЕ, А НЕ ВИСИТ ГОЛЫМ ГЛИФОМ
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Приём взят у Т-Банка. Голый глиф 20 на белом читается как часть текста
+ * и теряется среди букв; плитка 40 даёт строке якорь, за который цепляется
+ * глаз, идущий сверху вниз по списку из десяти одинаковых строк. Плитка
+ * `warm` с радиусом капсулы, значок внутри 20 цветом `text-2`.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ПРАВЫЙ СЛОТ ОЗНАЧАЕТ РОВНО ОДНО — «ИДЁМ ГЛУБЖЕ»
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * И в нём стоит только `chevron-right`. Прежде там встречались карандаш,
+ * крестик и конверт — четыре значения одной позиции, и человек не мог
+ * научиться читать её ни за какое число заходов. Карандаш и конверт значили
+ * то же, что шеврон: «нажми, откроется». Крестик значил обратное — «закрыть
+ * чужой сеанс», то есть действие прямо здесь, без перехода. Он остаётся,
+ * но приходит через `trailing` собственным контролом, а не значком-знаком.
  *
  * **Подпись под названием обязательна и говорит текущее значение, а не
  * повторяет заголовок.** Не «Уведомления — настройка уведомлений», а
@@ -79,15 +99,37 @@ type MobileSettingRoute =
  * плашку вместо отсутствующего экрана нельзя.
  */
 type MobileSettingRowProps = {
-  /** Значок слева, 20, вторичным цветом. */
+  /** Значок слева, 20, в круглой плитке 40. */
   icon: LucideIcon
   title: string
   /** Текущее значение или последствие. У «Выйти» подписи нет — так в файле. */
   note?: string
-  /** Значок справа: шеврон, карандаш, конверт. Только знак, не контрол. */
-  trailingIcon?: LucideIcon
+  /**
+   * Справа стоит шеврон.
+   *
+   * Свойства «какой значок» больше нет: правая позиция означает «идём глубже»
+   * и ничего другого. Шеврон рисуется у любой строки, за которой есть экран,
+   * — то есть у всех, кроме `passive` и тех, у кого свой контрол в `trailing`.
+   */
   /** Собственный контрол справа — например крестик закрытия чужого сеанса. */
   trailing?: ReactNode
+  /**
+   * Опасная строка: плитка `err-tint`, значок и заголовок `err-text`.
+   * Геометрия та же — красным становится смысл, а не форма.
+   */
+  danger?: boolean
+  /**
+   * Состояние настройки чипом вместо слова в подписи.
+   *
+   * На экране уведомлений слово «включено» стояло в подписи трижды и съедало
+   * 29 % всех слов экрана. Оно к тому же ничего не добавляло: строка и так
+   * называет, о чём уведомление, а «включено» отвечало на вопрос, которого
+   * человек не задавал, — он спрашивает «как часто», а не «работает ли».
+   *
+   * Чип отвечает точкой, а подпись остаётся условием: не «включено, если вы
+   * его смотрели», а точка «Включено» плюс «если вы его смотрели».
+   */
+  chip?: { tone: StateTone; label: string }
   /** Название приглушено: так нарисовано «Выйти» — уход, а не переход. */
   quiet?: boolean
   /** Строка-факт, а не действие: своё устройство закрыть нельзя. */
@@ -104,8 +146,9 @@ function MobileSettingRow({
   icon: Icon,
   title,
   note,
-  trailingIcon: TrailingIcon,
+  chip,
   trailing,
+  danger = false,
   quiet = false,
   passive = false,
   to,
@@ -114,27 +157,56 @@ function MobileSettingRow({
 }: MobileSettingRowProps) {
   const body = (
     <>
-      <Icon aria-hidden className="size-5 shrink-0 text-text-2" strokeWidth={2} />
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-full",
+          danger ? "bg-err-tint" : "bg-warm",
+        )}
+      >
+        <Icon
+          className={cn("size-5 shrink-0", danger ? "text-err-text" : "text-text-2")}
+          strokeWidth={2}
+        />
+      </span>
       {/* Колонка выровнена влево явно: внутри кнопки текст иначе встал бы
           по центру и подпись разъехалась бы с названием. */}
       <span className="flex min-w-0 flex-1 flex-col gap-1 text-left">
-        <Typography variant="rowPrice" tone={quiet ? "secondary" : "default"}>
+        <Typography
+          variant="settingTitle"
+          tone={danger ? "destructive" : quiet ? "secondary" : "default"}
+        >
           {title}
         </Typography>
-        {note === undefined ? null : (
-          <Typography variant="denseText" tone="dense">
-            {note}
-          </Typography>
+        {note === undefined && chip === undefined ? null : (
+          <span className="flex items-center gap-2">
+            {chip === undefined ? null : (
+              <StateChip tone={chip.tone}>{chip.label}</StateChip>
+            )}
+            {note === undefined ? null : (
+              <Typography variant="denseText" tone="dense">
+                {note}
+              </Typography>
+            )}
+          </span>
         )}
       </span>
-      {TrailingIcon === undefined ? null : (
-        <TrailingIcon
-          aria-hidden
-          className="size-5 shrink-0 text-text-dense"
-          strokeWidth={2}
-        />
+      {/* Шеврон — единственный знак правой позиции, и стоит он там, где
+          за строкой правда есть экран. У строки-факта его нет: стрелка
+          в никуда обещала бы переход, которого не будет. Свой контрол
+          в `trailing` шеврон вытесняет — иначе в одной позиции окажутся
+          и «идём глубже», и действие прямо здесь. */}
+      {trailing === undefined ? (
+        passive ? null : (
+          <ChevronRight
+            aria-hidden
+            className="size-5 shrink-0 text-text-dense"
+            strokeWidth={2}
+          />
+        )
+      ) : (
+        <>{trailing}</>
       )}
-      {trailing === undefined ? null : <>{trailing}</>}
     </>
   )
 
@@ -251,13 +323,12 @@ type SettingRowSpec = MobileSettingRowProps & { id: string }
  */
 function moreRows(staff: number): SettingRowSpec[] {
   return [
-    { id: "profile", icon: User, title: "Профиль", note: "имя, телефон, почта", trailingIcon: ChevronRight, to: "/m/profile" },
+    { id: "profile", icon: User, title: "Профиль", note: "имя, телефон, почта", to: "/m/profile" },
     {
       id: "notifications",
       icon: Bell,
       title: "Уведомления",
       note: "сразу · раз в день утром · выключено",
-      trailingIcon: ChevronRight,
       to: "/m/notifications",
     },
     {
@@ -265,7 +336,6 @@ function moreRows(staff: number): SettingRowSpec[] {
       icon: Shield,
       title: "Безопасность и сеансы",
       note: "пароль, устройства, вход по коду",
-      trailingIcon: ChevronRight,
       to: "/m/security",
     },
     {
@@ -273,7 +343,6 @@ function moreRows(staff: number): SettingRowSpec[] {
       icon: Users,
       title: "Сотрудники",
       note: staffNote(staff),
-      trailingIcon: ChevronRight,
       to: "/m/agency/staff",
     },
     {
@@ -281,7 +350,6 @@ function moreRows(staff: number): SettingRowSpec[] {
       icon: FileText,
       title: "Согласия собственников",
       note: "запросы подтверждения и отказы от звонков",
-      trailingIcon: ChevronRight,
       to: "/m/agency/consents",
     },
     {
@@ -289,7 +357,6 @@ function moreRows(staff: number): SettingRowSpec[] {
       icon: ScrollText,
       title: "Журнал доступа",
       note: "кто и когда открывал контакты",
-      trailingIcon: ChevronRight,
       to: "/m/agency/access",
     },
   ]
@@ -405,7 +472,6 @@ function profileRows(session: DemoSession | null): SettingRowSpec[] {
       icon: User,
       title: session?.name ?? "",
       note: session === null ? "" : session.role === "agent" ? "агент агентства" : "руководитель агентства",
-      trailingIcon: Pencil,
       action: "Изменить имя",
     },
     {
@@ -413,7 +479,6 @@ function profileRows(session: DemoSession | null): SettingRowSpec[] {
       icon: Phone,
       title: "—",
       note: "рабочий телефон",
-      trailingIcon: Pencil,
       action: "Изменить рабочий телефон",
     },
     {
@@ -421,7 +486,6 @@ function profileRows(session: DemoSession | null): SettingRowSpec[] {
       icon: Mail,
       title: session?.email ?? "",
       note: "почта, на неё приходят уведомления",
-      trailingIcon: Pencil,
       action: "Изменить почту",
     },
     {
@@ -429,7 +493,6 @@ function profileRows(session: DemoSession | null): SettingRowSpec[] {
       icon: Rows3,
       title: "Просторно",
       note: "плотность интерфейса, строка 88",
-      trailingIcon: ChevronRight,
       action: "Выбрать плотность интерфейса",
     },
     {
@@ -437,7 +500,6 @@ function profileRows(session: DemoSession | null): SettingRowSpec[] {
       icon: LayoutDashboard,
       title: "Сегодня",
       note: "стартовый экран при входе",
-      trailingIcon: ChevronRight,
       action: "Выбрать стартовый экран",
     },
   ]
@@ -485,40 +547,37 @@ const NOTIFICATION_ROWS: SettingRowSpec[] = [
     id: "saved-searches",
     icon: Bell,
     title: "Новые по сохранённым поискам",
-    note: "сразу",
-    trailingIcon: ChevronRight,
+    chip: { tone: "ok", label: "Сразу" },
     action: "Выбрать, как часто приходят новые по сохранённым поискам",
   },
   {
     id: "channel",
     icon: Send,
     title: "Канал уведомлений",
-    note: "e-mail",
-    trailingIcon: ChevronRight,
+    chip: { tone: "ok", label: "E-mail" },
     action: "Выбрать канал уведомлений",
   },
   {
     id: "colleague",
     icon: Users,
     title: "Коллега взял объект",
-    note: "включено, если вы его смотрели",
-    trailingIcon: ChevronRight,
+    chip: { tone: "ok", label: "Включено" },
+    note: "если вы его смотрели",
     action: "Выбрать, когда сообщать, что коллега взял объект",
   },
   {
     id: "refund",
     icon: RotateCcw,
     title: "Ответ по заявке на возврат",
-    note: "включено",
-    trailingIcon: ChevronRight,
+    chip: { tone: "ok", label: "Включено" },
     action: "Выбрать, сообщать ли ответ по заявке на возврат",
   },
   {
     id: "balance",
     icon: Wallet,
     title: "Баланс заканчивается",
-    note: "включено, меньше десяти раскрытий",
-    trailingIcon: ChevronRight,
+    chip: { tone: "ok", label: "Включено" },
+    note: "меньше десяти раскрытий",
     action: "Выбрать, когда предупреждать о конце баланса",
   },
 ]
@@ -624,7 +683,6 @@ export function MobileSecurityPage() {
             icon={KeyRound}
             title="Пароль"
             note="смена завершит остальные сеансы"
-            trailingIcon={ChevronRight}
             to="/m/change-password"
           />
 
@@ -659,7 +717,6 @@ export function MobileSecurityPage() {
             icon={Mail}
             title="Подтверждение входа по коду"
             note="код из письма при входе с нового устройства"
-            trailingIcon={Mail}
             action="Настроить подтверждение входа по коду"
           />
         </div>
@@ -735,12 +792,15 @@ export function MobileChangePasswordPage() {
 
         <div className="flex-1" />
 
-        {/* Сноска внизу, а не рядом с кнопкой: это правило продукта,
-            одинаковое для всех агентств, и менять его человек не может. */}
-        <Typography variant="metaText" tone="dense">
-          Пять попыток входа подряд, потом пауза пятнадцать минут. Так настроено для всех
-          агентств и не меняется.
-        </Typography>
+        {/*
+          Сноски про пять попыток входа здесь больше нет — узел `Fqyr2`
+          выключен 10.08.2026.
+
+          Правило верное, но принадлежит оно экранам ВХОДА: там человек
+          ошибается паролем и упирается в паузу. На экране смены пароля он
+          уже вошёл, и предупреждение о блокировке входа читается угрозой
+          ни за что. Экран стал короче на 117 знаков и не потерял ничего.
+        */}
       </div>
     </div>
   )

@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/controls/Button"
+import { StateChip } from "@/components/controls/StateChip"
 import { Typography } from "@/components/typography"
 import { ALL_ROWS } from "@/data/search-rows"
 import { DISCLOSURE_PRICE, useSession, useSessionActions } from "@/features/auth"
@@ -173,16 +174,20 @@ type TodayCard = {
   price: string
   deviation: number
   address: string
-  meta: string
-  /** Что уже было с этим объектом: касания, чужие обещания, запрет. */
-  touch: string
-  /** Когда звонить. Пустая строка не бывает: без срока карточке здесь нечего делать. */
+  /**
+   * Когда звонить. Пустой не бывает: без срока карточке здесь нечего делать.
+   *
+   * Больше в строке нет ничего. Район, метраж, история касаний и причина
+   * запрета из неё убраны 10.08.2026 — узлы `q88FvG`, `F3IjI`, `egeHF`,
+   * `h3T5o`, `v319Qd` выключены в файле. Все эти факты живут на карточке
+   * объекта, куда человек и так зайдёт перед звонком; в списке дня они
+   * растили строку вдвое и отвечали на вопросы, которых человек, глядя
+   * на очередь обзвона, не задаёт.
+   */
   due: string
   dueTone: "default" | "secondary" | "warn"
   /** Звонить запрещено — собственник в стоп-листе агентства. */
   blocked?: boolean
-  /** Почему запрещено. Только у заблокированной карточки. */
-  reason?: string
 }
 
 /**
@@ -208,25 +213,18 @@ function buildCards(workspace: Workspace, now: number, mine: string): TodayCard[
     (item) => !due.some((call) => call.address === item.address),
   )
 
-  const cardFor = (address: string, touch: string, due: string, tone: TodayCard["dueTone"]) => {
+  const cardFor = (address: string, _touch: string, due: string, tone: TodayCard["dueTone"]) => {
     const row = ALL_ROWS.find((item) => item.address === address)
     const blocked = workspace.stopList.includes(address)
     return {
       price: row?.price ?? "—",
       deviation: row?.deviation ?? 0,
       address,
-      // Мета собирается из полей строки, а не из её продажной `meta`:
-      // на 390 в неё не влезают ни свежесть, ни площадка.
-      meta: row ? `${row.metro} · ${row.rooms}-к · ${row.area} м²` : "",
-      touch: blocked ? "Собственник просил не звонить" : touch,
-      due: blocked ? "стоп-лист" : due,
+      // У заблокированного срока нет: звонить нельзя вовсе, и вместо времени
+      // справа встаёт чип «Стоп-лист» — состояние, а не обещание.
+      due: blocked ? "" : due,
       dueTone: blocked ? ("secondary" as const) : tone,
-      ...(blocked
-        ? {
-            blocked: true,
-            reason: "Собственник просил не звонить — стоп-лист агентства",
-          }
-        : {}),
+      ...(blocked ? { blocked: true } : {}),
     }
   }
 
@@ -271,81 +269,34 @@ function TodayCardRow({ card }: { card: TodayCard }) {
     <article
       data-slot="today-card"
       data-blocked={card.blocked || undefined}
-      className="flex w-full gap-3 rounded-2xl bg-surface px-3 py-2"
+      className="flex w-full items-center gap-3 bg-surface px-3 py-4 shadow-[inset_0_-1px_0_var(--line-1)] last:shadow-none"
     >
-      {/* Кадр 72 держит левую колонку. Ссылки на снимок у стенда нет,
-          и слот честно показывает, что фотографии нет, — это обычное
-          состояние объекта, а не сбой загрузки. */}
-      <div className="size-18 shrink-0 overflow-hidden rounded-lg outline-solid outline-1 -outline-offset-1 outline-line-2">
+      {/* Кадр 48 квадратом, радиус 12 — та же форма, что в строке выдачи.
+          Слот честно показывает, что фотографии нет: это обычное состояние
+          объекта, а не сбой загрузки. */}
+      <div className="size-12 shrink-0 overflow-hidden rounded-xl bg-warm outline-solid outline-1 -outline-offset-1 outline-line-2">
         <ListingPhoto src={photoFor(card.address)} alt={card.address} size="small" reason="no-photos" />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <Typography variant="rowPrice" tone="default">
+          <>{card.address}</>
+        </Typography>
+
         <div className="flex w-full items-center gap-2">
           <Typography variant="rowPrice" tone="default">
             <>{card.price}</>
           </Typography>
           <MarketDeviation percent={card.deviation} />
-        </div>
-
-        <Typography variant="strongText" tone="default">
-          <>{card.address}</>
-        </Typography>
-
-        <Typography variant="metaText" tone="dense">
-          <>{card.meta}</>
-        </Typography>
-
-        {/* История касаний идёт темнее меты: это не справка об объекте,
-            а то, из-за чего он сегодня в списке. */}
-        <Typography variant="metaText" tone="secondary">
-          <>{card.touch}</>
-        </Typography>
-
-        <div className="flex w-full items-center gap-2">
-          <Typography variant="metaStrong" tone={card.dueTone}>
-            <>{card.due}</>
-          </Typography>
           <div className="h-px flex-1" />
-
           {card.blocked ? (
-            // Кнопка остаётся на месте и не исчезает: пустое место
-            // читалось бы как «действие ещё не подгрузилось».
-            <span
-              data-slot="today-blocked"
-              className="flex h-11 shrink-0 items-center justify-center rounded-md bg-warm px-4 text-text-3 outline-solid outline-1 -outline-offset-1 outline-border-control"
-            >
-              <Typography variant="controlLabel" tone="current">
-                Звонок запрещён
-              </Typography>
-            </span>
+            <StateChip tone="danger">Стоп-лист</StateChip>
           ) : (
-            // Ссылка, а не кнопка: звонок открывает экран прозвона, и его надо
-            // уметь открыть в новой вкладке и вернуться назад браузером.
-            // Имя для читалки несёт адрес: четыре одинаковых «Позвонить»
-            // подряд в списке ссылок ничего не различают.
-            <Link
-              to="/m/call"
-              // Адрес уезжает параметром: без него прозвон открывался
-              // на объекте по умолчанию, то есть агент, нажавший «Позвонить»
-              // на четвёртой карточке, звонил по первой.
-              search={{ at: card.address }}
-              aria-label={`Позвонить: ${card.address}`}
-              data-slot="today-call"
-              className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-md bg-fg px-4 text-surface transition-colors duration-120 outline-none active:bg-fg-press focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-            >
-              <Typography variant="controlLabel" tone="current">
-                Позвонить
-              </Typography>
-            </Link>
+            <Typography variant="numericMeta" tone={card.dueTone}>
+              <>{card.due}</>
+            </Typography>
           )}
         </div>
-
-        {card.reason === undefined ? null : (
-          <Typography variant="metaText" tone="dense">
-            <>{card.reason}</>
-          </Typography>
-        )}
       </div>
     </article>
   )
@@ -365,6 +316,8 @@ export function MobileTodayPage() {
    * человеку показываем пустоту».
    */
   const cards = buildCards(workspace, now, session?.name ?? "")
+  /** Следующий в очереди: первый, по кому звонить не запрещено. */
+  const next = cards.find((card) => !card.blocked)
 
   return (
     <PhoneStand slot="mobile-today">
@@ -395,7 +348,9 @@ export function MobileTodayPage() {
             text="Сюда попадут перезвоны, назначенные в панели звонка, и объекты, взятые в работу. Начните с поиска: задайте район и цену."
           />
         ) : (
-          <div className="flex w-full flex-col gap-2">
+          /* Строки лежат на ОДНОЙ белой поверхности и разделены волосяной
+             линией — список, а не стопка карточек. */
+          <div className="flex w-full shrink-0 flex-col overflow-hidden rounded-2xl">
             {cards.map((card) => (
               <TodayCardRow key={card.address} card={card} />
             ))}
@@ -403,6 +358,38 @@ export function MobileTodayPage() {
         )}
 
         <div aria-hidden className="min-h-0 flex-1" />
+
+        {/*
+          ОДНА ТЁМНАЯ КНОПКА ВНИЗУ, А НЕ ПО КНОПКЕ В КАЖДОЙ СТРОКЕ.
+
+          ═══════════════════════════════════════════════════════════════════
+
+          Было четыре «Позвонить» в четырёх строках — то есть четыре
+          претендента на главное действие экрана, и ни одного главного.
+          Экран дня отвечает на вопрос «кому звонить сейчас», а не «кому
+          из четверых вы предпочтёте позвонить»: очередь уже выстроена
+          сверху вниз, и следующий в ней ровно один.
+
+          Кнопка называет его адресом, а не «Позвонить» вообще: человек
+          видит, кому попадёт, до нажатия. Прижата к низу распоркой —
+          туда достаёт большой палец.
+
+          Заблокированные объекты кнопку не получают: если весь список
+          в стоп-листе, звонить некому, и кнопки нет вовсе.
+        */}
+        {next === undefined ? null : (
+          <Link
+            to="/m/call"
+            search={{ at: next.address }}
+            data-slot="today-call"
+            aria-label={`Позвонить: ${next.address}`}
+            className="flex h-12 w-full shrink-0 cursor-pointer items-center justify-center rounded-full bg-fg px-4 text-surface transition-colors duration-120 outline-none active:bg-fg-press focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          >
+            <Typography variant="controlLabelLg" tone="current">
+              {`Позвонить · ${next.address}`}
+            </Typography>
+          </Link>
+        )}
       </div>
 
       {/* Нижнюю навигацию рисует постоянный каркас маршрута: она обязана

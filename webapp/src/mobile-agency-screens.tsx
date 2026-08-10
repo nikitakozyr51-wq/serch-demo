@@ -269,6 +269,7 @@ function AgencySettingRow({
   note,
   action,
   onPress,
+  danger = false,
   last = false,
 }: {
   icon: LucideIcon
@@ -279,6 +280,8 @@ function AgencySettingRow({
   action: string
   /** Открыть лист. Нет — значит экрана правки в файле не нарисовано. */
   onPress?: () => void
+  /** Опасная зона: плитка `err-tint`, значок и заголовок `err-text`. */
+  danger?: boolean
   last?: boolean
 }) {
   return (
@@ -294,9 +297,22 @@ function AgencySettingRow({
         !last && "border-b border-line-2",
       )}
     >
-      <Icon aria-hidden className="size-5 shrink-0 text-text-2" strokeWidth={2} />
+      {/* Плитка 40, как в `ESvsw`: значок в списке одинаковых строк нужен
+          якорем для глаза, а голый глиф 20 читается частью текста. */}
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-full",
+          danger ? "bg-err-tint" : "bg-warm",
+        )}
+      >
+        <Icon
+          className={cn("size-5 shrink-0", danger ? "text-err-text" : "text-text-2")}
+          strokeWidth={2}
+        />
+      </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <Typography variant="rowPrice" tone="default">
+        <Typography variant="settingTitle" tone={danger ? "destructive" : "default"}>
           {title}
         </Typography>
         <Typography variant="denseText" tone="dense">
@@ -804,6 +820,8 @@ type SettingsGroupData = {
     action: string
     /** Какой лист открывает. Пусто — листа в файле не нарисовано. */
     opens?: Exclude<OpenSheet, "none">
+    /** Опасная зона: плитка и заголовок цветом ошибки. */
+    danger?: boolean
   }[]
 }
 
@@ -936,6 +954,10 @@ function settingsGroups(values: {
           icon: Trash2,
           title: "Удаление агентства",
           note: "три рабочих дня · журнал хранится год",
+          // Красным становится смысл, а не форма: плитка `err-tint`, значок
+          // и заголовок `err-text`, геометрия строки та же. Строка не должна
+          // выглядеть иначе — она должна выглядеть опасной.
+          danger: true,
           action: "Запускает удаление агентства: три рабочих дня на отмену",
           opens: "delete",
         },
@@ -1063,6 +1085,7 @@ export function MobileAgencySettingsPage() {
                   title={row.title}
                   note={row.note}
                   action={row.action}
+                  danger={row.danger}
                   onPress={opens === undefined ? undefined : () => setSheet(opens)}
                   last={index === group.rows.length - 1}
                 />

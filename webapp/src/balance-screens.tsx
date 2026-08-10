@@ -168,11 +168,23 @@ function keyNumbers(workspace: Workspace, now: number, balance: number) {
       note: `${disclosed} ${plural(disclosed, "раскрытие", "раскрытия", "раскрытий")}`,
     },
     {
-      value: `${refunds.length} / ${groupDigits(returned)} ₽`,
+      /*
+        Только рубли — правка `lmGuS` от 10.08.2026.
+
+        Стояло «9 / 1 791 ₽»: штуки и рубли на одной шкале в ряду, где
+        три соседних числа — деньги. Глаз читает ряд как «8 610 ₽ ·
+        35 422 ₽ · 9 / 1 791 ₽ · 3 000 ₽» и спотыкается о четвёртую
+        величину, которой в ряду денег нет. Сколько заявок было — стоит
+        строкой ниже, в подписи, где оно и есть подробность.
+      */
+      value: `${groupDigits(returned)} ₽`,
       label: "возвращено за 30 дней",
       // Доля возвратов без раскрытий не существует: делить не на что, и
       // «0 %» соврало бы про качество базы. Прочерк честнее нуля.
-      note: disclosed > 0 ? `${Math.round((refunds.length / disclosed) * 100)} % раскрытий` : "—",
+      note:
+        disclosed > 0
+          ? `${refunds.length} ${plural(refunds.length, "заявка", "заявки", "заявок")} · ${Math.round((refunds.length / disclosed) * 100)} % раскрытий`
+          : `${refunds.length} ${plural(refunds.length, "заявка", "заявки", "заявок")}`,
     },
     {
       value: `${groupDigits(SUBSCRIPTION_PRICE)} ₽`,

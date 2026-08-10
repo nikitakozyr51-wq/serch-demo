@@ -4,6 +4,7 @@ import { useState } from "react"
 import type { MouseEvent, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
+import { StateChip } from "@/components/controls/StateChip"
 import { Typography } from "@/components/typography"
 import { DISCLOSURE_PRICE, useSession, useSessionActions } from "@/features/auth"
 import { MobileEmptyState, MobileScreen, MobileSectionHeader, MobileSheet } from "@/features/cabinet"
@@ -345,12 +346,16 @@ function OperationRow({
 }
 
 /**
- * Чип судьбы возврата: 24 / r-6 / 12 весом 500.
+ * Чип судьбы возврата.
+ *
+ * Обёртка над общим `StateChip`, а не своя фигура: до 10.08.2026 здесь была
+ * плашка с тинтовой заливкой и радиусом 6. Замер `xUogw` показал, что плашки
+ * у состояния нет ни в одном месте продукта — «Возвращено» это точка
+ * `ok-glyph` и слово `ok-text`, «В обработке» — `warn-glyph` и `warn-text`.
  *
  * Не `StatusChip`: у того набор подписей закрыт восемью состояниями объекта
- * («В работе», «Раскрыт», «Стоп-лист»…), а здесь состояние не объекта, а заявки
- * на деньги — «В обработке» и «Возвращено». Заливки и цвета подписи те же
- * токены `warn-tint`/`warn-text` и `ok-tint`/`ok-text`, что снято замером.
+ * («В работе», «Раскрыт», «Стоп-лист»…), а здесь состояние не объекта,
+ * а заявки на деньги. Фигура общая, словари разные.
  *
  * **В списке сегодня стоит только «Возвращено».** Продукт зачисляет возврат
  * сразу, очереди рассмотрения за ним нет, и рисовать «В обработке» значило бы
@@ -359,17 +364,9 @@ function OperationRow({
  */
 function RefundChip({ tone, label }: { tone: "pending" | "done"; label: string }) {
   return (
-    <span
-      data-slot="refund-chip"
-      className={cn(
-        "inline-flex h-6 shrink-0 items-center rounded-sm px-2",
-        tone === "pending" ? "bg-warn-tint text-warn-text" : "bg-ok-tint text-ok-text",
-      )}
-    >
-      <Typography variant="metaText" tone="current">
-        {label}
-      </Typography>
-    </span>
+    <StateChip tone={tone === "pending" ? "warn" : "ok"} slot="refund-chip">
+      {label}
+    </StateChip>
   )
 }
 

@@ -81,7 +81,7 @@ function ListingsSkeleton({
 
             <div className="flex w-33 shrink-0 flex-col gap-2">
               {/* Радиус 2 законен: полоска высотой 5, при радиусе 6 стала бы капсулой. */}
-              <Plate className="h-[5px] w-24 rounded-bar" />
+              <Plate className="h-[5px] w-24 rounded-full" />
               <Plate className="h-[11px] w-15 rounded-sm" />
             </div>
 

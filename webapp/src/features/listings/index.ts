@@ -18,6 +18,10 @@ export type {
 export type { ListingPhotoProps } from './ListingPhoto'
 export { OwnerAvatar } from './OwnerAvatar'
 export { PhotoPlaceholder } from './PhotoPlaceholder'
+export { PhotoViewer } from './PhotoViewer'
+export { SimilarDeviation, SimilarRow } from './SimilarRow'
+export type { SimilarRowProps } from './SimilarRow'
+export type { PhotoViewerProps } from './PhotoViewer'
 export { sizeForWidth } from './photo-slot-size'
 export type {
   MissingPhotoReason,

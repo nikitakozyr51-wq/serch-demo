@@ -93,35 +93,30 @@ function useStaff(): Staff[] {
       .reduce((sum, item) => sum + item.amount, 0),
   })
 
-  if (workspace.people.length > 0) {
-    return workspace.people.map((person) => ({
-      id: person.id,
-      initials: person.initials,
-      name: person.name,
-      email: person.email,
-      owner: person.role === "owner",
-      limit: person.limit,
-      addedAt: person.addedAt,
-      self: person.email === session?.email,
-      ...tally(person.name),
-    }))
-  }
+  /*
+    Состав берётся только из журнала работы — подставки из сеанса здесь
+    больше нет.
 
-  if (session === null) return []
-
-  return [
-    {
-      id: "owner",
-      initials: session.initials,
-      name: session.name,
-      email: session.email,
-      owner: session.role === "owner",
-      limit: null,
-      addedAt: 0,
-      self: true,
-      ...tally(session.name),
-    },
-  ]
+    Она стояла на случай пустого списка людей и чинила ровно этот экран:
+    «Сотрудники» показывали вошедшего, а «Эффективность» рядом честно
+    считала ноль. Один и тот же вопрос — сколько нас в агентстве — имел
+    два ответа на соседних вкладках, и виноват был не экран, а вход:
+    он открывал пространство агентства, но не записывал в него того,
+    кто вошёл. Починено там (`joinWorkspace` при входе), и подставка
+    стала не нужна — а нужная она была бы вредной, потому что прячет
+    ту же дыру от выгрузки, назначения объектов и лимитов.
+  */
+  return workspace.people.map((person) => ({
+    id: person.id,
+    initials: person.initials,
+    name: person.name,
+    email: person.email,
+    owner: person.role === "owner",
+    limit: person.limit,
+    addedAt: person.addedAt,
+    self: person.email === session?.email,
+    ...tally(person.name),
+  }))
 }
 
 export function AgencyStaffPage() {

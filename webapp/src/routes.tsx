@@ -9,6 +9,7 @@ import {
 import { hasSession } from '@/features/auth'
 import { loginPath, platformTwin } from '@/features/cabinet'
 import { RootLayout } from './root-layout'
+import { RouteError, RoutePending } from './route-fallbacks'
 
 const rootRoute = createRootRoute({
   component: RootLayout,
@@ -1010,7 +1011,27 @@ const routeTree = rootRoute.addChildren([
  */
 const basepath = import.meta.env.BASE_URL.replace(/\/+$/, '')
 
-export const router = createRouter({ routeTree, basepath })
+/**
+ * Маршрутизатор с нарисованными состояниями загрузки и срыва.
+ *
+ * Экраны едут отдельными кусками кода, и у этой езды два исхода, которые
+ * до сих пор не были нарисованы: пока едет — было пусто, не доехало —
+ * вылетала ошибка. Оба разобраны в `route-fallbacks.tsx`.
+ *
+ * `defaultPendingMs` 150 — то же число, что у скелетона выдачи, и по той же
+ * причине: переход быстрее полутора десятых секунды человек читает как
+ * мгновенный, и «загружаю» на нём только мигает. `defaultPendingMinMs` 300
+ * держит показанное состояние, чтобы оно не мелькнуло и не исчезло, —
+ * мигание раздражает сильнее самой задержки.
+ */
+export const router = createRouter({
+  routeTree,
+  basepath,
+  defaultPendingComponent: RoutePending,
+  defaultErrorComponent: RouteError,
+  defaultPendingMs: 150,
+  defaultPendingMinMs: 300,
+})
 
 function returnToSearch(search: Record<string, unknown>) {
   return {

@@ -62,6 +62,11 @@ const typographyVariants = cva("min-w-0", {
       // 14/600 и в макете стоят с переносом, а не в одну строку.
       strongText: "text-sm font-semibold",
       rowPrice: "text-base font-semibold",
+      // Та же ступень 16, но весом 500: заголовок строки настройки.
+      // Строка настройки — не значение и не цена, а название места, куда
+      // ведёт стрелка; 600 делал бы её равной по весу адресу и цене в выдаче.
+      // Снято с `ESvsw/rLbVw`: 16/500, трекинг −0.24.
+      settingTitle: "text-base font-medium",
       panelTitle: "text-xl font-semibold",
       // Единица рядом с крупным числом: «20 000 ₽» в поле суммы набрано двумя
       // ступенями одного кегля — число 600, знак валюты 500 и приглушённый.
@@ -191,6 +196,7 @@ const defaultElementByVariant: Record<TypographyVariant, React.ElementType> = {
   uiText: "span",
   strongText: "span",
   rowPrice: "span",
+  settingTitle: "span",
   panelTitle: "h2",
   unitLabel: "span",
   panelTitleTight: "h2",

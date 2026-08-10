@@ -3,7 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `viewport-fit=cover` включает переменные `env(safe-area-inset-*)`.
+      Без него браузер сам отступает от полосы жестов и выреза, а `env`
+      всегда отдаёт ноль — то есть нижняя навигация кончалась бы раньше
+      экрана и под ней просвечивала страница.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>web_frontend</title>
   </head>
   <body>

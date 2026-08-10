@@ -319,6 +319,17 @@ export async function signIn(email?: string, password = ""): Promise<string | nu
       idleMinutes: 120,
     })
     openWorkspace(identity.email)
+    // Вошедший обязан состоять в агентстве. С другого компьютера состав
+    // сюда не приезжает, и без этой строки «Эффективность» насчитывала бы
+    // ноль сотрудников там, где за экраном сидит руководитель.
+    joinWorkspace({
+      name: identity.name,
+      initials: identity.initials,
+      email: identity.email,
+      role: identity.role,
+      // Лимит руководителя всегда пуст: лимиты ставит он, а не ему.
+      limit: null,
+    })
     // Счёт приехал вместе с личностью: кладём его в пространство агентства,
     // откуда его читают списание, возврат и плашка нулевого баланса.
     setMoney({ balance: identity.balance, trial: identity.trial })
@@ -331,6 +342,13 @@ export async function signIn(email?: string, password = ""): Promise<string | nu
   const session = { ...stored, idleMinutes: stored.idleMinutes ?? 120, kind: "own" as const }
   write(session)
   openWorkspace(agencyKeyOf(session))
+  joinWorkspace({
+    name: session.name,
+    initials: session.initials,
+    email: session.email,
+    role: session.role,
+    limit: null,
+  })
   adoptMoney(session)
   return null
 }

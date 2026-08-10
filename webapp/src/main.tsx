@@ -10,7 +10,14 @@ import { createRoot } from 'react-dom/client'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider } from '@/features/auth'
 import App from './App'
+import { clearChunkReloadMark } from './chunk-reload'
 import './index.css'
+
+// Приложение дошло до запуска — значит куски кода на месте, и отметка
+// о вынужденной перезагрузке своё отработала. Без снятия вкладка,
+// однажды перезагрузившаяся, до самого закрытия не смогла бы сделать
+// это снова, а выкладок за день бывает несколько.
+clearChunkReloadMark()
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -166,7 +166,7 @@ function MobileOverlaySheet({
         }
         className={cn(
           "flex max-h-full w-full flex-col gap-5 overflow-y-auto overscroll-contain",
-          "rounded-t-3xl bg-surface px-5 pt-3 pb-8",
+          "pb-safe-sheet rounded-t-3xl bg-surface px-5 pt-3",
           arrived ? "transition-transform duration-200" : "sheet-in",
         )}
       >

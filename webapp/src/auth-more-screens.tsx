@@ -172,7 +172,7 @@ export function CheckMailPage() {
   return (
     <AuthShell
       title="Проверьте почту"
-      subtitle={`Мы отправили письмо на ${mailbox}. Перейдите по ссылке из письма, чтобы подтвердить адрес и открыть кабинет. Ссылка живёт двадцать четыре часа.`}
+      subtitle={`Мы отправили письмо на ${mailbox}. Ссылка живёт двадцать четыре часа.`}
       stepsLabel="ЧТО БУДЕТ ДАЛЬШЕ"
     >
       <div className="flex items-center gap-5">

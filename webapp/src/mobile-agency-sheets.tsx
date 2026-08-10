@@ -327,7 +327,14 @@ function DeleteAgencySheet({
       onClose={onClose}
       actions={
         <>
-          <Button variant="danger" size="lg" block onClick={onRequest}>
+          {/*
+            Обводка без заливки — замер `hnnq8/U5Tpd`: `stroke #a7463e`
+            толщиной 1, заливки нет, подпись тем же цветом. Отличается от
+            отключения сотрудника (`GIv2U/U5Tpd`, залито сплошь) намеренно:
+            отключение откатывается приглашением обратно, удаление агентства
+            не откатывается ничем, и мишени у него быть не должно.
+          */}
+          <Button variant="irreversible" size="lg" block onClick={onRequest}>
             Удалить агентство
           </Button>
           <Button variant="quiet" size="lg" block onClick={onClose}>

@@ -20,6 +20,8 @@ import {
   photoFor,
   photosFor,
   MarketDeviation,
+  PhotoViewer,
+  SimilarRow,
   StatusChip,
   type ListingStatus,
 } from "@/features/listings"
@@ -190,17 +192,48 @@ function StatusButton({ address }: { address: string }) {
  * Счётчик обязателен: без него человек считает, что кадр один, и не листает.
  */
 function ObjectPhoto({ address }: { address: string }) {
+  const shots = photosFor(address, 12)
+  const [open, setOpen] = useState(false)
+
   return (
     <div className="relative h-55 w-full shrink-0">
-      <ListingPhoto src={photoFor(address)} alt={address} size="large" reason="no-photos" />
-      <span
-        data-slot="mobile-photo-counter"
-        className="absolute top-45 left-[318px] flex items-center rounded-sm bg-fg/80 px-2.5 py-1 text-surface"
+      {/*
+        Кадр нажимается, и это не украшение: счётчик под ним прямо говорит,
+        что кадров больше одного. Пока нажатия не было, счётчик обещал листание,
+        которого не существовало, — и обещал его на телефоне, где листают
+        пальцем по самому снимку, а не мышью по стрелке.
+
+        Счётчик считает по настоящей пачке, а не по числу «5» из макета:
+        число в макете было образцом, а не фактом.
+      */}
+      <button
+        type="button"
+        data-slot="mobile-photo"
+        aria-label={`Открыть кадры объекта ${address}`}
+        disabled={shots.length === 0}
+        onClick={() => setOpen(true)}
+        className="size-full cursor-pointer bg-transparent p-0 outline-none disabled:cursor-default focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg"
       >
-        <Typography variant="numericMeta" tone="current">
-          1 / 5
-        </Typography>
-      </span>
+        <ListingPhoto src={photoFor(address)} alt={address} size="large" reason="no-photos" />
+      </button>
+      {shots.length === 0 ? null : (
+        <span
+          data-slot="mobile-photo-counter"
+          className="pointer-events-none absolute right-3 bottom-3 flex items-center rounded-md bg-fg/80 px-2.5 py-1 text-surface"
+        >
+          <Typography variant="numericMeta" tone="current">
+            {`1 / ${shots.length}`}
+          </Typography>
+        </span>
+      )}
+      {open ? (
+        <PhotoViewer
+          shots={shots}
+          startAt={0}
+          address={address}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -261,71 +294,6 @@ function TouchBlock({ headline, detail }: { headline: string; detail: string }) 
   )
 }
 
-/**
- * Отклонение от рынка в строке похожего объекта: 13/600 одной строкой.
- *
- * Собрано отдельно от `MarketDeviation`, потому что там отклонение идёт 12/600
- * двумя узлами с зазором 4, а в списке похожих файл рисует его одним текстом
- * на ступень крупнее. Полосы те же, что у `MarketDeviation`, и берутся из
- * одного закона: ±5 % — мёртвая зона со словами «≈ рынок», дешевле — зелёное
- * со знаком ▼, дороже — красное со знаком ▲.
- *
- * Знак пишется всегда: цвет не может быть единственным носителем смысла.
- */
-function SimilarDeviation({ percent }: { percent: number }) {
-  if (Math.abs(percent) <= 5) {
-    return (
-      <Typography variant="numericDense" tone="dense">
-        ≈ рынок
-      </Typography>
-    )
-  }
-
-  const cheaper = percent < 0
-
-  return (
-    <Typography variant="numericDense" tone={cheaper ? "ok" : "destructive"}>
-      {`${cheaper ? "▼ −" : "▲ +"}${Math.abs(percent)} %`}
-    </Typography>
-  )
-}
-
-/**
- * Пара кадров «что с чем сравнили»: подпись 11/600 и два снимка рядом.
- *
- * **Это ядро продукта, а не украшение.** Похожесть считает своя модель,
- * и пара кадров — единственное, чем она может объяснить свой вывод человеку:
- * кухня против кухни, комната против комнаты. Без пары строка «похоже»
- * остаётся утверждением, которое нечем проверить.
- */
-function ComparedPair({
-  caption,
-  address,
-  width,
-  photoHeight,
-}: {
-  caption: string
-  address: string
-  /** 164 на карточке объекта, 148 в списке похожих. Так в файле. */
-  width: string
-  photoHeight: string
-}) {
-  return (
-    <div className={cn("flex shrink-0 flex-col gap-1.5", width)}>
-      <Typography variant="columnHeader" tone="dense">
-        {caption}
-      </Typography>
-      <div className="flex w-full gap-1">
-        <div className={cn("min-w-0 flex-1", photoHeight)}>
-          <ListingPhoto src={photosFor(address)[1]} alt="Кадр этого объекта" size="small" reason="no-photos" />
-        </div>
-        <div className={cn("min-w-0 flex-1", photoHeight)}>
-          <ListingPhoto src={photosFor(address)[2]} alt={`Кадр объекта ${address}`} size="small" reason="no-photos" />
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* ────────────────────────────────────────────────────────────────────────────
    Объект, по которому работать нельзя: `OPyW3` и `b9LMVr`
@@ -660,7 +628,7 @@ export function MobileObjectBeforePage() {
                     key={index}
                     aria-hidden
                     className={cn(
-                      "h-[5px] w-5 rounded-bar",
+                      "h-[5px] w-5 rounded-full",
                       index < 2 ? "bg-fg" : "bg-line-2",
                     )}
                   />
@@ -776,57 +744,30 @@ export function MobileObjectSimilarPage() {
             </Typography>
           </div>
 
-          <div className="flex w-full flex-col gap-3">
+          {/* Строки лежат на одной поверхности и разделены волосяной линией,
+              без зазора между ними: список, а не стопка карточек. */}
+          <div className="flex w-full flex-col overflow-hidden rounded-2xl">
             {SIMILAR_CARDS.map((card) => (
-              // Карточка без радиуса: в файле у неё прямые углы, хотя строка
-              // выдачи и список похожих идут с радиусом 16. Так в файле.
-              <div
+              <SimilarRow
                 key={card.address}
-                data-slot="mobile-similar-card"
-                className="flex w-full flex-col gap-2.5 bg-surface p-3 outline-solid outline-1 -outline-offset-1 outline-line-1"
-              >
-                <div className="flex w-full gap-3">
-                  <ComparedPair
-                    caption={card.caption}
-                    address={card.address}
-                    width="w-41"
-                    photoHeight="h-15"
-                  />
-                  {/* Цена выключена вправо: она отвечает паре кадров слева,
-                      и обе колонки читаются от краёв к середине. */}
-                  <div className="flex min-w-0 flex-1 flex-col items-end gap-1">
-                    <Typography variant="rowPrice" tone="default">
-                      {card.price}
-                    </Typography>
-                    <SimilarDeviation percent={card.deviation} />
-                  </div>
-                </div>
-
-                <Typography variant="rowPrice" tone="default">
-                  {card.address}
-                </Typography>
-                <Typography variant="denseText" tone="dense">
-                  {card.meta}
-                </Typography>
-                {/* «Чем похоже» темнее меты: это вывод модели, а не паспорт
-                    объекта, и он не должен теряться среди фактов. */}
-                <Typography variant="denseText" tone="secondary">
-                  {card.why}
-                </Typography>
-
-                {/* Раскрытие похожего списывает деньги за его собственный
-                    адрес, а не за объект, из карточки которого он показан.
-                    Итог называется вслух — правило одно на все три места,
-                    откуда на телефоне раскрывают. */}
-                <Button
-                  variant="primary"
-                  size="md"
-                  block
-                  {...pressProps(() => tellDisclosure(actions.disclose(card.address), navigate))}
-                >
-                  {card.action}
-                </Button>
-              </div>
+                address={card.address}
+                compareWith="Ленская ул., 10"
+                caption={card.caption}
+                price={card.price}
+                deviation={card.deviation}
+                meta={card.meta}
+                why={card.why}
+                actionLabel={card.action}
+                charges
+                // Похожий объект открывается, а не только покупается. Открытие
+                // ничего не стоит и обязано быть первым действием строки.
+                onOpen={() =>
+                  void navigate({ to: "/m/object/before", search: { at: card.address } })
+                }
+                // Раскрытие похожего списывает деньги за его собственный
+                // адрес, а не за объект, из карточки которого он показан.
+                onAction={() => tellDisclosure(actions.disclose(card.address), navigate)}
+              />
             ))}
           </div>
 
@@ -984,61 +925,34 @@ export function MobileSimilarListPage() {
         </div>
 
         <div className="flex w-full shrink-0 flex-col overflow-hidden rounded-2xl bg-surface">
-          {rows.map((row, index) => (
-            <div
+          {rows.map((row) => (
+            <SimilarRow
               key={row.address}
-              data-slot="mobile-similar-row"
-              className={cn(
-                "flex w-full flex-col gap-2 px-3.5 py-3",
-                // Делитель внутренней тенью, а не рамкой: рамка растила бы
-                // каждую строку на пиксель, и список поехал бы вниз.
-                index > 0 && "shadow-[inset_0_1px_0_var(--line-1)]",
-              )}
-            >
-              <div className="flex w-full gap-2.5">
-                <ComparedPair
-                  caption={row.caption}
-                  address={row.address}
-                  width="w-37"
-                  photoHeight="h-11"
-                />
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <Typography variant="rowPrice" tone="default">
-                    {row.address}
-                  </Typography>
-                  <Typography variant="denseText" tone="dense">
-                    {row.meta}
-                  </Typography>
-                </div>
-              </div>
-
-              <div className="flex h-8 w-full items-center gap-2">
-                <Typography variant="rowPrice" tone="default">
-                  {row.price}
-                </Typography>
-                <SimilarDeviation percent={row.deviation} />
-                <div className="h-px flex-1" />
-                {/*
-                  Две разные кнопки под одной формой. «Раскрыть · 199 ₽»
-                  покупает контакт и трогает счёт агентства. «Открыть · 0 ₽»
-                  не покупает ничего — контакт уже оплачен, и остаётся только
-                  открыть карточку с номером.
-                */}
-                <Button
-                  variant="primary"
-                  size="sm"
-                  {...pressProps(() => {
-                    if (row.paid) {
-                      void navigate({ to: "/m/object", search: { at: row.address } })
-                      return
-                    }
-                    tellDisclosure(actions.disclose(row.address), navigate)
-                  })}
-                >
-                  {row.action}
-                </Button>
-              </div>
-            </div>
+              address={row.address}
+              compareWith="Ленская ул., 10"
+              caption={row.caption}
+              price={row.price}
+              deviation={row.deviation}
+              meta={row.meta}
+              actionLabel={row.action}
+              // Красный ровно там, где спишутся деньги. У уже раскрытого
+              // контакта действие бесплатное, и кнопка тёмная.
+              charges={!row.paid}
+              wide
+              onOpen={() =>
+                void navigate({
+                  to: row.paid ? "/m/object" : "/m/object/before",
+                  search: { at: row.address },
+                })
+              }
+              onAction={() => {
+                if (row.paid) {
+                  void navigate({ to: "/m/object", search: { at: row.address } })
+                  return
+                }
+                tellDisclosure(actions.disclose(row.address), navigate)
+              }}
+            />
           ))}
         </div>
       </div>

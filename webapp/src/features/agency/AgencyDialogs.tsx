@@ -81,14 +81,14 @@ function DialogScrim({
 function DialogFooter({
   onCancel,
   confirm,
-  danger = false,
+  irreversible = false,
   disabled = false,
   onConfirm,
 }: {
   onCancel: () => void
   confirm: string
-  /** Действие необратимо и опасно: заливка ошибки вместо графита. */
-  danger?: boolean
+  /** Отменить будет нельзя: обводка цвета ошибки вместо залитого графита. */
+  irreversible?: boolean
   disabled?: boolean
   onConfirm: () => void
 }) {
@@ -99,14 +99,18 @@ function DialogFooter({
         Отмена
       </Button>
       {/*
-        Опасное действие заливается цветом ошибки, а не акцентом.
+        Необратимое действие идёт обводкой цвета ошибки, а не заливкой.
 
-        Акцент в этом продукте означает «списываются деньги», и красить им
-        удаление агентства значило бы смешать два разных красных: один
-        зовёт нажать, другой предупреждает.
+        Красных в продукте два, и они означают противоположное: акцент зовёт
+        нажать («сейчас спишутся деньги»), цвет ошибки предупреждает («обратно
+        не будет»). Смешать их значило бы научить не замечать оба.
+
+        Заливки у необратимого нет намеренно: залитая кнопка — мишень, а по
+        удалению агентства не должно получаться попасть рефлексом. Замер
+        `d7JoII/JZsWW`: обводка `#a7463e` толщиной 1, заливки нет.
       */}
       <Button
-        variant={danger ? "danger" : "primary"}
+        variant={irreversible ? "irreversible" : "primary"}
         size="md"
         disabled={disabled}
         onClick={onConfirm}
@@ -400,7 +404,7 @@ function DeleteAgencyDialog({
         <DialogFooter
           onCancel={onClose}
           confirm="Удалить агентство"
-          danger
+          irreversible
           onConfirm={onRequest}
         />
       </DialogCard>

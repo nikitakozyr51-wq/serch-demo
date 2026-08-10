@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router"
+
 import { Typography } from "@/components/typography"
 import { groupDigits } from "@/features/listings"
 import { useAnimatedNumber } from "@/platform/motion"
@@ -61,13 +63,30 @@ function MobileHeader({ balance, initials }: MobileHeaderProps) {
         {`${groupDigits(shownBalance)} ₽`}
       </Typography>
 
-      {/* Аватар 28 графитом — на десктопе он такой же, а инициалы наследуют
-          цвет подложки, поэтому тон берётся от родителя. */}
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-fg text-surface">
+      {/*
+        Аватар 28 графитом — на десктопе он такой же, а инициалы наследуют
+        цвет подложки, поэтому тон берётся от родителя.
+
+        **Это дверь, а не картинка.** В файле поверх аватара лежит рамка
+        `VapV6` 44 × 44 — «зона нажатия 44». Рамка нарисована, значит нажатие
+        нарисовано; в коде аватар был неподвижным `span`, и единственная
+        дверь в профиль с любого экрана телефона молчала. Ведёт он в профиль:
+        меню аватара с четырьмя пунктами есть только на компьютере, а на
+        телефоне то же самое разложено по вкладке «Ещё».
+
+        Габарит остаётся 28, зону добирает `tap-44`: подними сам кружок
+        до 44, и шапка 56 перестала бы сходиться.
+      */}
+      <Link
+        to="/m/profile"
+        data-slot="mobile-header-avatar"
+        aria-label="Профиль"
+        className="tap-44 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-fg text-surface outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      >
         <Typography variant="avatarInitials" tone="current">
           {initials}
         </Typography>
-      </span>
+      </Link>
     </header>
   )
 }

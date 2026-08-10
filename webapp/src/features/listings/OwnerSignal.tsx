@@ -74,7 +74,7 @@ function OwnerSignal({
             <span
               key={index}
               className={cn(
-                "h-[5px] rounded-bar",
+                "h-[5px] rounded-full",
                 SEGMENT[place],
                 index < filled ? "bg-fg" : "bg-line-2",
               )}

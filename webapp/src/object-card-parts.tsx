@@ -18,6 +18,7 @@ import {
   MarketDeviation,
   MiniTable,
   OwnerSignal,
+  PhotoViewer,
   StatusChip,
   TitledBlock,
   type ListingStatus,
@@ -301,6 +302,13 @@ function CardMedia({ address, more }: { address: string; more?: string }) {
   // перезагрузки. Первый совпадает с тем, что показан в строке выдачи, —
   // иначе нажавший на строку попадает будто на другой объект.
   const shots = photosFor(address)
+  // Просмотрщику отдаётся вся пачка, а не четыре видимых кадра: плашка
+  // «ещё 12 фото» обещает именно остальные, и открыть по ней те же четыре
+  // значило бы соврать дважды.
+  const all = photosFor(address, 12)
+
+  /** Какой кадр открыт в просмотрщике. `null` — просмотрщик закрыт. */
+  const [viewing, setViewing] = useState<number | null>(null)
 
   return (
     // Кадр приходит с приближением, а не снизу: это единственный на экране
@@ -308,30 +316,61 @@ function CardMedia({ address, more }: { address: string; more?: string }) {
     // читается как «кадр подъехал». Корень сам стал подвижным вместо обёртки:
     // лишний узел между рядом и колонкой 564 сломал бы её ширину.
     <motion.div variants={ZOOM} className="flex w-[564px] shrink-0 flex-col gap-2">
-      <div className="h-[376px] w-full overflow-hidden rounded-2xl">
+      {/*
+        Кадр нажимается. До этой правки не нажималось ни одно изображение
+        объекта — при том что под главным кадром лежат четыре миниатюры
+        и плашка «ещё 12 фото», то есть экран прямо обещал, что за снимком
+        что-то есть. Обещание было пустым.
+
+        Кнопка, а не `div` с обработчиком: снимок открывается и с клавиатуры,
+        и читалкой экрана, а не только мышью.
+      */}
+      <button
+        type="button"
+        data-slot="card-photo"
+        aria-label={`Открыть кадры объекта ${address}`}
+        disabled={shots.length === 0}
+        onClick={() => setViewing(0)}
+        className="h-[376px] w-full cursor-pointer overflow-hidden rounded-2xl bg-transparent p-0 outline-none disabled:cursor-default focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+      >
         <ListingPhoto src={shots[0]} alt={`Кадр объекта ${address}`} size="large" reason="no-photos" />
-      </div>
+      </button>
       <div className="flex w-full gap-2">
         {[0, 1, 2, 3].map((index) => (
-          <div
+          <button
             key={index}
+            type="button"
             data-slot="card-thumb"
-            className="relative h-[90px] w-[135px] shrink-0 overflow-hidden rounded-2xl"
+            aria-label={`Открыть кадр ${index + 1} объекта ${address}`}
+            disabled={shots.length === 0}
+            // Миниатюра открывает СЕБЯ, а не первый кадр: нажимают на неё
+            // именно потому, что хотят рассмотреть её.
+            onClick={() => setViewing(index)}
+            className="relative h-[90px] w-[135px] shrink-0 cursor-pointer overflow-hidden rounded-2xl bg-transparent p-0 outline-none disabled:cursor-default focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <ListingPhoto src={shots[index]} alt={`Кадр объекта ${address}`} size="medium" reason="no-photos" />
             {index === 3 && more !== undefined ? (
               <>
                 <span aria-hidden className="absolute inset-0 bg-fg/65" />
-                <span className="absolute right-2.5 bottom-2.5 flex h-6 items-center rounded-sm bg-fg/80 px-2 text-surface">
+                <span className="absolute right-2.5 bottom-2.5 flex h-6 items-center rounded-md bg-fg/80 px-2 text-surface">
                   <Typography variant="metaStrong" tone="current">
                     {more}
                   </Typography>
                 </span>
               </>
             ) : null}
-          </div>
+          </button>
         ))}
       </div>
+
+      {viewing === null ? null : (
+        <PhotoViewer
+          shots={all}
+          startAt={viewing}
+          address={address}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </motion.div>
   )
 }

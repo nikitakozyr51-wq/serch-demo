@@ -51,7 +51,11 @@ function MobileSectionHeader({
           // обязана вернуть туда, откуда пришли, а не туда, где по мнению
           // разработчика человек был.
           onClick={() => router.history.back()}
-          className="flex size-5 shrink-0 cursor-pointer items-center justify-center bg-transparent text-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
+          // Стрелка 20, зона касания 44 — в файле она нарисована отдельной
+          // прозрачной рамкой `whY4N` 44 × 44 поверх значка. Габарит стрелки
+          // при этом остаётся 20: подними её саму до 44, и заголовок раздела
+          // уехал бы вправо на 24 пикселя на всех экранах с возвратом.
+          className="tap-44 flex size-5 shrink-0 cursor-pointer items-center justify-center bg-transparent text-fg outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
         >
           <ArrowLeft aria-hidden className="size-5" strokeWidth={2} />
         </button>
@@ -122,8 +126,23 @@ function MobileScreen({
 }
 
 /**
- * Пустое состояние (`I4XYhB`): значок 32, заголовок 20/600, объяснение 14/500
- * и одно действие 48 в капсуле. Поля тела [32, 24], зазор 16.
+ * Пустое состояние (`I4XYhB`, 10 экземпляров): значок 32, заголовок 20/600,
+ * объяснение 14/500 и одно действие 48 в капсуле. Поля тела [32, 24, 24, 24].
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ДЕЙСТВИЕ ПРИЖАТО К НИЗУ, СООБЩЕНИЕ — ПО ЦЕНТРУ ВЕРХА
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Раньше значок, заголовок, объяснение и кнопка стояли одной стопкой по центру
+ * экрана. На всех десяти экземплярах кнопка приходилась на `y 454` при линии
+ * большого пальца 563, и под ней пустовало 270 пикселей. То есть до
+ * единственного действия экрана приходилось тянуться вверх, а низ, куда палец
+ * достаёт сам, оставался пустым.
+ *
+ * Собрано двумя распорками вокруг блока сообщения: сообщение центрируется
+ * в свободной части, действие садится на 24 над навигацией. `justify-center`
+ * заменён на распорки намеренно — с ним кнопка ушла бы в центр вместе
+ * с текстом, а прижать её `margin-top: auto` значило бы сдвинуть и сообщение.
  *
  * **Значок приглушённый и один.** Пустой экран не праздник и не беда — это
  * место, где ещё ничего не произошло, и разноцветная иллюстрация здесь
@@ -143,16 +162,24 @@ function MobileEmptyState({
   return (
     <div
       data-slot="mobile-empty"
-      className="flex w-full flex-1 flex-col items-center justify-center gap-4 px-6 py-8"
+      className="flex w-full flex-1 flex-col items-center px-6 pt-8 pb-6"
     >
-      <Icon aria-hidden className="size-8 shrink-0 text-text-dense" strokeWidth={2} />
-      <Typography variant="panelTitle" tone="default" align="center">
-        {title}
-      </Typography>
-      <Typography variant="uiText" tone="secondary" align="center">
-        {text}
-      </Typography>
-      {action === undefined ? null : <>{action}</>}
+      <div className="h-px flex-1" />
+      <div className="flex w-full flex-col items-center gap-4">
+        <Icon aria-hidden className="size-8 shrink-0 text-text-dense" strokeWidth={2} />
+        <Typography variant="panelTitle" tone="default" align="center">
+          {title}
+        </Typography>
+        <Typography variant="uiText" tone="secondary" align="center">
+          {text}
+        </Typography>
+      </div>
+      <div className="h-px flex-1" />
+      {action === undefined ? null : (
+        <div className="flex w-full flex-col">
+          <>{action}</>
+        </div>
+      )}
     </div>
   )
 }
@@ -255,7 +282,7 @@ function MobileSheet({
         style={drag === null ? undefined : { transform: `translateY(${drag}px)`, transition: "none" }}
         // Жест листа не должен превращаться в прокрутку страницы под ним.
         className={cn(
-          "flex w-full touch-none flex-col gap-5 rounded-t-3xl bg-surface px-5 pt-3 pb-8",
+          "flex w-full touch-none flex-col gap-5 pb-safe-sheet rounded-t-3xl bg-surface px-5 pt-3",
           arrived ? "transition-transform duration-200" : "sheet-in",
         )}
       >

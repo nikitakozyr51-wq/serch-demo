@@ -138,8 +138,6 @@
        из шаблона выдаёт 14 · 18 · 22 · 26 — значения, которых в проекте нет. */
     --radius: 10px;
     --radius-none: 0px;
-    --radius-bar: 2px;          /* только полоски высотой до 8 px: шкала отклонения, антидубль */
-    --radius-bar-lg: 4px;       /* только заливки индикаторов */
     --radius-sm: 6px;           /* r-6  — высота 24 */
     --radius-md: 8px;           /* r-8  — высота 28 и 32 */
     --radius-lg: 10px;          /* r-10 — высота 36 и 40 */
@@ -240,7 +238,7 @@
     --spacing-cell: var(--pad-cell);
 
     /* Ряды */
-    --height-row-obj: var(--row-obj);    /* 88 → 64 — строка выдачи */
+    --height-row-obj: var(--row-obj);    /* 96 → 64 — строка выдачи */
     --height-row-tbl: var(--row-tbl);    /* 48 → 40 — строка таблицы */
     --height-row-head: var(--row-head);  /* 36 → 32 — шапка таблицы */
 
@@ -332,7 +330,10 @@
     --h-md: 40px;
     --h-lg: 48px;
     --h-chip: 28px;
-    --row-obj: 88px;
+    /* 96, а не 88: сверка 10.08.2026 свела строку выдачи к одной форме на обеих
+       платформах. Сторона снимка выводится из текстового блока — 60 текста
+       даёт квадрат 48 и по 24 воздуха сверху и снизу, то есть ровно 96. */
+    --row-obj: 96px;
     --row-tbl: 48px;
     --row-head: 36px;
     --pad-cell: 16px;
@@ -550,7 +551,7 @@
   палитру открывают десятки раз за смену.
 */
 .motion-in {
-  animation: serch-motion-in 200ms cubic-bezier(0.34, 1.16, 0.5, 1) both;
+  animation: serch-motion-in 260ms cubic-bezier(0.34, 1.16, 0.5, 1) both;
 }
 
 /*
@@ -596,6 +597,71 @@
 
 .row-tap[data-blocked]:active {
   background-color: var(--warm-press);
+}
+
+/*
+  Безопасные зоны телефона.
+
+  ═══════════════════════════════════════════════════════════════════════════
+
+  Внизу экрана живёт системная полоса: на айфоне жест 34, на андроиде жест 24
+  или три кнопки 48. Наши элементы обязаны врастать в неё СВОИМ ФОНОМ, а не
+  отступать от неё, — иначе под панелью виден просвет страницы, и белая полоса
+  навигации кончается раньше, чем экран.
+
+  Числа 47 и 34 объявлены в Pencil и сняты с айфона. В коде они не годятся:
+  `env(safe-area-inset-bottom)` спрашивает у самого устройства, а константа
+  промахнётся везде, кроме одной модели. На экранах без выреза `env` отдаёт 0,
+  поэтому берётся `max` с рисованным полем — панель не сядет обратно на 72.
+
+  Работает только вместе с `viewport-fit=cover` в мета-теге: без него браузер
+  сам отступает от системных зон и `env` всегда отдаёт 0.
+*/
+.pb-safe-nav {
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
+}
+
+.pb-safe-sheet {
+  padding-bottom: max(40px, env(safe-area-inset-bottom));
+}
+
+.pt-safe-head {
+  padding-top: env(safe-area-inset-top);
+}
+
+/*
+  Зона нажатия 44 у элемента, который меньше 44.
+
+  ═══════════════════════════════════════════════════════════════════════════
+
+  WCAG 2.5.8 требует 24 × 24, а рекомендация Apple и Material — 44 и 48.
+  У нас есть контролы ниже: денежная кнопка в строке телефона 32, крестик
+  завершения чужого сеанса 20 × 20 (400 px² при норме 1936), «Прочитать все»
+  в уведомлениях, значки шапки фильтра.
+
+  Поднимать сам контрол нельзя: высота 32 и кегль 14 сняты с файла, и любая
+  прибавка сдвинула бы вертикаль строки, которая сходится ровно (16+64+16=96).
+  Поэтому зона расширяется НАД элементом, псевдоэлементом, — габаритов
+  раскладки он не занимает и соседей не двигает. В файле это 53 прозрачные
+  рамки `layoutPosition: absolute`; здесь — то же самое одним классом.
+
+  `position: relative` ставится тут же: без него рамка уехала бы к ближайшему
+  спозиционированному предку, а это ярус строки, и палец попадал бы в адрес.
+*/
+.tap-44 {
+  position: relative;
+}
+
+.tap-44::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: 100%;
+  height: 100%;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 /*
@@ -715,7 +781,7 @@
 }
 
 .panel-in {
-  animation: serch-panel-in 200ms cubic-bezier(0.22, 0.61, 0.24, 1) both;
+  animation: serch-panel-in 260ms cubic-bezier(0.22, 0.61, 0.24, 1) both;
 }
 
 /*
@@ -738,7 +804,7 @@
   с подъёмом 8 px.
 */
 .scrim-in {
-  animation: serch-fade-in 120ms cubic-bezier(0.22, 0.61, 0.24, 1) both;
+  animation: serch-fade-in 160ms cubic-bezier(0.22, 0.61, 0.24, 1) both;
 }
 
 /*
@@ -782,7 +848,7 @@
   что окно передумало закрываться.
 */
 .motion-out {
-  animation: serch-motion-out 120ms cubic-bezier(0.22, 0.61, 0.24, 1) forwards;
+  animation: serch-motion-out 260ms cubic-bezier(0.22, 0.61, 0.24, 1) forwards;
 }
 
 @keyframes serch-fade-out {
@@ -795,7 +861,7 @@
 }
 
 .scrim-out {
-  animation: serch-fade-out 120ms cubic-bezier(0.22, 0.61, 0.24, 1) forwards;
+  animation: serch-fade-out 160ms cubic-bezier(0.22, 0.61, 0.24, 1) forwards;
 }
 
 /* Колонка фильтров уходит туда же, откуда пришла, — под сайдбар.
@@ -811,7 +877,7 @@
 }
 
 .panel-out {
-  animation: serch-panel-out 200ms cubic-bezier(0.22, 0.61, 0.24, 1) forwards;
+  animation: serch-panel-out 260ms cubic-bezier(0.22, 0.61, 0.24, 1) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
