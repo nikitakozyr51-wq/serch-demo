@@ -385,3 +385,17 @@ export const DISTRICTS = [
   { id: "vasileostrovsky", label: "Василеостровский" },
   { id: "petrogradsky", label: "Петроградский" },
 ] as const
+
+/**
+ * Границы цены в базе — для честной активности полей «Цена от»/«Цена до».
+ *
+ * Поле считается условием, только когда сужает: «от 6 000 000» при самой
+ * дешёвой квартире в 6 000 000 — не условие, а подпись «от минимальной»,
+ * ровно как потолок 0 на десктопе — «без потолка». Границы выводятся
+ * из базы, а не записаны руками, — иначе при смене базы счётчик соврёт.
+ */
+const PRICE_VALUES = ALL_ROWS.map((row) => row.priceValue)
+export const PRICE_BOUNDS = {
+  min: Math.min(...PRICE_VALUES),
+  max: Math.max(...PRICE_VALUES),
+} as const

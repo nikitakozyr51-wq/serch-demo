@@ -411,18 +411,31 @@ const PUBLIC = new Set<string>([
   '/dialogs',
 ])
 
-function productRoute<TModule extends Record<string, unknown>, const TPath extends string>(
+/**
+ * Что экран читает из адреса.
+ *
+ * Почти всем экранам это не нужно, поэтому необязательно. Нужно ровно
+ * там, где адрес несёт данные: ключ приглашения, адрес объекта, номер
+ * сохранённого поиска.
+ *
+ * `TSearch` — возвращаемая схема поиска, а не `Record<string, unknown>`:
+ * обобщённый дженерик сохраняет конкретный тип (`{ at?: string }`), иначе
+ * `useSearch({ from })` на экране вернул бы `unknown`, и каждый адрес из
+ * параметра требовал ручного приведения.
+ */
+type RouteExtra<TSearch extends Record<string, unknown>> = {
+  validateSearch: (search: Record<string, unknown>) => TSearch
+}
+
+function productRoute<
+  TModule extends Record<string, unknown>,
+  const TPath extends string,
+  TSearch extends Record<string, unknown> = Record<string, unknown>,
+>(
   path: TPath,
   load: () => Promise<TModule>,
   name: keyof TModule & string,
-  /**
-   * Что экран читает из адреса.
-   *
-   * Почти всем экранам это не нужно, поэтому необязательно. Нужно ровно
-   * там, где адрес несёт данные: ключ приглашения, адрес объекта, номер
-   * сохранённого поиска.
-   */
-  extra?: { validateSearch: (search: Record<string, unknown>) => Record<string, unknown> },
+  extra?: RouteExtra<TSearch>,
 ) {
   return createRoute({
     getParentRoute: () => rootRoute,
@@ -505,11 +518,15 @@ const mobileLayoutRoute = createRoute({
 })
 
 /** Экран одной из пяти мобильных вкладок: рисуется внутри общего каркаса. */
-function mobileTabRoute<TModule extends Record<string, unknown>, const TPath extends string>(
+function mobileTabRoute<
+  TModule extends Record<string, unknown>,
+  const TPath extends string,
+  TSearch extends Record<string, unknown> = Record<string, unknown>,
+>(
   path: TPath,
   load: () => Promise<TModule>,
   name: keyof TModule & string,
-  extra?: { validateSearch: (search: Record<string, unknown>) => Record<string, unknown> },
+  extra?: RouteExtra<TSearch>,
 ) {
   return createRoute({
     getParentRoute: () => mobileLayoutRoute,
@@ -529,11 +546,15 @@ function mobileTabRoute<TModule extends Record<string, unknown>, const TPath ext
  * Такие экраны больше не несут `<CabinetShell>` сами: каркас теперь этажом
  * выше, а экран отдаёт только своё тело.
  */
-function cabinetRoute<TModule extends Record<string, unknown>, const TPath extends string>(
+function cabinetRoute<
+  TModule extends Record<string, unknown>,
+  const TPath extends string,
+  TSearch extends Record<string, unknown> = Record<string, unknown>,
+>(
   path: TPath,
   load: () => Promise<TModule>,
   name: keyof TModule & string,
-  extra?: { validateSearch: (search: Record<string, unknown>) => Record<string, unknown> },
+  extra?: RouteExtra<TSearch>,
 ) {
   return createRoute({
     getParentRoute: () => cabinetLayoutRoute,
@@ -571,9 +592,7 @@ const cabinetRoutes = [
    * на то же место списка, а не на верх — иначе агент теряет позицию после
    * каждого звонка». На тридцатом звонке за смену это уже не мелочь.
    */
-  createRoute({
-    getParentRoute: () => cabinetLayoutRoute,
-    path: '/search',
+  cabinetRoute('/search', () => import('./search-screen'), 'SearchScreenPage', {
     // Тип с необязательным ключом, а не `string | undefined`: иначе
     // маршрутизатор требует передавать `search` при каждом переходе
     // на выдачу, включая те девять мест, где возвращать некуда.
@@ -582,11 +601,16 @@ const cabinetRoutes = [
     // в адресе: они уже лежат в журнале работы, и дублировать их значило бы
     // завести второй источник правды, который разъедется с первым при первой
     // же правке условий.
+    //
+    // Раньше маршрут создавался `createRoute` напрямую, и у него не было
+    // `beforeLoad` с `platformTwin` — единственного во всём кабинете. На
+    // телефоне поиск открывался десктопным кадром 1440 в окне 390; по той же
+    // причине туториал, ведущий на `/search`, уводил на ПК-версию. `cabinetRoute`
+    // добавляет выбор экрана по устройству, а `extra` проносит валидацию адреса.
     validateSearch: (search: Record<string, unknown>): { at?: string; saved?: string } => ({
       ...(typeof search.at === 'string' ? { at: search.at } : {}),
       ...(typeof search.saved === 'string' ? { saved: search.saved } : {}),
     }),
-    component: lazyRouteComponent(() => import('./search-screen'), 'SearchScreenPage'),
   }),
   /**
    * Карточка объекта — того, на который нажали.
@@ -595,24 +619,20 @@ const cabinetRoutes = [
    * адрес стоял в ней константой, и все 260 строк выдачи вели в одну и ту же
    * квартиру. Тот же приём, что у выдачи выше, и по той же причине.
    */
-  createRoute({
-    getParentRoute: () => cabinetLayoutRoute,
-    path: '/object',
+  cabinetRoute('/object', () => import('./object-card-screen'), 'ObjectCardScreenPage', {
     validateSearch: (search: Record<string, unknown>): { at?: string } =>
       typeof search.at === 'string' ? { at: search.at } : {},
-    component: lazyRouteComponent(() => import('./object-card-screen'), 'ObjectCardScreenPage'),
   }),
   /** Раскрытая карточка — того же объекта, за который заплатили. */
-  createRoute({
-    getParentRoute: () => cabinetLayoutRoute,
-    path: '/object/disclosed',
-    validateSearch: (search: Record<string, unknown>): { at?: string } =>
-      typeof search.at === 'string' ? { at: search.at } : {},
-    component: lazyRouteComponent(
-      () => import('./object-card-disclosed-screen'),
-      'ObjectCardDisclosedPage',
-    ),
-  }),
+  cabinetRoute(
+    '/object/disclosed',
+    () => import('./object-card-disclosed-screen'),
+    'ObjectCardDisclosedPage',
+    {
+      validateSearch: (search: Record<string, unknown>): { at?: string } =>
+        typeof search.at === 'string' ? { at: search.at } : {},
+    },
+  ),
   cabinetRoute('/balance', () => import('./balance-screens'), 'BalanceChargesPage'),
   cabinetRoute('/balance/refunds', () => import('./balance-screens'), 'BalanceRefundsPage'),
   cabinetRoute('/balance/top-ups', () => import('./balance-screens'), 'BalanceTopUpsPage'),

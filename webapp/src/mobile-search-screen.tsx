@@ -7,6 +7,7 @@ import { DISCLOSURE_PRICE, useSession } from "@/features/auth"
 import { MobileBottomNav, MobileHeader, PhoneFrame, useMobileFramed } from "@/features/cabinet"
 import { MobileListingRow, plural, photoFor } from "@/features/listings"
 import { disclosureOf, useWorkspace } from "@/features/workspace"
+import { applyMobileFilters, countActiveFilters, useMobileFilters } from "@/platform/mobile-search-filters"
 
 /**
  * МОБАЙЛ · Поиск и выдача.
@@ -18,12 +19,14 @@ import { disclosureOf, useWorkspace } from "@/features/workspace"
  * стоит рядом с выдачей, потому что там правило «фильтры никогда не перекрывают
  * выдачу»: агент видит условия и результат одновременно. На 390 это физически
  * невозможно, и правило меняет форму — условия сворачиваются в кнопку
- * «Фильтры 7», где 7 говорит, сколько условий сейчас сужают выдачу.
+ * «Фильтры N», где N говорит, сколько условий сейчас сужают выдачу.
  * Счётчик обязателен: без него кнопка молчит о том, что выдача уже сужена.
  *
- * Заголовок несёт «247 объектов» рядом с названием раздела — на телефоне
+ * Заголовок несёт «N объектов» рядом с названием раздела — на телефоне
  * отдельной строки результата нет, и число переезжает в шапку раздела.
- * Арифметики отсева здесь нет вовсе: три числа в строку 390 не встают.
+ * N — честный размер выдачи под текущими условиями стора, и кнопка фильтров
+ * пересчитывается там же: оба числа живут в `platform/mobile-search-filters`,
+ * а не набраны с кадра (в кадре «247 объектов» — снимок старой базы).
  */
 
 /** Сколько объектов список показывает за раз. Дальше — прокрутка списка. */
@@ -49,6 +52,7 @@ export function MobileSearchScreenPage({
   const navigate = useNavigate()
   const session = useSession()
   const workspace = useWorkspace()
+  const filters = useMobileFilters()
 
   /**
    * Выдача на телефоне — настоящая, а не три вписанные карточки.
@@ -63,7 +67,21 @@ export function MobileSearchScreenPage({
    *
    * База берётся та же, что у компьютера: два экрана одной выдачи не могут
    * показывать разные объекты.
+   *
+   * **Фильтры применяются здесь же.** Условия живут в сторе
+   * `platform/mobile-search-filters`, лист их меняет, а выдача сужает базу
+   * той же функцией, которой лист считает «Показать N объектов», — два
+   * разных фильтра для одного набора условий разошлись бы на первой правке.
    */
+  const visible = useMemo(() => {
+    const filtered = applyMobileFilters(ALL_ROWS, filters)
+    const source =
+      dataset === "measured"
+        ? MEASURED.flatMap((address) => ALL_ROWS.filter((row) => row.address === address))
+        : filtered.slice(0, PAGE)
+    return { source, total: dataset === "measured" ? ALL_ROWS.length : filtered.length }
+  }, [dataset, filters])
+
   const rows = useMemo(() => {
     const stop = new Set(workspace.stopList)
     /*
@@ -88,12 +106,7 @@ export function MobileSearchScreenPage({
     */
     const isOpen = (address: string) => disclosureOf(workspace, address) !== undefined
 
-    const source =
-      dataset === "measured"
-        ? MEASURED.flatMap((address) => ALL_ROWS.filter((row) => row.address === address))
-        : ALL_ROWS.slice(0, PAGE)
-
-    return source.map((row) => ({
+    return visible.source.map((row) => ({
       address: row.address,
       price: row.price,
       deviation: row.deviation,
@@ -114,7 +127,7 @@ export function MobileSearchScreenPage({
           : `Раскрыть · ${DISCLOSURE_PRICE} ₽`,
       paid: isOpen(row.address),
     }))
-  }, [dataset, workspace])
+  }, [visible.source, workspace])
 
   return (
     // Кадр телефона на десктопном экране: 390 × 844 по центру, чтобы стенд
@@ -129,7 +142,7 @@ export function MobileSearchScreenPage({
           </Typography>
           <div className="h-px flex-1" />
           <Typography variant="denseText" tone="dense">
-            {`${ALL_ROWS.length} ${plural(ALL_ROWS.length, "объект", "объекта", "объектов")}`}
+            {`${visible.total} ${plural(visible.total, "объект", "объекта", "объектов")}`}
           </Typography>
           {/* Фильтры на телефоне — лист снизу, он нарисован кадром `gFIin`
               и живёт своим адресом. */}
@@ -140,7 +153,7 @@ export function MobileSearchScreenPage({
             className="flex h-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-surface px-3.5 transition-colors duration-120 outline-solid outline-1 -outline-offset-1 outline-border-control active:bg-warm-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
           >
             <Typography variant="controlLabel" tone="default">
-              Фильтры 7
+              Фильтры {countActiveFilters(filters)}
             </Typography>
           </button>
         </div>

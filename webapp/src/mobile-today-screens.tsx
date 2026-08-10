@@ -16,11 +16,28 @@ import {
 import { Button } from "@/components/controls/Button"
 import { StateChip } from "@/components/controls/StateChip"
 import { Typography } from "@/components/typography"
-import { ALL_ROWS } from "@/data/search-rows"
+import { ALL_ROWS, PRICE_BOUNDS } from "@/data/search-rows"
 import { DISCLOSURE_PRICE, useSession, useSessionActions } from "@/features/auth"
 import { MobileBottomNav, MobileEmptyState, MobileHeader, MobileSectionHeader, PhoneFrame } from "@/features/cabinet"
 import { ListingPhoto, MarketDeviation, photoFor, plural } from "@/features/listings"
 import { notifyError } from "@/platform/notify"
+import {
+  applyMobileFilters,
+  countActiveFilters,
+  districtRows,
+  districtRowsOpen,
+  metroRows,
+  metroRowsOpen,
+  resetMobileFilters,
+  setPrice,
+  toggleDistrict,
+  toggleExpanded,
+  toggleFloor,
+  toggleMetro,
+  toggleWalk,
+  useMobileFilters,
+  type MobileFilterState,
+} from "@/platform/mobile-search-filters"
 import {
   callbacksDue,
   formatDay,
@@ -979,95 +996,63 @@ export function MobileResultsLoadingPage() {
  * как лист закроется. Кнопки «Применить» в продукте нет: счётчик пересчитывается
  * на каждом касании чипа.
  *
- * **«Сбросить 7» несёт то же число, что и кнопка вызова.** Семь — это сколько
- * условий сейчас сужают выдачу, и без него сброс молчал бы о том, что сбрасывать
+ * **«Сбросить N» несёт то же число, что и кнопка вызова.** N — сколько условий
+ * сейчас сужают выдачу, и без него сброс молчал бы о том, что сбрасывать
  * вообще есть что.
  *
- * Чипы разложены по рядам вручную, ровно как в файле: «Красногвардейский» стоит
- * один в первом ряду, а «Невский», «Калининский» и «+ район» — во втором.
- * Автоматический перенос дал бы другую разбивку на другом шрифте.
+ * **Условия живут в общем сторе** (`platform/mobile-search-filters`), и лист
+ * больше не рисует снимок: чипы переключают состояния, «Показать N объектов»
+ * считает выдачу по тем же условиям, и выбор переживает закрытие листа —
+ * вернувшись на выдачу, человек видит суженный список.
+ *
+ * **Стартовые условия — дефолт ПК, а не снимок кадра.** В кадре выбраны
+ * «Лиговский проспект», «до 10 мин» и «не первый», и это даёт ноль объектов
+ * в текущей базе: у станции все объекты в Центральном, а выбраны три других
+ * района. Лист с «Показать 0 объектов» на первом открытии — и есть тот
+ * дефект, который владелец описал как «фильтры не работают». Причины —
+ * в доке стора.
+ *
+ * Чипы разложены по рядам правилом стора, повторяющим кадр: первый
+ * выбранный район один в первом ряду, «Невский», «Калининский» и «+ район» —
+ * во втором.
  *
  * **Назван листом, а нарисован экраном.** Ни затемнения, ни хвата, ни скруглённого
  * верха — вместо них шапка 56 с крестиком. Общий `MobileSheet` поэтому не подошёл;
  * расхождение имени и формы вынесено в отчёт.
  */
 
-type FilterChipSpec = {
+type FilterChip = {
   id: string
   label: string
   selected: boolean
   edge: ChipEdge
+  onPress: () => void
 }
 
-type FilterGroup = {
-  label: string
-  rows: FilterChipSpec[][]
-}
-
-const FILTER_GROUPS: FilterGroup[] = [
-  {
-    label: "РАЙОН",
-    rows: [
-      [{ id: "krasnogv", label: "Красногвардейский", selected: true, edge: "control" }],
-      [
-        { id: "nevsky", label: "Невский", selected: true, edge: "control" },
-        { id: "kalinin", label: "Калининский", selected: true, edge: "control" },
-        { id: "more-district", label: "+ район", selected: false, edge: "control" },
-      ],
-    ],
-  },
-  {
-    label: "МЕТРО",
-    rows: [
-      [
-        { id: "ligovsky", label: "Лиговский проспект", selected: true, edge: "line-2" },
-        { id: "obvodny", label: "Обводный канал", selected: false, edge: "line-2" },
-      ],
-      [
-        { id: "vosstaniya", label: "Площадь Восстания", selected: false, edge: "line-2" },
-        { id: "more-station", label: "+ станция", selected: false, edge: "line-2" },
-      ],
-      [
-        { id: "walk-10", label: "до 10 мин", selected: true, edge: "control" },
-        { id: "walk-20", label: "до 20 мин", selected: false, edge: "control" },
-      ],
-    ],
-  },
-]
-
-const FLOOR_GROUP: FilterGroup = {
-  label: "ЭТАЖ",
-  rows: [
-    [
-      { id: "not-first", label: "не первый", selected: true, edge: "control" },
-      { id: "not-last", label: "не последний", selected: false, edge: "control" },
-    ],
-  ],
-}
-
-function FilterChipRows({
-  group,
-  selection,
-  onToggle,
-}: {
-  group: FilterGroup
-  selection: Record<string, boolean>
-  onToggle: (id: string) => void
-}) {
+/**
+ * Группа чипов листа.
+ *
+ * Ряды приходят готовыми от стора (`districtRows`/`metroRows` и раскрытые
+ * варианты) — там же живёт правило «выбранные впереди, „+“ последним».
+ * Здесь чипы получают границу (районы `control`, станции `line-2` — как
+ * в файле) и действие: обычный чип переключает условие, «+» раскрывает
+ * группу, «−» сворачивает.
+ */
+function FilterChipRows({ label, rows }: { label: string; rows: FilterChip[][] }) {
   return (
     <section className="flex w-full flex-col gap-4">
       <Typography variant="columnHeader" tone="dense">
-        <>{group.label}</>
+        <>{label}</>
       </Typography>
-      {group.rows.map((row) => (
+      {rows.map((row) => (
         <div key={row[0].id} className="flex w-full gap-2">
           {row.map((chip) => (
             <TouchChip
               key={chip.id}
               label={chip.label}
               edge={chip.edge}
-              selected={selection[chip.id] ?? chip.selected}
-              onPress={() => onToggle(chip.id)}
+              selected={chip.selected}
+              onPress={chip.onPress}
             />
           ))}
         </div>
@@ -1076,32 +1061,93 @@ function FilterChipRows({
   )
 }
 
-/** Все чипы листа одним списком: их перебирают и переключение, и сброс. */
-const ALL_FILTER_CHIPS = [...FILTER_GROUPS, FLOOR_GROUP].flatMap((group) =>
-  group.rows.flat(),
-)
+/** Чипы района: обычный переключает, «+»/«−» раскрывают и сворачивают. */
+function districtChipRows(filters: MobileFilterState): FilterChip[][] {
+  const source = filters.expanded === "district" ? districtRowsOpen() : districtRows(filters)
+  return source.map((row) =>
+    row.map((chip) => ({
+      ...chip,
+      edge: "control" as const,
+      onPress: () =>
+        chip.id === "more-district" || chip.id === "close-district"
+          ? toggleExpanded("district")
+          : toggleDistrict(chip.id),
+    })),
+  )
+}
+
+/** Ступени пешей доступности — третий ряд группы метро, как в кадре. */
+const walkChipRow: FilterChip[] = [
+  { id: "walk-10", label: "до 10 мин", selected: false, edge: "control", onPress: () => toggleWalk(10) },
+  { id: "walk-20", label: "до 20 мин", selected: false, edge: "control", onPress: () => toggleWalk(20) },
+]
+
+function metroChipRows(filters: MobileFilterState): FilterChip[][] {
+  const stations = (
+    filters.expanded === "metro" ? metroRowsOpen(filters) : metroRows(filters)
+  ).map((row) =>
+    row.map((chip) => ({
+      ...chip,
+      edge: "line-2" as const,
+      onPress: () =>
+        chip.id === "more-station" || chip.id === "close-station"
+          ? toggleExpanded("metro")
+          : toggleMetro(chip.id),
+    })),
+  )
+  const walk = walkChipRow.map((chip) => ({ ...chip, selected: filters.walk === parseInt(chip.id.slice(5), 10) }))
+  const close = filters.expanded === "metro"
+    ? [[{ id: "close-station", label: "− станция", selected: false, edge: "line-2" as const, onPress: () => toggleExpanded("metro") }]]
+    : []
+  return [...stations, walk, ...close]
+}
+
+/** Чипы этажа: «не первый» и «не последний». */
+function floorChipRow(filters: MobileFilterState): FilterChip[] {
+  return [
+    { id: "not-first", label: "не первый", selected: filters.floor.includes("not-first"), edge: "control", onPress: () => toggleFloor("not-first") },
+    { id: "not-last", label: "не последний", selected: filters.floor.includes("not-last"), edge: "control", onPress: () => toggleFloor("not-last") },
+  ]
+}
+
+/** Компактная запись дефолтного потолка — так подпись стоит в кадре. */
+const DEFAULT_CAP_LABEL = "до 15 млн"
+
+const priceFormat = new Intl.NumberFormat("ru-RU")
 
 export function MobileFiltersSheetPage() {
-  const [selection, setSelection] = useState<Record<string, boolean>>({})
+  const filters = useMobileFilters()
   const navigate = useNavigate()
-
-  const toggle = (id: string) =>
-    setSelection((current) => {
-      const spec = ALL_FILTER_CHIPS.find((chip) => chip.id === id)
-      const now = current[id] ?? spec?.selected ?? false
-      return { ...current, [id]: !now }
-    })
+  const active = countActiveFilters(filters)
+  const total = applyMobileFilters(ALL_ROWS, filters).length
+  const [focused, setFocused] = useState<null | "priceFrom" | "priceTo">(null)
 
   /**
-   * Сброс снимает все условия разом.
-   *
-   * Числа «7» в кнопке сброса и «247» в подвале при этом не пересчитываются:
-   * они сняты с макета, а за листом нет выдачи, по которой можно считать.
-   * Это расхождение названо в отчёте — счётчик, живущий отдельно от условий,
-   * рано или поздно соврёт человеку.
+   * Поле цены: в фокусе — обычное число с пробелами, вне фокуса потолок
+   * в 15 млн сворачивается в подпись кадра «до 15 млн». Пустое поле —
+   * «без условия»: «Цена от» в минимальную цену базы не сужает, и это
+   * не условие, а подпись того, что от минимальной.
    */
-  const reset = () =>
-    setSelection(Object.fromEntries(ALL_FILTER_CHIPS.map((chip) => [chip.id, false])))
+  const priceValue = (edge: "priceFrom" | "priceTo"): { value: string; placeholder: string } => {
+    const value = filters[edge]
+    if (value === undefined) {
+      return {
+        value: "",
+        placeholder:
+          edge === "priceFrom" ? priceFormat.format(PRICE_BOUNDS.min) : DEFAULT_CAP_LABEL,
+      }
+    }
+    if (edge === "priceTo" && focused !== edge && value === 15_000_000) {
+      return { value: DEFAULT_CAP_LABEL, placeholder: "" }
+    }
+    return { value: priceFormat.format(value), placeholder: "" }
+  }
+
+  /** Ввод цифр: всё нецифровое отбрасывается, пусто — снимает условие. */
+  const handlePrice = (edge: "priceFrom" | "priceTo", raw: string) => {
+    const digits = raw.replace(/\D/g, "")
+    setPrice(edge, digits === "" ? undefined : parseInt(digits, 10))
+  }
 
   return (
     <PhoneStand slot="mobile-filters-sheet">
@@ -1132,23 +1178,17 @@ export function MobileFiltersSheetPage() {
           type="button"
           data-slot="mobile-filters-reset"
           className="-mx-2 flex h-11 shrink-0 cursor-pointer items-center rounded-md bg-transparent px-2 text-fg transition-colors duration-120 outline-none active:bg-warm-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg"
-          {...pressProps(reset)}
+          {...pressProps(resetMobileFilters)}
         >
           <Typography variant="strongText" tone="current">
-            Сбросить 7
+            Сбросить {active}
           </Typography>
         </button>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 py-6">
-        {FILTER_GROUPS.map((group) => (
-          <FilterChipRows
-            key={group.label}
-            group={group}
-            selection={selection}
-            onToggle={toggle}
-          />
-        ))}
+        <FilterChipRows label="РАЙОН" rows={districtChipRows(filters)} />
+        <FilterChipRows label="МЕТРО" rows={metroChipRows(filters)} />
 
         <section className="flex w-full flex-col gap-4">
           <Typography variant="columnHeader" tone="dense">
@@ -1182,23 +1222,30 @@ export function MobileFiltersSheetPage() {
             ЦЕНА, ₽
           </Typography>
           <div className="flex w-full gap-3">
-            {[
-              { label: "Цена от", value: "6 000 000" },
-              { label: "Цена до", value: "до 15 млн" },
-            ].map((field) => (
+            {(
+              [
+                { label: "Цена от", edge: "priceFrom" },
+                { label: "Цена до", edge: "priceTo" },
+              ] as const
+            ).map((field) => (
               <Typography key={field.label} asChild variant="rowPrice" tone="default">
                 <input
                   aria-label={field.label}
-                  defaultValue={field.value}
+                  value={priceValue(field.edge).value}
+                  placeholder={priceValue(field.edge).placeholder}
+                  inputMode="numeric"
                   data-slot="filters-price"
-                  className="h-12 min-w-0 flex-1 rounded-xl bg-surface px-4 outline-solid outline-1 -outline-offset-1 outline-border-control focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg"
+                  onFocus={() => setFocused(field.edge)}
+                  onBlur={() => setFocused(null)}
+                  onChange={(event) => handlePrice(field.edge, event.target.value)}
+                  className="h-12 min-w-0 flex-1 rounded-xl bg-surface px-4 outline-solid outline-1 -outline-offset-1 outline-border-control placeholder:text-fg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg"
                 />
               </Typography>
             ))}
           </div>
         </section>
 
-        <FilterChipRows group={FLOOR_GROUP} selection={selection} onToggle={toggle} />
+        <FilterChipRows label="ЭТАЖ" rows={[floorChipRow(filters)]} />
       </div>
 
       <div
@@ -1206,14 +1253,17 @@ export function MobileFiltersSheetPage() {
         className="flex w-full shrink-0 flex-col border-t border-line-2 bg-surface px-4 pt-3 pb-6"
       >
         {/* Кнопки «Применить» в продукте нет: лист закрывается показом выдачи,
-            и это тот же адрес, что за крестиком. */}
+            и это тот же адрес, что за крестиком. Число — честный размер
+            выдачи, он пересчитывается на каждом касании (решение владельца
+            в DESIGN.md: «счётчик найденного пересчитывается на каждом
+            касании»). */}
         <Button
           variant="primary"
           size="lg"
           block
           {...pressProps(() => void navigate({ to: "/m/search" }))}
         >
-          Показать 247 объектов
+          Показать {total} {plural(total, "объект", "объекта", "объектов")}
         </Button>
       </div>
     </PhoneStand>
