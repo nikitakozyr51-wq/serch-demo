@@ -38,7 +38,7 @@ function MobileSectionHeader({
   return (
     <header
       data-slot="mobile-section-header"
-      className="flex h-header w-full shrink-0 items-center gap-3 border-b border-line-2 bg-surface px-4"
+      className="px-safe-screen flex h-header w-full shrink-0 items-center gap-3 border-b border-line-2 bg-surface"
     >
       {back ? (
         <button
@@ -315,7 +315,7 @@ function MobileAuthLogo() {
   return (
     <div
       data-slot="mobile-auth-logo"
-      className="flex h-header w-full shrink-0 items-center gap-2 px-4"
+      className="px-safe-screen flex h-header w-full shrink-0 items-center gap-2"
     >
       <Typography variant="panelTitle" tone="default">
         Сёрчь

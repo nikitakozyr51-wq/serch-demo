@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 
-import { isOverlayOpen } from "./overlay-state"
+import { isOverlayOpen } from "@/platform/overlay"
 
 /**
  * Горячие клавиши кабинета.

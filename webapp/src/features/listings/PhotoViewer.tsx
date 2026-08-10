@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 
 import { Typography } from "@/components/typography"
+import { setOverlayOpen } from "@/platform/overlay"
 import { cn } from "@/lib/utils"
 
 /**
@@ -61,23 +62,63 @@ function PhotoViewer({ shots, startAt, address, onClose }: PhotoViewerProps) {
     [total],
   )
 
+  /**
+   * Просмотрщик ОБЪЯВЛЯЕТ СЕБЯ ОКНОМ, и это не формальность.
+   *
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * В кабинете есть общий счётчик открытых окон, и `useHotkeys` молчит,
+   * пока он не ноль. Правило заведено после того, как `Enter` из командной
+   * палитры раскрыл контакт на скрытой под ней выдаче — то есть списал
+   * 199 ₽ из окна, которое о выдаче ничего не знает.
+   *
+   * Просмотрщик этот счётчик не трогал, и та же беда вернулась вдвое хуже.
+   * Он открывается с карточки объекта, где `Escape` уводит в выдачу,
+   * а `←` и `→` листают список, — и с экрана прозвона, где `Enter`, `2`,
+   * `3` и `h` ЗАПИСЫВАЮТ ИСХОД ЗВОНКА в журнал агентства. Оба обработчика
+   * висят на окне и оба срабатывают на одно нажатие: человек листал
+   * фотографию, а продукт под ней отмечал разговор, которого не было,
+   * и переходил к следующему объекту очереди.
+   *
+   * Счётчик поднимается на всё время жизни окна и опускается при закрытии
+   * — включая закрытие вместе с экраном, потому что снятие возвращает
+   * функция очистки, а не обработчик кнопки.
+   */
+  useEffect(() => {
+    setOverlayOpen(true)
+    return () => setOverlayOpen(false)
+  }, [])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" && event.key !== "ArrowRight" && event.key !== "ArrowLeft") {
+        return
+      }
+      // Клавиша принадлежит просмотрщику целиком: экран под ним слушает
+      // те же три и без остановки получил бы их вторым.
+      event.preventDefault()
+      event.stopPropagation()
       if (event.key === "Escape") onClose()
       if (event.key === "ArrowRight") step(1)
       if (event.key === "ArrowLeft") step(-1)
     }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    // `capture`: перехват до того, как событие дойдёт до слушателей экрана.
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
   }, [onClose, step])
 
   /**
-   * Свайп пальцем.
+   * Начало жеста: где палец лёг и попал ли он мимо кадра.
    *
-   * Порог 40 px, а не любое смещение: без порога просмотрщик перелистывался
-   * бы от дрожания руки при попытке просто закрыть его нажатием.
+   * Порог листания 40 px, а не любое смещение: без порога просмотрщик
+   * перелистывался бы от дрожания руки при попытке просто закрыть его.
+   *
+   * Признак «мимо кадра» запоминается вместе с точкой, а не проверяется
+   * при отпускании: за время жеста палец успевает съехать с фона на снимок
+   * и обратно, и решать по конечной точке значило бы закрывать окно
+   * по случайности того, где палец остановился.
    */
-  const [from, setFrom] = useState<number | null>(null)
+  const [from, setFrom] = useState<{ x: number; onBackdrop: boolean } | null>(null)
 
   if (total === 0) return null
 
@@ -88,16 +129,45 @@ function PhotoViewer({ shots, startAt, address, onClose }: PhotoViewerProps) {
       aria-modal="true"
       aria-label={`Кадры объекта ${address}`}
       className="scrim-in fixed inset-0 z-60 flex flex-col items-center justify-center gap-4 bg-[#1e1e1e59] p-4"
+      /*
+        ЗАКРЫТИЕ — НА ОТПУСКАНИИ, А НЕ НА НАЖАТИИ, И ЭТО УСЛОВИЕ СВАЙПА.
+
+        ═══════════════════════════════════════════════════════════════════
+
+        Сначала фон закрывал окно по `pointerdown` и там же запоминал начало
+        жеста. Две несовместимые вещи разом: свайп начинается там же, где
+        срабатывает закрытие, — и обещанный в шапке файла жест был невозможен
+        нигде, кроме самого снимка.
+
+        А снимок занимает меньше трети площади: он идёт `object-contain`,
+        и кадр 900 × 600 на экране 390 × 844 — это примерно 390 × 260
+        из семисот доступных по высоте. Остальное фон. То есть палец
+        почти всегда ложился туда, где движение обрывалось закрытием
+        на первом же кадре, ещё до того, как стало ясно, что это листание.
+
+        Теперь нажатие только запоминает точку, а решение принимается
+        на отпускании: сдвинулся дальше сорока — листаем, остался
+        на месте и попал мимо кадра — закрываем. Случайный сдвиг пальца
+        при этом перестал закрывать окно, а не только перестал мешать.
+      */
       onPointerDown={(event) => {
-        setFrom(event.clientX)
-        if (event.target === event.currentTarget) onClose()
+        setFrom({ x: event.clientX, onBackdrop: event.target === event.currentTarget })
       }}
       onPointerUp={(event) => {
         if (from === null) return
-        const shift = event.clientX - from
+        const shift = event.clientX - from.x
+        const wasOnBackdrop = from.onBackdrop
         setFrom(null)
-        if (Math.abs(shift) >= 40) step(shift < 0 ? 1 : -1)
+        if (Math.abs(shift) >= 40) {
+          step(shift < 0 ? 1 : -1)
+          return
+        }
+        if (wasOnBackdrop) onClose()
       }}
+      // Палец ушёл за край окна или жест перехватила система: ничего
+      // не делаем, но начало забываем — иначе следующее отпускание
+      // где угодно посчиталось бы концом этого жеста.
+      onPointerCancel={() => setFrom(null)}
     >
       {/* Крестик у верхнего края, а не над кадром: кадр занимает всё, что
           может, и кнопка над ним отъедала бы у него высоту. */}

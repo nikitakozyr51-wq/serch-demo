@@ -80,7 +80,7 @@ function MobileBottomNav({ activeId }: MobileBottomNavProps) {
       // Волосяная линия сверху нарисована внутренней тенью, а не рамкой:
       // в файле обводка идёт внутрь и высоту не меняет, а рамка добавила бы
       // 73-й пиксель. Это линия, а не глубина, — запрет теней не нарушен.
-      className="pb-safe-nav flex w-full shrink-0 items-start justify-between bg-surface px-2 pt-2 shadow-[inset_0_1px_0_var(--line-2)]"
+      className="pb-safe-nav px-safe-nav flex w-full shrink-0 items-start justify-between bg-surface pt-2 shadow-[inset_0_1px_0_var(--line-2)]"
     >
       {TABS.map((tab) => {
         const active = tab.id === activeId

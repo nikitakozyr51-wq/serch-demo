@@ -1,7 +1,7 @@
 {
   "_": "Снято обходом доски «СИСТЕМА · Состояния контролов» (nXleb) из Pencil-файла serch с resolveVariables, поэтому цвета настоящие, а не имена переменных. Пересняли 06.08.2026 после передачи 05.08: форма отвечает роли, а не высоте. Ряды: gbFiM главная 48 · m5O0xU вторичная 32 · MpEkM поле 40 линией снизу · vCCph чип 28 · iv9er чекбокс 24. Прежний ряд «Поле 40» с коробкой (aVkKz) остался в файле, но законом больше не является. Процедура — в webapp/design-check/README.md.",
   "_snapshot": "2026-08-03",
-  "primary-48|rest": {
+  "row-money-48|rest": {
     "height": 48,
     "fill": "#1e1e1e",
     "radius": 999,
@@ -17,9 +17,9 @@
       "lh": 24
     }
   },
-  "primary-48|hover": {
+  "row-money-48|hover": {
     "height": 48,
-    "fill": "#333029",
+    "fill": "#d92d2c",
     "radius": 999,
     "padding": [
       0,
@@ -33,7 +33,7 @@
       "lh": 24
     }
   },
-  "primary-48|focus": {
+  "row-money-48|focus": {
     "height": 48,
     "fill": "#1e1e1e",
     "stroke": "#f9f9f9",
@@ -55,7 +55,7 @@
       "lh": 24
     }
   },
-  "primary-48|press": {
+  "row-money-48|press": {
     "height": 48,
     "fill": "#0d0d0c",
     "radius": 999,
@@ -71,7 +71,7 @@
       "lh": 24
     }
   },
-  "primary-48|disabled": {
+  "row-money-48|disabled": {
     "height": 48,
     "fill": "#f2f1ee",
     "radius": 999,
@@ -355,7 +355,7 @@
     ]
   },
   "listing-row|rest": {
-    "height": 88,
+    "height": 96,
     "fill": "#ffffff",
     "padding": [
       0,
@@ -363,7 +363,7 @@
     ]
   },
   "listing-row|selected": {
-    "height": 88,
+    "height": 96,
     "fill": "#ffffff",
     "stroke": "#1e1e1e",
     "strokeWidth": 1,
@@ -373,7 +373,7 @@
     ]
   },
   "listing-row|taken": {
-    "height": 88,
+    "height": 96,
     "fill": "#ffffff",
     "padding": [
       0,
@@ -381,7 +381,7 @@
     ]
   },
   "listing-row|blocked": {
-    "height": 88,
+    "height": 96,
     "fill": "#f2f1ee",
     "padding": [
       0,

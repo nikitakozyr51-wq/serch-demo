@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 import { useExit } from "@/platform/motion"
 import { CommandPalette } from "./CommandPalette"
 import { HotkeysDialog } from "./dialogs"
-import { onPaletteRequest, resetOverlays, setOverlayOpen } from "./overlay-state"
+import { onPaletteRequest, resetOverlays, setOverlayOpen } from "@/platform/overlay"
 
 /**
  * Два окна, которые открываются с клавиатуры на любом экране кабинета.

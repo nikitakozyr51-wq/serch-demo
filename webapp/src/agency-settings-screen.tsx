@@ -297,7 +297,7 @@ export function AgencySettingsPage() {
           />
           <SettingRow
             title="Плотность по умолчанию"
-            note="строка выдачи 88 px или 64 px"
+            note="строка выдачи 96 px или 64 px"
             control={<RuleChips options={["Просторно", "Плотно"]} initial="Просторно" />}
           />
           <SettingRow

@@ -326,7 +326,7 @@ export function StatesScreenPage() {
             G37qjO
           </Typography>
           <Typography variant="denseText" tone="secondary">
-            Строка выдачи, телефон — 358 × 204
+            Строка выдачи, телефон — 358 × 96
           </Typography>
         </div>
         <div

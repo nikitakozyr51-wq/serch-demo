@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { CabinetHeader } from "./CabinetHeader"
 import { CabinetGuard } from "./CabinetGuard"
 import { CabinetOverlays } from "./CabinetOverlays"
-import { requestPalette } from "./overlay-state"
+import { requestPalette } from "@/platform/overlay"
 import { useCabinetNav } from "./useCabinetNav"
 import { CabinetSidebar, type NavEntry } from "./CabinetSidebar"
 

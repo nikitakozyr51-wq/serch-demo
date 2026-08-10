@@ -4,6 +4,7 @@ import { useId, useState } from "react"
 import { Bookmark, Plus, Share2 } from "lucide-react"
 
 import { Button } from "@/components/controls/Button"
+import { StateChip } from "@/components/controls/StateChip"
 import { Typography } from "@/components/typography"
 import { CollectionOffReason } from "@/collection-off-parts"
 import { ALL_ROWS } from "@/data/search-rows"
@@ -108,24 +109,35 @@ function objectsOf(collection: Collection | undefined): CollectionObject[] {
 }
 
 /**
- * Чип «Открыта» (`mrzcW`): 32, поля [0, 8], радиус 8, зелёная плашка.
+ * Чип «Открыта»: судьба ссылки подборки.
  *
- * Свой, а не `StatusChip`: тот несёт восемь состояний объекта — «В работе»,
- * «Раскрыт», «Стоп-лист». Здесь речь не об объекте, а о ссылке подборки,
- * и набор у неё другой. Геометрия совпадает с телефонным `StatusChip`
- * один в один, потому что она общая для чипов на телефоне, а не потому,
- * что это тот же чип.
+ * **Обёртка над общим `StateChip`, а не своя фигура.** До 10.08.2026 здесь
+ * стояла зелёная плашка `mrzcW` — высота 32, поля [0, 8], радиус 8, заливка
+ * `ok-tint`. Плашку убрали во всём продукте разом: состояние не поверхность,
+ * оно ничего не содержит и никуда не ведёт, а прямоугольник с заливкой
+ * и радиусом читается кнопкой, по которой надо нажать. В списке подборок
+ * это било сильнее всего — плашка стояла в строке-ссылке, то есть внутри
+ * настоящего нажимаемого узла оказывался ложный второй.
+ *
+ * Осталась одна фигура на весь продукт: точка 6 и слово. Тон `ok` —
+ * тот же смысл, что нёс `ok-tint`: ссылка живая, клиент по ней зайдёт.
+ * Высота коробки 32 сохранена через `tall`: она телефонная, и на ней стоит
+ * первая строка подборки в списке.
+ *
+ * **Прежний комментарий здесь врал, и это стоит назвать вслух.** Он обещал,
+ * что геометрия «общая для чипов на телефоне», и звал сверять её с
+ * `StatusChip`. После пересборки `StatusChip` общего между ними не осталось
+ * ничего, кроме `StateChip`, — сверять надо с ним, а не с соседним чипом.
+ *
+ * **Что осталось своим — только словарь.** Не `StatusChip`: у того набор
+ * закрыт восемью состояниями объекта («В работе», «Раскрыт», «Стоп-лист»).
+ * Здесь состояние не объекта, а ссылки подборки. Фигура общая, словари разные.
  */
 function CollectionLinkChip({ label }: { label: string }) {
   return (
-    <span
-      data-slot="collection-link-chip"
-      className="inline-flex h-8 shrink-0 items-center rounded-md bg-ok-tint px-2 text-ok-text"
-    >
-      <Typography variant="chipLabel" tone="current">
-        {label}
-      </Typography>
-    </span>
+    <StateChip tone="ok" slot="collection-link-chip" tall>
+      {label}
+    </StateChip>
   )
 }
 

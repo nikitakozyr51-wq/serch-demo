@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { Fragment, useState } from "react"
-import { ChevronRight, CreditCard, Mail, Users } from "lucide-react"
+import { CreditCard, Mail, Users } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
@@ -726,11 +726,40 @@ export function MobilePlanPage() {
           рассказывает про списание и не даёт его прекратить, — это не
           недоделка, а неприятная особенность.
 
-          Своего экрана за строкой в файле нет: смена карты идёт через
-          платёжного провайдера, остановка автосписания — заявкой. Строка
-          называет действие и ничего не рисует.
+          **Экрана за строкой нет, и придумать его здесь нельзя.** Карту
+          меняют на стороне платёжного провайдера: карточные данные кабинет
+          не принимает и принимать не должен. Автосписание останавливают
+          заявкой: подписка держится на договоре с агентством, и обрывать
+          её кнопкой в обход договора — обещание, которого продукт не даёт.
+
+          **Но на касание строка обязана отвечать.** Заведена она была
+          обычным `div`: выглядела нажимаемой строкой настройки и при этом
+          не темнела под пальцем, не бралась фокусом с клавиатуры и не
+          попадала в перепись кнопок, которая ищет `data-action`. Человеку
+          она обещала экран остановки списания, машине не существовала
+          вовсе. Теперь это кнопка с названным действием — тот же приём,
+          что у строк настроек агентства (`AgencySettingRow`), за которыми
+          окна тоже не нарисовано: действие названо вслух, отклик есть,
+          выдуманного окна нет.
+
+          Шеврон убран. Правая позиция в строке настройки значит ровно одно
+          — «идём глубже», — и стрелка в никуда обещала бы переход, которого
+          не будет. Высота при этом стала обычными 64: строка настройки жмётся
+          пальцем, а 42 по содержимому — не ступень касания.
         */}
-        <div className="flex w-full shrink-0 items-center gap-3 border-t border-line-2 pt-4">
+        <button
+          type="button"
+          data-slot="mobile-setting-row"
+          data-action="Открывает управление подпиской: карту меняют у платёжного провайдера, автосписание останавливают заявкой"
+          className={cn(
+            "flex min-h-16 w-full shrink-0 cursor-pointer items-center gap-3 border-t border-line-2 bg-transparent py-2 text-left",
+            // Отклик — общее правило нажимаемой строки кабинета из `index.css`,
+            // а не своя пара цветов: на телефоне подсветка наведения там уже
+            // отключена, и переписывать её здесь значило бы завести вторую.
+            "row-tap",
+            "outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg",
+          )}
+        >
           <span
             aria-hidden
             className="flex size-10 shrink-0 items-center justify-center rounded-full bg-warm"
@@ -745,8 +774,7 @@ export function MobilePlanPage() {
               сменить карту · остановить автосписание
             </Typography>
           </span>
-          <ChevronRight aria-hidden className="size-5 shrink-0 text-text-dense" strokeWidth={2} />
-        </div>
+        </button>
       </div>
     </PersonScreen>
   )

@@ -46,7 +46,7 @@ function MobileHeader({ balance, initials }: MobileHeaderProps) {
   return (
     <header
       data-slot="mobile-header"
-      className="flex h-header w-full shrink-0 items-center gap-2.5 border-b border-line-2 bg-surface px-4"
+      className="px-safe-screen flex h-header w-full shrink-0 items-center gap-2.5 border-b border-line-2 bg-surface"
     >
       <div className="flex items-center gap-2">
         <Typography variant="panelTitle" tone="default">

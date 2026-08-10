@@ -6,7 +6,7 @@ import { ALL_ROWS } from "@/data/search-rows"
 import { DISCLOSURE_PRICE, useSession } from "@/features/auth"
 import { MobileBottomNav, MobileHeader, PhoneFrame, useMobileFramed } from "@/features/cabinet"
 import { MobileListingRow, plural, photoFor } from "@/features/listings"
-import { useWorkspace } from "@/features/workspace"
+import { disclosureOf, useWorkspace } from "@/features/workspace"
 
 /**
  * МОБАЙЛ · Поиск и выдача.
@@ -66,7 +66,27 @@ export function MobileSearchScreenPage({
    */
   const rows = useMemo(() => {
     const stop = new Set(workspace.stopList)
-    const paid = new Set(session?.disclosed ?? [])
+    /*
+      «Раскрыт» спрашивается у ЖУРНАЛА АГЕНТСТВА, а не у личного списка.
+
+      ═══════════════════════════════════════════════════════════════════════
+
+      Стояло `session.disclosed` — список адресов, которые раскрыл ЭТОТ
+      человек. Но платит не человек, а агентство, и правило продукта
+      записано в `disclose()`: если номер уже открывал коллега, второй раз
+      не списывается ничего.
+
+      Из-за личного списка строка по контакту, за который агентство уже
+      заплатило, показывала «Раскрыть · 199 ₽» и вела на экран продажи.
+      Денег это не теряло — нажатие уходило в ветку «уже раскрыт», — но
+      врало дважды: обещало трату, которой не будет, и прятало номер,
+      который агентству принадлежит.
+
+      На компьютере это место сделано верно (`search-screen.tsx` зовёт
+      `disclosureOf`), и расхождение было ровно между платформами: два
+      экрана одной выдачи по-разному отвечали на вопрос «мы за это платили».
+    */
+    const isOpen = (address: string) => disclosureOf(workspace, address) !== undefined
 
     const source =
       dataset === "measured"
@@ -89,12 +109,12 @@ export function MobileSearchScreenPage({
       // не платят, у объекта из стоп-листа раскрытия нет вовсе.
       actionLabel: stop.has(row.address)
         ? "Просил не звонить"
-        : paid.has(row.address)
+        : isOpen(row.address)
           ? "Открыть · 0 ₽"
           : `Раскрыть · ${DISCLOSURE_PRICE} ₽`,
-      paid: paid.has(row.address),
+      paid: isOpen(row.address),
     }))
-  }, [dataset, session?.disclosed, workspace.stopList])
+  }, [dataset, workspace])
 
   return (
     // Кадр телефона на десктопном экране: 390 × 844 по центру, чтобы стенд

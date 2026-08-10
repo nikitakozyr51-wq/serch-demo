@@ -915,7 +915,7 @@ function settingsGroups(values: {
           id: "density",
           icon: Rows3,
           title: "Плотность по умолчанию",
-          note: "строка выдачи 88 px или 64 px",
+          note: "строка выдачи 96 px или 64 px",
           action: "Меняет плотность списков для всего агентства",
         },
         {

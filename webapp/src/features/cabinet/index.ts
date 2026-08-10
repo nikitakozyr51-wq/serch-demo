@@ -1,11 +1,18 @@
-export { isOverlayOpen, useOverlayOpen } from './overlay-state'
+/*
+  Счётчик открытых окон переехал в платформу (`@/platform/overlay`): его
+  спрашивает не только кабинет, но и просмотрщик кадров из выдачи, а прямая
+  стрелка «выдача → кабинет» замкнула бы кольцо — кабинет уже импортирует
+  выдачу. Здесь остаётся пересылка, чтобы двадцать мест кабинета не меняли
+  адрес импорта ради переезда, которого они не заметят.
+*/
+export { isOverlayOpen, useOverlayOpen } from '@/platform/overlay'
 export { CabinetGuard } from './CabinetGuard'
 export { AvatarMenu } from './AvatarMenu'
 export { PhoneFrame } from './PhoneFrame'
 export { useCabinetNav } from './useCabinetNav'
 export { isNarrow, loginPath, platformTwin } from './platform'
 export { usePlatformRoute } from './usePlatformRoute'
-export { requestPalette } from './overlay-state'
+export { requestPalette } from '@/platform/overlay'
 export { CabinetHeader } from './CabinetHeader'
 export type { CabinetHeaderProps } from './CabinetHeader'
 export { BalanceStoppedBar } from './BalanceStoppedBar'

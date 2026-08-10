@@ -11,7 +11,12 @@ import { seedSession } from '../lib/session'
  * но их никто не читал — высоты были набраны числами. Снаружи это выглядит
  * как «кнопка есть, а толку нет», и ни один слой такого не ловил.
  *
- * Значения сняты с пары экранов `ghwPj` (просторно, 88) и `ZOB5K` (плотно, 64).
+ * Значения сняты с пары экранов `ghwPj` (просторно, 96) и `ZOB5K` (плотно, 64).
+ *
+ * Просторная строка выросла с 88 до 96 сверкой 10.08.2026. Имя кадра тогда
+ * отстало от содержимого и говорило «просторно, 88» при 166 экземплярах
+ * по 96 внутри — переименовано вместе с этой правкой, чтобы имя и замер
+ * снова говорили одно и то же.
  * Пары ниже — это ровно то, что в файле отличается между ними.
  */
 
@@ -27,7 +32,7 @@ type Expected = {
 }
 
 const PAIRS: Expected[] = [
-  { what: 'строка выдачи', selector: '[data-slot="listing-row"]', prop: 'height', spacious: 88, compact: 64 },
+  { what: 'строка выдачи', selector: '[data-slot="listing-row"]', prop: 'height', spacious: 96, compact: 64 },
   { what: 'поле строки', selector: '[data-slot="listing-row"]', prop: 'paddingLeft', spacious: 16, compact: 12 },
   { what: 'кнопка действия', selector: '[data-slot="listing-row"] [data-slot="button"]', prop: 'height', spacious: 32, compact: 28 },
   { what: 'полоса табов', selector: '[data-slot="result-tabs"]', prop: 'height', spacious: 36, compact: 32 },
