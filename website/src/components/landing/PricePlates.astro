@@ -62,14 +62,16 @@ interface Plate {
   price: string
   /** Единицы у пробного старта нет: ноль ни за что не считается. */
   unit?: string
-  /** Красная цена — только там, где списываются деньги. */
-  priceAccent?: boolean
   description: string
   features: string[]
-  action: { href: string; label: string; variant: 'primary' | 'secondary' }
+  action: { href: string; label: string; variant: 'primary' | 'secondary' | 'recommend' }
   /** Строка доверия под кнопкой; у третьей плашки её нет. */
   trust?: string
-  /** Акцентная обводка 2 px. */
+  /**
+   * Рекомендованная плашка: волосяная обводка `accent` вместо `hairline`.
+   *
+   * Ровно одна на ряд. Две выделенные плашки — это ни одной выделенной.
+   */
   accent?: boolean
 }
 
@@ -92,15 +94,15 @@ const plates: Plate[] = [
       'Воронка агентства в рублях',
       'Журнал доступа, стоп-лист, возвраты',
     ],
-    action: { href: 'mailto:hello@serch.ru', label: 'Спросить о договоре', variant: 'secondary' },
+    action: { href: 'mailto:hello@serch.ru', label: 'Спросить о договоре', variant: 'recommend' },
     trust: 'Работаем с юридическими лицами',
+    accent: true,
   },
   {
     label: 'Раскрытый контакт',
     badge: 'Только за факт',
     price: '199 ₽',
     unit: '/ контакт',
-    priceAccent: true,
     description: 'Списывается, когда агент решил звонить. Нераскрытые объекты не стоят ничего.',
     features: [
       'Прямой номер собственника',
@@ -109,7 +111,6 @@ const plates: Plate[] = [
       'Один счёт в конце месяца',
     ],
     action: { href: signupHref, label: 'Создать агентство', variant: 'primary' },
-    accent: true,
   },
 ]
 ---
@@ -123,7 +124,18 @@ const plates: Plate[] = [
       <article
         class:list={[
           'hv-card flex flex-1 flex-col justify-between gap-4 rounded-3xl bg-surface p-6 lg:h-125 lg:gap-0 lg:p-8',
-          plate.accent ? 'border-2 border-accent-bright' : 'border border-hairline',
+          /*
+            Обводка волосяная и у выделенной плашки тоже — 1 px `accent`,
+            а не 2 px. Замер `xcGV2/v2Nfb` от 10.08.2026: толщина у всех
+            трёх одна, различается только цвет. Двойная толщина сдвигала
+            содержимое выделенной плашки на пиксель внутрь, и три ряда
+            фактов переставали стоять на одной линии.
+
+            Выделена вторая плашка, «Доступ агентства», а не третья: это
+            рекомендованная покупка. Третья, «Раскрытый контакт», — цена
+            за факт, её не выбирают, она наступает сама.
+          */
+          plate.accent ? 'border border-accent-bright' : 'border border-hairline',
         ]}
       >
         <div class="flex flex-col gap-4">
@@ -139,14 +151,11 @@ const plates: Plate[] = [
           {/* Цена и единица: 4 на телефоне (`fIaQn`, `zcRFB`, `JyFmU`) и 6 от
               lg (`p4WnR`, `hlqdm`, `sWGd4`). Обе меры из файла. */}
           <div class="flex items-end gap-1 lg:gap-1.5">
-            <span
-              class:list={[
-                'text-num-40 font-semibold',
-                plate.priceAccent ? 'text-accent-deep' : 'text-fg',
-              ]}
-            >
-              {plate.price}
-            </span>
+            {/* Цена графитом у всех трёх. Красная цена на «199 ₽» была
+                дорисована, а не снята: в файле все три числа `#1e1e1e`.
+                Красный на сайте закреплён за кнопкой рекомендованного
+                тарифа, и второе красное рядом отменяло бы первое. */}
+            <span class="text-num-40 font-semibold text-fg">{plate.price}</span>
             {plate.unit && <span class="text-15 font-medium text-text-2">{plate.unit}</span>}
           </div>
 

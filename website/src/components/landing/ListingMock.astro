@@ -108,31 +108,42 @@ const deviationTone = {
   data-demo-mock
   class="hv-object flex flex-col gap-3 lg:rounded-3xl lg:border lg:border-hairline lg:bg-surface lg:p-4 lg:shadow-[0_16px_40px_-12px_#1E1E1E1F]"
 >
-  <div
-    class="flex h-18 items-center gap-3 rounded-2xl border border-hairline bg-surface py-3 pr-3 pl-4 lg:h-12 lg:gap-2.5 lg:rounded-xl lg:bg-bg lg:py-0 lg:pr-1.5 lg:pl-3.5"
+  {/*
+    Строка поиска: тёплая коробка 48, радиус 8. Замер `ALz6d/PpVll`
+    от 10.08.2026 — было три вложенных радиуса и белая заливка на белом.
+
+    Радиус 8 не случайный и не «на глаз»: 24 у карточки минус поле 16 даёт
+    ровно 8, и коробка сидит в карточке концентрично. Вложенность упала
+    с трёх уровней до одного.
+
+    ═══════════════════════════════════════════════════════════════════════
+    КНОПКИ «НАЙТИ» БОЛЬШЕ НЕТ, НО ПОИСК РАБОТАЕТ
+    ═══════════════════════════════════════════════════════════════════════
+
+    Узел `vmo39` в файле выключен: в кадре было два тёмных главных действия
+    на один экран — «Найти» и «Позвонить», — и второе забирало у первого
+    внимание, ничего не давая взамен.
+
+    Но у владельца по этому месту есть своё решение: «поиск в герое
+    не нажимается» было его претензией, и витрина обязана отвечать
+    на нажатие. Решение владельца выигрывает у совета файла, конфликт
+    назван вслух.
+
+    Разрешён он не спором, а составом: нажимается вся строка целиком,
+    а отдельной тёмной кнопки в ней нет. Витрина отвечает, тёмное действие
+    на экране остаётся одно, и ни одна из двух правд не отменена.
+  */}
+  <button
+    type="button"
+    data-demo-search
+    aria-label="Показать выдачу: Калининский район, до 15 млн"
+    class="ctl flex h-18 w-full cursor-pointer items-center gap-3 rounded-2xl border border-hairline bg-surface py-3 pr-3 pl-4 text-left lg:h-12 lg:gap-2.5 lg:rounded-lg lg:border-0 lg:bg-warm lg:py-0 lg:pr-4 lg:pl-4"
   >
     <Search className="size-[18px] shrink-0 text-text-3 lg:size-4" />
     <span class="text-15 min-w-0 flex-1 font-medium text-fg lg:text-15-dense">
       Калининский<span class="hidden lg:inline"> район</span>, до 15 млн
     </span>
-    {/*
-      Кнопка настоящая, а не нарисованная. Промпт движения требует от витрины
-      состояний `idle → pending → success` со скелетоном при поиске: человек
-      обязан увидеть, что продукт делает, а не поверить картинке. Владелец
-      об это и споткнулся — «Поиск в герое не нажимается».
-
-      Скелетон держится 900 мс: это не имитация задержки ради красоты,
-      а нижняя граница из DESIGN.md — показанный скелет живёт минимум 400 мс,
-      иначе он мигает, а четыре площадки быстрее секунды не отвечают.
-    */}
-    <button
-      type="button"
-      data-demo-search
-      class="ctl ctl-solid text-15 flex h-12 shrink-0 cursor-pointer items-center rounded-full bg-fg px-4 font-semibold text-surface lg:text-17 lg:px-5"
-    >
-      Найти
-    </button>
-  </div>
+  </button>
 
   <div class="flex items-center justify-between gap-2 px-1 lg:px-0">
     <span class="flex items-end gap-1 lg:items-baseline">
@@ -200,7 +211,16 @@ const deviationTone = {
     }
   </div>
 
-  <div class="flex flex-col gap-2 rounded-2xl bg-warm p-3.5">
+  {/*
+    Раскрытый объект: ни своей заливки, ни своего радиуса, ни поля —
+    только волосяная черта сверху. Замер `ALz6d/Iv1x8` от 10.08.2026.
+
+    Была тёплая карточка с радиусом 16 внутри белой карточки с радиусом 24,
+    а внутри неё — капсула кнопки: три поверхности одна в другой на 486 px.
+    Блок и без заливки читается отдельным: его отделяет черта и то, что он
+    последний. Заливка добавляла глубины там, где нужна была граница.
+  */}
+  <div class="flex flex-col gap-2 border-t border-hairline pt-3">
     {/* Номер не переносится: телефон, разорванный по строкам, перестаёт быть
         номером. На 320 адрес и номер встают друг под друга, а не ломаются. */}
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">

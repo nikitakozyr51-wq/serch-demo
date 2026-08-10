@@ -34,7 +34,7 @@ interface Props {
    * заливка тонет в завесе, поэтому цвета меняются местами (замер `mylzb`
    * в «Итоговом действии»: заливка #ffffff, метка #1e1e1e).
    */
-  variant?: 'primary' | 'secondary' | 'on-photo'
+  variant?: 'primary' | 'secondary' | 'on-photo' | 'recommend'
   /** `full` — кнопка занимает всю ширину родителя (так стоит в плашках прайса). */
   width?: 'auto' | 'full'
   /**
@@ -77,6 +77,9 @@ const variants = {
   // белое можно только притемнить, и притемняется оно в тёплую сторону,
   // а не в серую, иначе кнопка выпадает из палитры.
   'on-photo': 'ctl-light',
+  // Рекомендованный тариф: единственное красное на сайте, которое означает
+  // не списание. Объяснение и границы исключения — в `.ctl-recommend`.
+  recommend: 'ctl-recommend ctl-dark border',
 } as const
 
 const classes = [
