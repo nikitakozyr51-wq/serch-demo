@@ -3,15 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/serch-demo/app/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `viewport-fit=cover` включает переменные `env(safe-area-inset-*)`.
+      Без него браузер сам отступает от полосы жестов и выреза, а `env`
+      всегда отдаёт ноль — то есть нижняя навигация кончалась бы раньше
+      экрана и под ней просвечивала страница.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>web_frontend</title>
-    <script type="module" crossorigin src="/serch-demo/app/assets/index-gXnrQhqH.js"></script>
+    <script type="module" crossorigin src="/serch-demo/app/assets/index-D-EdbqB1.js"></script>
     <link rel="modulepreload" crossorigin href="/serch-demo/app/assets/rolldown-runtime-BgaNhQyE.js">
     <link rel="modulepreload" crossorigin href="/serch-demo/app/assets/react-vendor-BuEn74Du.js">
     <link rel="modulepreload" crossorigin href="/serch-demo/app/assets/tanstack-vendor-BrmI1dWK.js">
-    <link rel="modulepreload" crossorigin href="/serch-demo/app/assets/vendor-CD13fBmx.js">
-    <link rel="modulepreload" crossorigin href="/serch-demo/app/assets/typography-Cc1f55a2.js">
-    <link rel="stylesheet" crossorigin href="/serch-demo/app/assets/index-CAXptnie.css">
+    <link rel="modulepreload" crossorigin href="/serch-demo/app/assets/vendor-DmPOcC7O.js">
+    <link rel="modulepreload" crossorigin href="/serch-demo/app/assets/typography-N8Np7IDv.js">
+    <link rel="stylesheet" crossorigin href="/serch-demo/app/assets/index-CUwiiAHP.css">
   </head>
   <body>
     <div id="root"></div>
