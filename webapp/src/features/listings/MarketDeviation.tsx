@@ -81,10 +81,9 @@ function MarketDeviation({ percent, comparables }: MarketDeviationProps) {
     <span
       data-slot="market-deviation"
       data-band={isCheaper ? "cheaper" : "pricier"}
-      // Перенос здесь запрещён: в тесной строке чип уступает место целиком
-      // (лестница в `index.css`, `.deviation-shrink`), а не разваливается
-      // значением на две строки — как в файле, где переполненная строка
-      // оставляет один глиф.
+      // Перенос здесь запрещён: чип в одну строку или никак. В мобильной
+      // строке выдачи его нет вовсе (решение владельца 10.08), а в карточке
+      // места хватает всегда.
       className="inline-flex h-5 items-center gap-1 whitespace-nowrap"
     >
       <Typography variant="metaStrong" tone={tone}>

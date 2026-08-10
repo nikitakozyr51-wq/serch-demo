@@ -6,7 +6,7 @@ import type { MouseEvent, ReactNode } from "react"
 
 import { Button } from "@/components/controls/Button"
 import { Typography } from "@/components/typography"
-import { ALL_ROWS } from "@/data/search-rows"
+import { ALL_ROWS, type SearchRow } from "@/data/search-rows"
 import { DISCLOSURE_PRICE, useSession, useSessionActions } from "@/features/auth"
 import {
   MobileBottomNav,
@@ -25,9 +25,9 @@ import {
   StatusChip,
   type ListingStatus,
 } from "@/features/listings"
-import { useWorkspace } from "@/features/workspace"
+import { disclosureOf, useWorkspace } from "@/features/workspace"
 import { notifyDone, notifyError } from "@/platform/notify"
-import { maskedPhone } from "@/lib/demo-phone"
+import { demoPhone, maskedPhone } from "@/lib/demo-phone"
 import { cn } from "@/lib/utils"
 import { PhoneSheet } from "./phone-sheet"
 
@@ -412,42 +412,94 @@ function ObjectStopListScreen() {
  * Из десктопной карточки сюда не переехало ничего из доказательств — ни трёх
  * колонок, ни таблиц аналогов, ни истории цены. После раскрытия они больше
  * не нужны: решение принято, осталось позвонить.
+ *
+ * **Раньше это была статичная карточка Ленской ул., 10, и любая ссылка
+ * «Открыть · 0 ₽» водила сюда ЧУЖОЙ адрес** — человек открывал оплаченный
+ * контакт «Партизанской ул., 15» и видел чужой объект. Теперь страница —
+ * обёртка над общей карточкой: адрес приходит ссылкой (`at`), а состояние
+ * «до/после» выбирает сама карточка по журналу раскрытий, как на компьютере.
  */
 export function MobileObjectPage() {
+  const search = useSearch({ from: "/m/object", shouldThrow: false }) as
+    | { at?: string }
+    | null
+
+  return <MobileObjectCard address={search?.at ?? DISCLOSED_ADDRESS} />
+}
+
+/** Дефолт кадра `OGEg8`, когда адрес не пришёл ссылкой. */
+const DISCLOSED_ADDRESS = "Ленская ул., 10"
+
+/**
+ * Карточка раскрытого объекта — состояние «после» (`OGEg8`), параметризованное.
+ *
+ * Данные берутся из строки выдачи, как у «до»-формы: адрес из ссылки, цена,
+ * отклонение и мета из `ALL_ROWS`; у адресов вне базы — из списков похожих,
+ * это данные тех же кадров файла.
+ *
+ * Три места здесь — факт журнала, а не копия кадра:
+ *
+ * **Номер собран `demoPhone(address)`, а не взят из кадра.** В `OGEg8` стоит
+ * `+7 900 000-99-87`, но запрет живых номеров (`lib/demo-phone.ts`) относится
+ * ко всей демонстрации: у каждого адреса свой устойчивый номер, одинаковый
+ * на выдаче, в карточке, в прозвоне и в журнале доступа.
+ *
+ * **Плашка звонков собрана из `workspace.calls`, а не из кадра.** Кадр рисует
+ * «Вы звонили сегодня дважды, обе без ответа» — сценарий уже прозвоненного
+ * объекта, а у свежераскрытого звонков нет вовсе. Поэтому: звонков нет —
+ * плашка «до»-формы (замер `MSLPo`), звонки есть — исход и число из журнала
+ * в формате «Сегодня» (today-screen).
+ *
+ * **«Позвонить» ведёт в прозвон с этим адресом**, а не с пустым: панель
+ * фиксации обязана знать, по какому объекту отметили звонок.
+ */
+function ObjectDisclosed({ address, row }: ObjectCardProps) {
   const navigate = useNavigate()
+  const workspace = useWorkspace()
+  const calls = workspace.calls.filter((item) => item.address === address)
+  const last = calls[0]
 
   return (
     <PhoneFrame slot="mobile-screen">
       <ObjectBackBar label="К списку" to="/m/search" status="disclosed" />
 
       <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto bg-bg">
-        <ObjectPhoto address="Ленская ул., 10" />
+        <ObjectPhoto address={address} />
 
         <div className="flex w-full flex-1 flex-col gap-4 p-4">
           <div className="flex w-full shrink-0 items-center gap-2.5">
             <Typography variant="cardPrice" tone="default">
-              8,6 млн ₽
+              {row?.price ?? "8,6 млн ₽"}
             </Typography>
-            <MarketDeviation percent={-12} />
+            <MarketDeviation percent={row?.deviation ?? -12} />
           </div>
 
           <Typography variant="rowPrice" tone="default" as="h1">
-            Ленская ул., 10 · 2-комн · 58 м² · 4/9 эт
+            {row ? `${row.address}${row.meta}` : `${address} · 2-комн · 58 м² · 4/9 эт`}
           </Typography>
 
-          <Typography variant="denseText" tone="dense">
-            Ладожская · 6 мин пешком · Красногвардейский район
-          </Typography>
+          {row?.metro ? (
+            <Typography variant="denseText" tone="dense">
+              {`${row.metro} · ${row.metroMinutes} мин пешком · ${row.districtName} район`}
+            </Typography>
+          ) : null}
 
-          <ObjectMap label="Ленская ул., 10 · открыть маршрут" address="Ленская ул., 10" />
+          <ObjectMap label={`${address} · открыть маршрут`} address={address} />
 
-          <TouchBlock
-            headline="Вы звонили сегодня дважды, обе без ответа"
-            detail="не дозвонился, две попытки · повторное списание невозможно"
-          />
+          {last ? (
+            <TouchBlock
+              headline={`${last.outcome}${last.note ? ` · ${last.note}` : ""}`}
+              detail={`звонков по объекту: ${calls.length} · повторное списание невозможно`}
+            />
+          ) : (
+            <TouchBlock
+              headline="По этому объекту из агентства ещё не звонили"
+              detail="проверено по пяти сотрудникам, история касаний с 05.07"
+            />
+          )}
 
           <Typography variant="cardPrice" tone="default">
-            +7 900 000-99-87
+            {demoPhone(address)}
           </Typography>
 
           <div className="flex-1" />
@@ -464,12 +516,12 @@ export function MobileObjectPage() {
             size="lg"
             block
             iconLeft={<Phone aria-hidden className="size-4.5" strokeWidth={2} />}
-            {...pressProps(() => void navigate({ to: "/m/call", search: {} }))}
+            {...pressProps(() => void navigate({ to: "/m/call", search: { at: address } }))}
           >
             Позвонить
           </Button>
         </div>
-        <StatusButton address="Ленская ул., 10" />
+        <StatusButton address={address} />
       </StickyActionBar>
     </PhoneFrame>
   )
@@ -478,14 +530,19 @@ export function MobileObjectPage() {
 /**
  * МОБАЙЛ · Объект, до раскрытия (`MSLPo`) — контакт ещё не куплен.
  *
- * Тот же каркас, но другой объект: Ленская ул., 6 за 8,8 млн ₽. Это не два
- * состояния одной карточки, а две разные карточки, и данные у них разные —
- * так же, как на десктопе.
- *
  * Вместо номера здесь стоит то, что человек покупает: признаки собственника
  * и обещание возврата. Признаки отвечают на вопрос «это точно не агентство»,
  * возврат снимает страх «а если всё-таки агентство». Красная кнопка —
  * единственное место продукта, где красный значит «сейчас спишутся деньги».
+ *
+ * **Раньше это была отдельная карточка Ленской ул., 6, а соседняя `/m/object`
+ * — отдельная карточка Ленской ул., 10, и кнопка после раскрытия не менялась
+ * ничем.** 10.08.2026 карточка стала общей: обе страницы — обёртки над
+ * `MobileObjectCard`, адрес приходит ссылкой, а состояние «до/после»
+ * выбирается по журналу раскрытий — ровно как на компьютере, где строка
+ * выдачи меняет «Раскрыть · 199 ₽» на «Открыть · 0 ₽». Различие маршрутов
+ * осталось только для ссылок: выдача ведёт оплаченный объект в `/m/object`,
+ * неоплаченный — сюда.
  */
 /** Объект этой карточки, когда адрес не пришёл ссылкой. */
 const BEFORE_ADDRESS = "Ленская ул., 6"
@@ -528,41 +585,30 @@ function tellDisclosure(
 }
 
 export function MobileObjectBeforePage() {
-  const actions = useSessionActions()
-  const navigate = useNavigate()
-  const workspace = useWorkspace()
-
-  /**
-   * Какой объект раскрывают.
-   *
-   * Карточка была одна на всю базу: адрес стоял константой, и любая строка
-   * выдачи вела в одну и ту же квартиру — а раскрытие списывало деньги
-   * именно за неё. То есть человек платил не за тот объект, который выбрал.
-   */
   const search = useSearch({ from: "/m/object/before", shouldThrow: false }) as
     | { at?: string }
     | null
-  const address = search?.at ?? BEFORE_ADDRESS
-  const row = ALL_ROWS.find((item) => item.address === address)
 
-  /**
-   * Раскрытие говорит, чем кончилось.
-   *
-   * Раньше ответ выбрасывался (`void actions.disclose(...)`), и экран не
-   * менялся ничем: списали, не списали, кончились деньги — тишина. Человек
-   * жал кнопку второй и третий раз. Шапки со счётом у этой карточки нет,
-   * поэтому сообщение здесь — единственный способ узнать про свои деньги.
-   *
-   * Кадра «карточка на телефоне после раскрытия» в файле нет, поэтому
-   * экран не подменяется: сообщение и переход на пополнение при нехватке —
-   * ровно то, что можно сделать, ничего не выдумывая.
-   */
-  const disclose = () => tellDisclosure(actions.disclose(address), navigate)
+  return <MobileObjectCard address={search?.at ?? BEFORE_ADDRESS} />
+}
+
+/**
+ * Общая карточка объекта на телефоне: до и после раскрытия — состояния
+ * одной карточки, а не разные страницы.
+ *
+ * Маршрутов по-прежнему два — `/m/object/before` (`MSLPo`) и `/m/object`
+ * (`OGEg8`), — но различие между ними только в адресе по умолчанию и в том,
+ * куда ведут ссылки выдачи. Состояние выбирается журналом раскрытий
+ * (`disclosureOf`), и `useWorkspace` реактивен: нажатие «Раскрыть» перерисует
+ * карточку в форму с номером на глазах, а повторный вход не предложит купить
+ * уже купленное. Так же устроен компьютер.
+ */
+function MobileObjectCard({ address }: { address: string }) {
+  const workspace = useWorkspace()
+  const row = ALL_ROWS.find((item) => item.address === address) ?? similarRow(address)
 
   /*
-    Два ответа вместо карточки — и оба обязаны стоять ПЕРЕД ней.
-
-    ═══════════════════════════════════════════════════════════════════════
+    Два ответа вместо карточки — и оба обязаны стоять ПЕРЕД выбором состояния.
 
     Карточка до раскрытия продаёт контакт: красная кнопка «Раскрыть · 199 ₽»
     и обещание вернуть деньги. Показать её у объекта, чей собственник просил
@@ -578,6 +624,64 @@ export function MobileObjectBeforePage() {
   const stopped = workspace.stopList.includes(address) || row?.status === "stop-list"
   if (stopped) return <ObjectStopListScreen />
   if (row?.status === "revoked") return <ObjectRevokedScreen />
+
+  return disclosureOf(workspace, address) !== undefined ? (
+    <ObjectDisclosed address={address} row={row} />
+  ) : (
+    <ObjectBefore address={address} row={row} />
+  )
+}
+
+/**
+ * Что карточка читает из строки: данные кадра. Остальных полей — силы,
+ * площадок, фильтров — на карточке нет, и тащить их в общий тип значило бы
+ * связывать карточку с выданным списком.
+ *
+ * Метро опционально: у адресов вне базы (списки похожих) его в данных нет,
+ * и строка метро тогда не рисуется вовсе.
+ *
+ * `status` — тоже опционально и по той же причине: список похожих статуса
+ * не несёт. Карточка читает из него только два значения — «стоп-лист»
+ * и «отзыв согласия»; остальные статусы выдачи к вопросу «можно ли звонить»
+ * отношения не имеют.
+ */
+type CardRow = Pick<SearchRow, "address" | "price" | "deviation" | "meta"> & {
+  metro?: string
+  metroMinutes?: number
+  districtName?: string
+  status?: ListingStatus
+}
+
+/** Параметры состояния карточки. `row` пуст у адресов вне базы. */
+type ObjectCardProps = {
+  address: string
+  row: CardRow | undefined
+}
+
+/**
+ * Карточка нераскрытого объекта — состояние «до» (`MSLPo`).
+ *
+ * Раскрытие списывает деньги за адрес, по которому человек вошёл: раньше
+ * адрес стоял константой, и любая строка выдачи вела в одну и ту же
+ * квартиру — а платили именно за неё.
+ */
+function ObjectBefore({ address, row }: ObjectCardProps) {
+  const actions = useSessionActions()
+  const navigate = useNavigate()
+
+  /**
+   * Раскрытие говорит, чем кончилось.
+   *
+   * Раньше ответ выбрасывался (`void actions.disclose(...)`), и экран не
+   * менялся ничем: списали, не списали, кончились деньги — тишина. Человек
+   * жал кнопку второй и третий раз. Шапки со счётом у этой карточки нет,
+   * поэтому сообщение здесь — способ узнать про свои деньги.
+   *
+   * Сообщение остаётся и теперь, но экран больше от него не зависит:
+   * `useWorkspace` реактивен, и после записи раскрытия карточка сама
+   * перейдёт в форму «контакт уже раскрыт» (`OGEg8`) — номер и «Позвонить».
+   */
+  const disclose = () => tellDisclosure(actions.disclose(address), navigate)
 
   return (
     <PhoneFrame slot="mobile-screen">
@@ -598,11 +702,19 @@ export function MobileObjectBeforePage() {
             {row ? `${row.address}${row.meta}` : `${address} · 2-комн · 57 м² · 8/9 эт`}
           </Typography>
 
-          <Typography variant="denseText" tone="dense">
-            Ладожская · 5 мин пешком · Красногвардейский район
-          </Typography>
+          {/*
+            Метро собирается из строки — у обеих Ленских это ровно замеры
+            кадров («Ладожская · 5 мин пешком · Красногвардейский район»
+            у `MSLPo`, «· 6 мин» у `OGEg8»). У адресов без данных строки
+            нет вовсе: придумывать минуты ради полного экрана нельзя.
+          */}
+          {row?.metro ? (
+            <Typography variant="denseText" tone="dense">
+              {`${row.metro} · ${row.metroMinutes} мин пешком · ${row.districtName} район`}
+            </Typography>
+          ) : null}
 
-          <ObjectMap label="Ленская ул., 6 · открыть маршрут" address="Ленская ул., 6" />
+          <ObjectMap label={`${address} · открыть маршрут`} address={address} />
 
           <TouchBlock
             headline="По этому объекту из агентства ещё не звонили"
@@ -664,10 +776,9 @@ export function MobileObjectBeforePage() {
             а не подпись под кнопкой. Второй раз за тот же адрес не спишется:
             правило продукта, а не защита от двойного нажатия.
 
-            **Экрана «раскрыто» у этой карточки в макете нет.** Соседний
-            `/m/object` — другой объект, а не её продолжение, и уводить туда
-            значило бы соврать адресом. Поэтому итог говорится сообщением,
-            а деньги видны там, где они живут: в «Сегодня» и в балансе.
+            После записи `useWorkspace` перерисовывает карточку в форму
+            «контакт уже раскрыт» (`OGEg8`): номер и «Позвонить». Кадр был
+            в файле всегда — не хватало связи между нажатием и состоянием.
           */}
           <Button
             variant="money"
@@ -928,6 +1039,32 @@ const SIMILAR_ROWS = [
     paid: true,
   },
 ]
+
+/**
+ * Данные кадра для адреса вне базы выдачи.
+ *
+ * Списки похожих (`SIMILAR_CARDS`, `SIMILAR_ROWS`) нарисованы в файле своими
+ * ценами, отклонениями и метой — и карточка, открытая по такому адресу,
+ * обязана показывать эти данные, а не дефолт чужого кадра. Ведущая «·»
+ * меты — часть замера строки выдачи; у списков похожих её нет, и здесь она
+ * приводится к общему виду, чтобы заголовок карточки не склеивал слова.
+ */
+function similarRow(address: string): CardRow | undefined {
+  const row =
+    SIMILAR_ROWS.find((item) => item.address === address) ??
+    SIMILAR_CARDS.find((item) => item.address === address)
+
+  if (row === undefined) return undefined
+
+  return {
+    address: row.address,
+    price: row.price,
+    deviation: row.deviation,
+    meta: row.meta.startsWith("·") ? row.meta : ` · ${row.meta}`,
+    // Статуса у списков похожих нет: стоп-лист и отзыв согласия
+    // карточка читает из строки выдачи, а её у похожих не существует.
+  }
+}
 
 /**
  * МОБАЙЛ · Похожие на Ленскую ул., 10 (`GUrdB`) — полный список.

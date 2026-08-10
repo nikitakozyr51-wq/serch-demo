@@ -29,7 +29,7 @@
  * первый. Точка вордмарка здесь 8×8 против 9×9 на десктопе.
  */
 import BrandMark from './BrandMark.astro'
-import { isActiveRoute, signupHref, siteRoutes } from '@/lib/site-routes'
+import { isActiveRoute, loginHref, signupHref, siteRoutes } from '@/lib/site-routes'
 
 const columns = [
   {
@@ -40,6 +40,10 @@ const columns = [
       { href: siteRoutes.blog, label: 'Блог' },
       { href: siteRoutes.pricing, label: 'Тарифы' },
       { href: signupHref, label: 'Получить доступ' },
+      // Пятая строка — решение 05.08 (ВХОД-И-ПРОФИЛЬ-решения.md):
+      // вход в кабинет тем, кто заходит на serch.ру по памяти, не обязан
+      // листать до подвала — но если дошёл, путь в кабинет лежит здесь.
+      { href: loginHref, label: 'Войти' },
     ],
   },
   {
